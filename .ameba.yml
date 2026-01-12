@@ -1,0 +1,56 @@
+# Ameba configuration for anthropic-cr
+# Documentation: https://github.com/crystal-ameba/ameba
+
+# Files to lint
+Globs:
+  - "**/*.cr"
+  - "!lib/**/*"
+
+# Files to exclude from all rules
+Excluded:
+  - lib/
+
+# Rule configurations
+# See all rules: https://crystal-ameba.github.io/ameba/
+
+# Lint rules - catch bugs and incorrect code
+Lint/NotNil:
+  Enabled: true
+  Excluded:
+    - spec/**/*  # not_nil! is acceptable in tests for assertions
+
+Lint/UselessAssign:
+  Enabled: true
+  ExcludeTypeDeclarations: true
+  Excluded:
+    - examples/**/*  # Examples show API usage even if result isn't used
+
+# Style rules - enforce consistent code style
+Style/RedundantBegin:
+  Enabled: true
+
+Style/RedundantReturn:
+  Enabled: true
+
+# Allow larger numbers without underscores in test fixtures
+Style/LargeNumbers:
+  Enabled: true
+  IntMinDigits: 6
+
+# Documentation rules - we'll enable these later
+Documentation/DocumentationAdmonition:
+  Enabled: false
+
+# Metrics rules
+Metrics/CyclomaticComplexity:
+  Enabled: true
+  MaxComplexity: 15
+  Excluded:
+    - examples/**/*  # Examples can be more complex for demonstration
+
+# Performance rules
+Performance/ChainedCallWithNoBang:
+  Enabled: true
+
+Performance/MapInsteadOfBlock:
+  Enabled: true

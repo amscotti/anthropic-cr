@@ -1,0 +1,27 @@
+# Generated directories
+/docs/
+/lib/
+/bin/
+/.shards/
+
+# Crystal build artifacts
+*.dwarf
+
+# Libraries don't need dependency lock
+# Dependencies will be locked in applications that use them
+/shard.lock
+
+# Environment variables (contains API keys)
+.env
+.env.*
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# VCR cassettes may contain sensitive data
+# spec/fixtures/cassettes/

@@ -1,0 +1,1474 @@
+# Anthropic SDK for Crystal - Complete Documentation
+
+This document provides comprehensive information for working with the anthropic-cr Crystal library. It is designed to be used by AI coding assistants that need to understand how to use this library correctly.
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Quick Start](#quick-start)
+3. [Core Architecture](#core-architecture)
+4. [Client Configuration](#client-configuration)
+5. [Messages API](#messages-api)
+6. [Streaming Responses](#streaming-responses)
+7. [Tool System](#tool-system)
+8. [Tool Runner (Automatic Execution)](#tool-runner-automatic-execution)
+9. [Beta Features](#beta-features)
+10. [Models API](#models-api)
+11. [Batches API](#batches-api)
+12. [Files API](#files-api)
+13. [Error Handling](#error-handling)
+14. [Configuration Reference](#configuration-reference)
+15. [Common Patterns](#common-patterns)
+16. [Best Practices](#best-practices)
+17. [Migration from Ruby SDK](#migration-from-ruby-sdk)
+18. [Known Limitations](#known-limitations)
+
+---
+
+## Overview
+
+The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. Key features include:
+
+- Full Messages API coverage (create and stream)
+- Tool use / function calling with Schema DSL and typed tools
+- Automatic tool execution loop (Tool Runner)
+- Server-Sent Events (SSE) streaming
+- Message Batches API for batch processing
+- Models API for listing/retrieving models
+- Files API for file uploads/downloads
+- Web Search server-side tool
+- Extended thinking / reasoning support
+- Structured outputs via beta API
+- Document citations with streaming support
+- Prompt caching support
+- Comprehensive error handling with automatic retries
+
+**Status**: Feature complete for core functionality.
+
+---
+
+## Quick Start
+
+### Installation
+
+Add to `shard.yml`:
+
+```yaml
+dependencies:
+  anthropic-cr:
+    github: amscotti/anthropic-cr
+```
+
+### Basic Usage
+
+```crystal
+require "anthropic"
+
+client = Anthropic::Client.new  # Uses ANTHROPIC_API_KEY env var
+
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Hello, Claude!"}]
+)
+
+puts message.text
+# => "Hello! I'm Claude, an AI assistant..."
+
+puts message.usage.input_tokens
+# => 10
+```
+
+### Streaming
+
+```crystal
+client.messages.stream(
+  model: Anthropic::Model::CLAUDE_HAIKU_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Write a haiku about programming"}]
+) do |event|
+  if event.is_a?(Anthropic::ContentBlockDeltaEvent) && event.text
+    print event.text
+  end
+end
+```
+
+---
+
+## Core Architecture
+
+### Module Structure
+
+```
+src/anthropic/
+├── client.cr              # HTTP client with retry logic
+├── errors.cr              # Error hierarchy (APIError, RateLimitError, etc.)
+├── schema.cr              # Schema DSL for tool definitions
+├── models/                # Type definitions
+│   ├── content.cr         # Content block types (Text, Image, Tool, etc.)
+│   ├── message.cr         # Message and MessageParam
+│   ├── params.cr          # Request parameter structs
+│   ├── role.cr            # Role enum
+│   ├── usage.cr           # Usage struct
+│   └── model_info.cr      # Model information
+├── resources/             # API resources
+│   ├── messages.cr        # Messages API
+│   ├── batches.cr         # Batches API
+│   ├── models.cr          # Models API
+│   ├── files.cr           # Files API (beta)
+│   └── beta.cr            # Beta namespace for beta features
+├── streaming/             # SSE streaming
+│   ├── events.cr          # Event types
+│   └── stream.cr          # MessageStream with iterators
+├── tools/                 # Tool system
+│   ├── tool.cr            # Tool base class, InlineTool, TypedTool
+│   ├── tool_choice.cr     # ToolChoice types
+│   ├── server_tools.cr    # Server-side tools (WebSearch, etc.)
+│   └── runner.cr          # Automatic tool execution loop
+└── version.cr
+```
+
+### Key Design Patterns
+
+**Resource Chaining**: APIs accessed via `client.messages.create(...)`, `client.models.list()`, `client.beta.messages.create(...)`
+
+**Block-based Streaming**: `stream(...) { |event| }` - yields events directly. Iterator-based streaming (returning a stream object) is not yet implemented.
+
+**Flexible Message Input**: NamedTuples for simple use `{role: "user", content: "Hi"}` or typed structs `MessageParam.new(...)` for complex content
+
+**Tool System**:
+- `Anthropic.tool(name:, schema:, ...) { |input| }` - Schema DSL tools
+- `Anthropic.tool(name:, input: MyStruct) { |input| }` - TypedTool with struct input
+- `client.beta.messages.tool_runner(...)` - Automatic tool execution loop
+
+**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array)
+
+---
+
+## Client Configuration
+
+### Initialization
+
+```crystal
+# Default configuration (uses ANTHROPIC_API_KEY env var)
+client = Anthropic::Client.new
+
+# Custom configuration
+client = Anthropic::Client.new(
+  api_key: "sk-ant-api03-...",
+  base_url: "https://api.anthropic.com",
+  timeout: 600.seconds,
+  max_retries: 2,
+  initial_retry_delay: 0.5,
+  max_retry_delay: 8.0,
+  default_headers: {"X-Custom-Header" => "value"}
+)
+```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `api_key` | `String?` | `ENV["ANTHROPIC_API_KEY"]` | API key, required |
+| `base_url` | `String` | `https://api.anthropic.com` | API base URL |
+| `timeout` | `Time::Span` | `600.seconds` | Request timeout |
+| `max_retries` | `Int32` | `2` | Maximum retry attempts |
+| `initial_retry_delay` | `Float64` | `0.5` | Initial delay in seconds |
+| `max_retry_delay` | `Float64` | `8.0` | Maximum delay in seconds |
+| `default_headers` | `Hash(String, String)` | `{}` | Headers sent with every request |
+
+### Accessing Resources
+
+```crystal
+# Core resources
+client.messages        # Messages API
+client.models          # Models API
+client.beta            # Beta namespace (files, messages with beta features)
+client.beta.messages   # Beta Messages API
+client.beta.files      # Beta Files API
+```
+
+---
+
+## Messages API
+
+### Creating a Message
+
+```crystal
+# Simple message with NamedTuple
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Hello, Claude!"}]
+)
+
+# With typed MessageParam
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [
+    Anthropic::MessageParam.new(role: "user", content: "Hello!")
+  ]
+)
+
+# Convenience constructors
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [Anthropic::MessageParam.user("Hello!")]
+)
+```
+
+### Message Parameters
+
+```crystal
+client.messages.create(
+  model: String,                        # Model ID or Anthropic::Model::*
+  max_tokens: Int32,                    # Maximum tokens to generate
+  messages: Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
+  system: String | Array(TextContent)?, # System prompt
+  temperature: Float64?,                # Temperature (0.0-1.0)
+  top_p: Float64?,                      # Top-p sampling
+  top_k: Int32?,                        # Top-k sampling
+  tools: Array(Tool)?,                  # User-defined tools
+  server_tools: Array(ServerTool)?,     # Server-side tools (WebSearch, etc.)
+  tool_choice: ToolChoice?,             # How to use tools
+  stop_sequences: Array(String)?,       # Stop sequences
+  metadata: Hash(String, String)?,      # Request metadata
+  service_tier: String?,                # Service tier
+  thinking: ThinkingConfig?             # Extended thinking configuration
+)
+```
+
+### Accessing Message Content
+
+```crystal
+message = client.messages.create(...)
+
+# Text content (combines all text blocks)
+puts message.text
+
+# Access typed content blocks
+message.content.each do |block|
+  case block
+  when Anthropic::TextContent
+    puts "Text: #{block.text}"
+  when Anthropic::ToolUseContent
+    puts "Tool: #{block.name}"
+    puts "Input: #{block.input}"
+  when Anthropic::ThinkingContent
+    puts "Thinking: #{block.thinking}"
+  end
+end
+
+# Convenience methods
+message.tool_use?          # Boolean - did Claude request tool use?
+message.tool_use_blocks    # Array of tool use content blocks
+message.text_blocks        # Array of text content blocks
+message.thinking_blocks    # Array of thinking content blocks
+
+# Usage information
+puts message.usage.input_tokens
+puts message.usage.output_tokens
+
+# Stop reason
+puts message.stop_reason   # "end_turn" | "max_tokens" | "tool_use" | etc.
+```
+
+### Multi-turn Conversations
+
+```crystal
+# Include conversation history
+response = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [
+    {role: "user", content: "Hello!"},
+    {role: "assistant", content: previous_message.text},
+    {role: "user", content: "What did I just say?"}
+  ]
+)
+```
+
+### Counting Tokens
+
+```crystal
+# Count tokens without sending message
+count = client.messages.count_tokens(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  messages: [{role: "user", content: "Hello, Claude!"}],
+  system: "You are a helpful assistant."
+)
+
+puts count.input_tokens
+puts count.cache_creation_input_tokens  # nil if not using cache
+puts count.cache_read_input_tokens      # nil if not using cache
+```
+
+---
+
+## Streaming Responses
+
+### Block-based Streaming
+
+```crystal
+client.messages.stream(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Tell me a story"}]
+) do |event|
+  case event
+  when Anthropic::MessageStartEvent
+    puts "Message started: #{event.message.id}"
+  when Anthropic::ContentBlockDeltaEvent
+    if text = event.text
+      print text
+    end
+  when Anthropic::ContentBlockStartEvent
+    puts "Block started: #{event.content_block["type"]}"
+  when Anthropic::ContentBlockStopEvent
+    puts "Block stopped"
+  when Anthropic::MessageDeltaEvent
+    puts "Delta: #{event.usage}"
+  when Anthropic::MessageStopEvent
+    puts "Message finished: #{event.stop_reason}"
+  when Anthropic::PingEvent
+    # Keep-alive ping, can ignore
+  when Anthropic::ErrorEvent
+    puts "Error: #{event.error}"
+  end
+end
+```
+
+### Streaming Implementation Note
+
+The SDK currently only supports block-based streaming. The `stream` method requires a block and yields events directly:
+
+```crystal
+# This is the ONLY supported pattern for streaming
+client.messages.stream(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Tell me a story"}]
+) do |event|
+  case event
+  when Anthropic::ContentBlockDeltaEvent
+    print event.text if event.text
+  end
+end
+```
+
+**Note**: Iterator-based streaming (returning a stream object) is not yet implemented due to HTTP connection lifecycle limitations. The `MessageStream` class exists internally with helper methods (`.text`, `.thinking`, `.citations`, `.final_message`), but these are not directly accessible from the public API.
+
+### Stream Event Types
+
+| Event Type | Description |
+|------------|-------------|
+| `MessageStartEvent` | First event, contains the Message object |
+| `MessageDeltaEvent` | Updates to message (usage, stop_reason) |
+| `MessageStopEvent` | Stream finished, contains stop_reason |
+| `ContentBlockStartEvent` | New content block started |
+| `ContentBlockDeltaEvent` | Updates to content block (text, thinking, etc.) |
+| `ContentBlockStopEvent` | Content block finished |
+| `PingEvent` | Keep-alive ping |
+| `ErrorEvent` | Error occurred during streaming |
+
+---
+
+## Tool System
+
+### Overview
+
+The SDK supports two types of tools:
+1. **User-defined tools** - Custom functions you define and Claude can call
+2. **Server tools** - Built-in tools like web search (require beta access)
+
+### Schema DSL Tools (Recommended for Simple Use)
+
+```crystal
+# Define a tool with Schema DSL
+weather_tool = Anthropic.tool(
+  name: "get_weather",
+  description: "Get current weather for a location",
+  schema: {
+    "location" => Anthropic::Schema.string("City name, e.g. San Francisco"),
+    "unit"     => Anthropic::Schema.enum("celsius", "fahrenheit", description: "Temperature unit"),
+  },
+  required: ["location"]
+) do |input|
+  location = input["location"].as_s
+  unit = input["unit"]?.try(&.as_s) || "fahrenheit"
+  "Sunny, 72°#{unit == "celsius" ? "C" : "F"} in #{location}"
+end
+
+# Use the tool
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "What's the weather in Tokyo?"}],
+  tools: [weather_tool]
+)
+
+if message.tool_use?
+  message.tool_use_blocks.each do |tool_use|
+    result = weather_tool.call(tool_use.input)
+    puts result
+  end
+end
+```
+
+### Schema Types
+
+```crystal
+# String type
+Anthropic::Schema.string(description: "Description")
+
+# Number type
+Anthropic::Schema.number(description: "Description")
+
+# Integer type
+Anthropic::Schema.integer(description: "Description")
+
+# Boolean type
+Anthropic::Schema.boolean(description: "Description")
+
+# Enum type (one of specific values)
+Anthropic::Schema.enum("value1", "value2", description: "Description")
+
+# Array type
+Anthropic::Schema.array(
+  items: Anthropic::Schema.string(description: "Array item"),
+  description: "Description"
+)
+
+# Object type (nested properties)
+Anthropic::Schema.object(
+  properties: {
+    "name" => Anthropic::Schema.string(description: "Name"),
+    "age" => Anthropic::Schema.integer(description: "Age")
+  },
+  required: ["name"],
+  description: "Description"
+)
+```
+
+### Typed Tools (Ruby BaseTool-like Pattern)
+
+For type-safe inputs, define structs and use the `Anthropic.tool` macro:
+
+```crystal
+# Define input struct with annotations
+struct GetWeatherInput
+  include JSON::Serializable
+
+  @[JSON::Field(description: "City name, e.g. San Francisco")]
+  getter location : String
+
+  @[JSON::Field(description: "Temperature unit")]
+  getter unit : TemperatureUnit?
+end
+
+enum TemperatureUnit
+  Celsius
+  Fahrenheit
+end
+
+# Create typed tool - handler receives typed struct!
+weather_tool = Anthropic.tool(
+  name: "get_weather",
+  description: "Get weather for a location",
+  input: GetWeatherInput
+) do |input|
+  # input.location is String, not JSON::Any!
+  # input.unit is TemperatureUnit?, not JSON::Any!
+  unit = input.unit || TemperatureUnit::Fahrenheit
+  "Sunny, 72° in #{input.location}"
+end
+```
+
+### Using Tools with Messages
+
+```crystal
+# Create tools
+calculator = Anthropic.tool(
+  name: "calculator",
+  description: "Perform arithmetic",
+  schema: {
+    "expression" => Anthropic::Schema.string("Math expression")
+  },
+  required: ["expression"]
+) do |input|
+  # Implementation
+end
+
+# Use in message
+response = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "What's 15 * 7?"}],
+  tools: [calculator]
+)
+
+# Handle tool use
+if response.tool_use?
+  response.tool_use_blocks.each do |tool_use|
+    result = calculator.call(tool_use.input)
+    puts result
+  end
+end
+```
+
+### Tool Choice
+
+```crystal
+# Let Claude decide when to use tools (default)
+tool_choice: Anthropic::ToolChoiceAuto.new
+
+# Force Claude to use any available tool
+tool_choice: Anthropic::ToolChoiceAny.new
+
+# Force Claude to use a specific tool
+tool_choice: Anthropic::ToolChoiceTool.new(name: "calculator")
+
+# Prevent Claude from using tools
+tool_choice: Anthropic::ToolChoiceNone.new
+```
+
+---
+
+## Tool Runner (Automatic Execution)
+
+The Tool Runner automatically handles tool execution, feeding results back to Claude until the conversation completes without tool use.
+
+### Basic Usage
+
+```crystal
+# Define tools
+calculator = Anthropic.tool(...) { |input| ... }
+time_tool = Anthropic.tool(...) { |input| ... }
+
+# Create tool runner
+runner = client.beta.messages.tool_runner(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [Anthropic::MessageParam.user("What time is it? Also calculate 15 + 27")],
+  tools: [calculator, time_tool] of Anthropic::Tool,
+  max_iterations: 10
+)
+
+# Iterate through conversation (tools executed automatically)
+runner.each_message do |msg|
+  if msg.tool_use?
+    puts "Claude wants to use tools"
+  else
+    puts "Final: #{msg.text}"
+  end
+end
+
+# Or just get the final answer
+final = runner.final_message
+puts final.text
+```
+
+### Step-by-Step Control
+
+```crystal
+runner = client.beta.messages.tool_runner(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [Anthropic::MessageParam.user("Calculate 15 + 27")],
+  tools: [calculator],
+  max_iterations: 10
+)
+
+while msg = runner.next_message
+  if msg.tool_use?
+    # Tools will be executed automatically
+    puts "Tool use detected"
+  else
+    puts "Final response: #{msg.text}"
+  end
+end
+```
+
+### With Auto-Compaction
+
+```crystal
+compaction = Anthropic::CompactionConfig.enabled(threshold: 3000) do |before, after|
+  puts "Compacted: #{before} -> #{after} tokens"
+end
+
+runner = client.beta.messages.tool_runner(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: messages,
+  tools: tools,
+  compaction: compaction
+)
+```
+
+### Streaming with Tool Runner
+
+```crystal
+runner = client.beta.messages.tool_runner(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [Anthropic::MessageParam.user("Calculate 15 + 27")],
+  tools: [calculator]
+)
+
+runner.each_streaming do |event|
+  case event
+  when Anthropic::ContentBlockDeltaEvent
+    if text = event.text
+      print text
+    end
+  end
+end
+```
+
+---
+
+## Beta Features
+
+### Beta Namespace
+
+Beta features are accessed via `client.beta.messages` and `client.beta.files`.
+
+### Structured Outputs
+
+Get type-safe JSON responses with defined schemas:
+
+```crystal
+# Define output struct
+struct SentimentResult
+  include JSON::Serializable
+  getter sentiment : String
+  getter confidence : Float64
+  getter summary : String
+end
+
+# Create schema from struct
+schema = Anthropic.output_schema(
+  type: SentimentResult,
+  name: "sentiment_result"
+)
+
+# Use with beta API
+message = client.beta.messages.create(
+  betas: ["structured-outputs-2025-11-13"],
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 512,
+  output_schema: schema,
+  messages: [{role: "user", content: "Analyze: 'Great product!'"}]
+)
+
+# Parse directly to typed struct
+result = SentimentResult.from_json(message.text)
+puts result.sentiment
+puts result.confidence
+```
+
+### Extended Thinking
+
+Enable Claude's reasoning process:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 8192,
+  thinking: Anthropic::ThinkingConfig.enabled(budget_tokens: 4000),
+  messages: [{role: "user", content: "Solve this logic puzzle..."}]
+)
+
+# Access thinking content
+message.content.each do |block|
+  if thinking = block.as?(Anthropic::ThinkingContent)
+    puts "Reasoning: #{thinking.thinking}"
+  end
+end
+```
+
+### Web Search
+
+Let Claude search the internet:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 2048,
+  server_tools: [Anthropic::WebSearchTool.new],
+  messages: [{role: "user", content: "What are the latest developments in Crystal programming?"}]
+)
+
+puts message.text
+```
+
+With configuration:
+
+```crystal
+# Limit to specific domains
+search = Anthropic::WebSearchTool.new(
+  allowed_domains: ["github.com", "crystal-lang.org"],
+  max_uses: 3
+)
+
+# Location-aware search
+search = Anthropic::WebSearchTool.new(
+  user_location: Anthropic::UserLocation.new(city: "San Francisco", country: "US")
+)
+```
+
+### Citation Tracking
+
+```crystal
+stream = client.beta.messages.stream(
+  betas: ["citations-2025-02-19"],
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "What is Crystal programming language?"}]
+)
+
+stream.citations.each do |citation|
+  puts "Citation: #{citation.citation}"
+  puts "Referenced from: #{citation.referenced_document}"
+end
+```
+
+---
+
+## Models API
+
+### List Available Models
+
+```crystal
+response = client.models.list
+
+response.data.each do |model|
+  puts "#{model.display_name} (#{model.id})"
+end
+
+# Auto-pagination
+all_models = client.models.list.auto_paging_all(client)
+```
+
+### Retrieve Specific Model
+
+```crystal
+model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_5)
+
+puts model.id           # "claude-sonnet-4-5-20250929"
+puts model.display_name # "Claude Sonnet 4.5"
+puts model.type         # "model"
+puts model.version      # e.g., "20250929"
+puts model.description  # Model description
+```
+
+### Model Constants
+
+```crystal
+# Latest model versions
+Anthropic::Model::CLAUDE_OPUS_4_5
+Anthropic::Model::CLAUDE_SONNET_4_5
+Anthropic::Model::CLAUDE_HAIKU_4_5
+
+# Model shorthands
+Anthropic.model_name(:opus)    # => "claude-opus-4-5-20251101"
+Anthropic.model_name(:sonnet)  # => "claude-sonnet-4-5-20250929"
+Anthropic.model_name(:haiku)   # => "claude-haiku-4-5-20251001"
+```
+
+---
+
+## Batches API
+
+### Create a Batch
+
+```crystal
+requests = [
+  Anthropic::BatchRequest.new(
+    custom_id: "req-1",
+    params: Anthropic::BatchRequestParams.new(
+      model: Anthropic::Model::CLAUDE_HAIKU_4_5,
+      max_tokens: 100,
+      messages: [Anthropic::MessageParam.user("What is 2+2?")]
+    )
+  ),
+  Anthropic::BatchRequest.new(
+    custom_id: "req-2",
+    params: Anthropic::BatchRequestParams.new(
+      model: Anthropic::Model::CLAUDE_HAIKU_4_5,
+      max_tokens: 100,
+      messages: [Anthropic::MessageParam.user("What is the capital of France?")]
+    )
+  ),
+]
+
+batch = client.messages.batches.create(requests: requests)
+puts batch.id  # => "msgbatch_..."
+puts batch.processing_status  # => "in_progress"
+```
+
+### Monitor Batch Status
+
+```crystal
+status = client.messages.batches.retrieve(batch.id)
+puts status.processing_status  # => "in_progress" | "canceling" | "ended"
+puts status.request_counts.succeeded
+puts status.request_counts.errored
+puts status.created_at
+puts status.ended_at
+```
+
+### Get Results
+
+```crystal
+# Stream results as they become available
+client.messages.batches.results(batch.id) do |result|
+  puts "#{result.custom_id}: "
+  case result.result
+  when .succeeded?
+    puts result.result.message.try(&.text)
+  when .errored?
+    puts "Error: #{result.result.error.message}"
+  when .expired?
+    puts "Expired"
+  when .canceled?
+    puts "Canceled"
+  end
+end
+```
+
+### List Batches
+
+```crystal
+response = client.messages.batches.list(limit: 20)
+
+response.data.each do |batch|
+  puts "#{batch.id}: #{batch.processing_status}"
+end
+
+# Auto-pagination
+all_batches = client.messages.batches.list.auto_paging_all(client)
+```
+
+### Cancel or Delete Batch
+
+```crystal
+# Cancel a batch
+canceled = client.messages.batches.cancel(batch_id)
+
+# Delete a batch (after it's ended)
+deleted = client.messages.batches.delete(batch_id)
+```
+
+---
+
+## Files API
+
+### Upload a File
+
+```crystal
+# Using Pathname
+file_metadata = client.beta.files.upload(file: Path["document.pdf"])
+puts file_metadata.id
+
+# Using file contents directly
+file_metadata = client.beta.files.upload(
+  file: File.read("/path/to/file"),
+  filename: "document.pdf",
+  content_type: "application/pdf"
+)
+```
+
+### List Files
+
+```crystal
+response = client.beta.files.list
+
+response.data.each do |file|
+  puts "#{file.id}: #{file.filename}"
+end
+```
+
+### Retrieve File Info
+
+```crystal
+file = client.beta.files.retrieve(file_id)
+puts file.id
+puts file.filename
+puts file.bytes
+puts file.created_at
+puts file.expires_at
+```
+
+### Download File
+
+```crystal
+# Get file content as IO
+content = client.beta.files.download(file_id)
+File.write("/local/path", content)
+```
+
+### Delete File
+
+```crystal
+deleted = client.beta.files.delete(file_id)
+puts deleted.id
+```
+
+---
+
+## Error Handling
+
+### Error Types
+
+```crystal
+begin
+  message = client.messages.create(...)
+rescue Anthropic::APIError => e
+  puts "Status: #{e.status}"
+  puts "Body: #{e.body}"
+  puts "Headers: #{e.headers}"  # HTTP::Headers object
+end
+```
+
+| Error Type | HTTP Status | Description |
+|------------|-------------|-------------|
+| `BadRequestError` | 400 | Invalid request |
+| `AuthenticationError` | 401 | Invalid API key |
+| `PermissionDeniedError` | 403 | Permission denied |
+| `NotFoundError` | 404 | Resource not found |
+| `ConflictError` | 409 | Conflict |
+| `UnprocessableEntityError` | 422 | Unprocessable entity |
+| `RateLimitError` | 429 | Rate limited (see `retry_after` seconds) |
+| `InternalServerError` | 500+ | Server error |
+| `APIConnectionError` | N/A | Network/connection error |
+| `APITimeoutError` | N/A | Request timed out |
+
+### Rate Limit Errors
+
+```crystal
+begin
+  message = client.messages.create(...)
+rescue Anthropic::RateLimitError => e
+  puts "Rate limited! Retry after: #{e.retry_after} seconds"
+  sleep(e.retry_after.not_nil!.seconds)
+  retry
+end
+```
+
+### Retry Behavior
+
+The SDK automatically retries:
+- Connection errors
+- 408 Request Timeout
+- 409 Conflict
+- 429 Rate Limit
+- 500+ Server errors
+
+Default: 2 retries with exponential backoff (0.5s initial, max 8s).
+
+```crystal
+# Configure retries
+client = Anthropic::Client.new(
+  max_retries: 5,  # Increase retries
+  initial_retry_delay: 0.25,
+  max_retry_delay: 16.0
+)
+```
+
+---
+
+## Configuration Reference
+
+### Client Options
+
+```crystal
+client = Anthropic::Client.new(
+  api_key: String,                                    # Required
+  base_url: String = "https://api.anthropic.com",    # API base URL
+  timeout: Time::Span = 600.seconds,                  # Request timeout
+  max_retries: Int32 = 2,                             # Retry attempts
+  initial_retry_delay: Float64 = 0.5,                 # Initial delay (seconds)
+  max_retry_delay: Float64 = 8.0,                     # Max delay (seconds)
+  default_headers: Hash(String, String) = {}          # Headers for all requests
+)
+```
+
+### Message Options
+
+```crystal
+# Core options
+model: String                    # Model ID
+max_tokens: Int32                # Max tokens to generate
+messages: Array(MessageParam)    # Conversation messages
+
+# Optional parameters
+system: String | Array(TextContent)?     # System prompt
+temperature: Float64?                     # Sampling temperature (0.0-1.0)
+top_p: Float64?                           # Top-p sampling (0.0-1.0)
+top_k: Int32?                             # Top-k sampling
+stop_sequences: Array(String)?            # Stop sequences
+metadata: Hash(String, String)?           # Request metadata
+service_tier: String?                     # Service tier
+
+# Tools
+tools: Array(Tool)?              # User-defined tools
+server_tools: Array(ServerTool)? # Server-side tools
+tool_choice: ToolChoice?         # Tool selection behavior
+
+# Advanced
+thinking: ThinkingConfig?        # Extended thinking configuration
+```
+
+### ToolChoice Types
+
+```crystal
+# Auto (default) - Claude decides when to use tools
+tool_choice: Anthropic::ToolChoiceAuto.new
+
+# Any - Claude must use any available tool
+tool_choice: Anthropic::ToolChoiceAny.new
+
+# Tool - Claude must use a specific tool
+tool_choice: Anthropic::ToolChoiceTool.new(name: "calculator")
+
+# None - Prevent tool use
+tool_choice: Anthropic::ToolChoiceNone.new
+```
+
+---
+
+## Common Patterns
+
+### Vision (Image Understanding)
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [
+    Anthropic::MessageParam.new(
+      role: Anthropic::Role::User,
+      content: [
+        Anthropic::TextContent.new("Describe this image"),
+        Anthropic::ImageContent.base64("image/png", base64_data)
+      ] of Anthropic::ContentBlock
+    )
+  ]
+)
+```
+
+### System Prompts
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_5,
+  max_tokens: 2048,
+  system: "You are a helpful coding assistant specializing in Crystal.",
+  messages: [{role: "user", content: "How do I create a HTTP server?"}]
+)
+```
+
+### With Temperature Control
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  temperature: 0.7,  # More creative
+  messages: [{role: "user", content: "Write a creative story"}]
+)
+```
+
+### With Stop Sequences
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  stop_sequences: ["END", "STOP"],
+  messages: [{role: "user", content: "Write a story ending with 'The End'"}]
+)
+```
+
+### With Metadata
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  metadata: {"user_id" => "12345", "session_id" => "abc123"},
+  messages: [{role: "user", content: "Hello"}]
+)
+```
+
+### Service Tier
+
+```crystal
+# For higher throughput workloads
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  service_tier: "priority",  # or "auto" (default)
+  messages: [{role: "user", content: "Hello"}]
+)
+```
+
+### Prompt Caching
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  system: "You are a helpful assistant...",  # This gets cached
+  messages: [{role: "user", content: "Hello"}]
+)
+```
+
+---
+
+## Best Practices
+
+### 1. Use Typed Tools for Complex Inputs
+
+```crystal
+# Instead of this (schema DSL with JSON::Any)
+def self.tool(name, description, schema, &)
+  # ...
+end
+
+# Use typed tools for complex schemas
+struct ComplexInput
+  include JSON::Serializable
+  getter name : String
+  getter age : Int32
+  getter preferences : Array(String)
+end
+
+tool = Anthropic.tool(name: "complex", input: ComplexInput) do |input|
+  # input is typed - no .as_s, .as_i calls needed!
+end
+```
+
+### 2. Handle Tool Use Explicitly
+
+```crystal
+response = client.messages.create(...)
+
+if response.tool_use?
+  response.tool_use_blocks.each do |tool_use|
+    tool = tools.find { |t| t.name == tool_use.name }
+    if tool
+      result = tool.call(tool_use.input)
+      puts "Tool result: #{result}"
+    end
+  end
+else
+  puts response.text
+end
+```
+
+### 3. Handle Stream Events Efficiently
+
+```crystal
+# Use pattern matching on event types
+client.messages.stream(...) do |event|
+  case event
+  when Anthropic::ContentBlockDeltaEvent
+    # Text content
+    print event.text if event.text
+    # Thinking content
+    puts event.thinking if event.thinking
+  when Anthropic::MessageStopEvent
+    puts "\nDone: #{event.stop_reason}"
+  end
+end
+```
+
+### 4. Handle Errors Appropriately
+
+```crystal
+begin
+  client.messages.create(...)
+rescue Anthropic::RateLimitError => e
+  sleep(e.retry_after.not_nil!.seconds)
+  retry
+rescue Anthropic::AuthenticationError => e
+  puts "Check your API key!"
+  raise
+rescue Anthropic::APIError => e
+  puts "API error: #{e.status} - #{e.body}"
+  raise
+end
+```
+
+### 5. Use Batch API for Multiple Requests
+
+```crystal
+# Instead of multiple sequential requests
+requests = large_array.map_with_index do |item, idx|
+  Anthropic::BatchRequest.new(
+    custom_id: "req-#{idx}",
+    params: Anthropic::BatchRequestParams.new(
+      model: Anthropic::Model::CLAUDE_HAIKU_4_5,
+      max_tokens: 100,
+      messages: [Anthropic::MessageParam.user(item)]
+    )
+  )
+end
+
+batch = client.messages.batches.create(requests: requests)
+```
+
+### 6. Reuse Client Instance
+
+```crystal
+# Create once, reuse
+client = Anthropic::Client.new
+
+# Use throughout your application
+def process_message(client, input)
+  client.messages.create(...)
+end
+```
+
+---
+
+## Migration from Ruby SDK
+
+### Key Differences
+
+| Feature | Ruby SDK | Crystal SDK |
+|---------|----------|-------------|
+| Tool Runner | `client.beta.messages.tool_runner(...)` | `client.beta.messages.tool_runner(...)` ✅ Same |
+| Tools parameter | Single `tools` array | Separate `tools:` and `server_tools:` parameters |
+| Streaming | Returns stream object with `.text.each` | Block-based only: `stream(...) { |event| }` |
+| Error headers | `e.headers` | `e.headers` ✅ Same |
+| Request ID | `_request_id` property | Not available |
+| Custom logger | `logger:` parameter | Not available |
+
+### Migration Examples
+
+#### Basic Message
+
+**Ruby:**
+```ruby
+client = Anthropic::Client.new
+message = client.messages.create(
+  model: "claude-sonnet-4-5-20250929",
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Hello"}]
+)
+puts message.content
+```
+
+**Crystal:**
+```crystal
+client = Anthropic::Client.new
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Hello"}]
+)
+puts message.text  # Note: .text instead of .content
+```
+
+#### Streaming
+
+**Ruby:**
+```ruby
+stream = client.messages.stream(
+  model: "claude-sonnet-4-5-20250929",
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Hello"}]
+)
+
+stream.text.each do |text|
+  print text
+end
+```
+
+**Crystal:**
+```crystal
+# Crystal uses block-based streaming (iterator-based not yet implemented)
+client.messages.stream(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Hello"}]
+) do |event|
+  if event.is_a?(Anthropic::ContentBlockDeltaEvent) && event.text
+    print event.text
+  end
+end
+```
+
+#### Tool Use
+
+**Ruby:**
+```ruby
+weather = Anthropic::Tool.new(
+  name: "get_weather",
+  description: "Get weather",
+  input_schema: {
+    type: "object",
+    properties: {
+      location: {type: "string", description: "City"}
+    },
+    required: ["location"]
+  }
+) do |input|
+  # ...
+end
+
+message = client.messages.create(
+  model: "claude-sonnet-4-5-20250929",
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Weather?"}],
+  tools: [weather]
+)
+```
+
+**Crystal:**
+```crystal
+weather = Anthropic.tool(
+  name: "get_weather",
+  description: "Get weather",
+  schema: {
+    "location" => Anthropic::Schema.string("City")
+  },
+  required: ["location"]
+) do |input|
+  # ...
+end
+
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Weather?"}],
+  tools: [weather]
+)
+```
+
+#### Tool Runner
+
+**Ruby:**
+```ruby
+client.beta.messages.tool_runner(
+  model: "claude-sonnet-4-5-20250929",
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Calculate 15 + 27"}],
+  tools: [calculator]
+).each_message { |msg| puts msg.content }
+```
+
+**Crystal:**
+```crystal
+client.beta.messages.tool_runner(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 1024,
+  messages: [Anthropic::MessageParam.user("Calculate 15 + 27")],
+  tools: [calculator] of Anthropic::Tool
+).each_message { |msg| puts msg.text }
+```
+
+---
+
+## Known Limitations
+
+### Out of Scope (Documented as Future)
+
+- **AWS Bedrock Support**: Not implemented, listed as future feature
+- **Google Vertex Support**: Not implemented, listed as future feature
+
+### Intentional Design Choices
+
+- **Separate `tools` and `server_tools` parameters**: For type safety and automatic beta header management
+- **No bracket notation**: Crystal doesn't support Ruby's `obj[:prop]` syntax
+- **Strong typing**: This is a feature, not a limitation
+- **No browser support**: Not applicable for Crystal (server-side only)
+- **No custom logger injection**: Crystal apps use the built-in `Log` module
+
+### Not Implemented (Post-1.0)
+
+- **Iterator-based streaming**: The `stream` method requires a block; returning a `MessageStream` object is not yet supported due to HTTP connection lifecycle limitations
+- Per-request options (timeout, retries)
+- Raw HTTP response access
+- Undocumented parameters support
+- Connection pooling configuration
+
+---
+
+## File Reference
+
+### Core Files
+
+| File | Purpose |
+|------|---------|
+| `src/anthropic.cr` | Main module, requires all components |
+| `src/anthropic/client.cr` | HTTP client with retry logic |
+| `src/anthropic/errors.cr` | Error types |
+| `src/anthropic/schema.cr` | Schema DSL for tools |
+
+### Model Files
+
+| File | Purpose |
+|------|---------|
+| `src/anthropic/models/message.cr` | Message, MessageParam |
+| `src/anthropic/models/content.cr` | Content blocks (Text, Image, Tool, etc.) |
+| `src/anthropic/models/params.cr` | Request parameters |
+| `src/anthropic/models/role.cr` | Role enum |
+| `src/anthropic/models/usage.cr` | Usage struct |
+| `src/anthropic/models/model_info.cr` | Model information |
+
+### Resource Files
+
+| File | Purpose |
+|------|---------|
+| `src/anthropic/resources/messages.cr` | Messages API |
+| `src/anthropic/resources/batches.cr` | Batches API |
+| `src/anthropic/resources/models.cr` | Models API |
+| `src/anthropic/resources/files.cr` | Files API |
+| `src/anthropic/resources/beta.cr` | Beta namespace |
+
+### Tool Files
+
+| File | Purpose |
+|------|---------|
+| `src/anthropic/tools/tool.cr` | Tool, InlineTool, TypedTool |
+| `src/anthropic/tools/tool_choice.cr` | ToolChoice types |
+| `src/anthropic/tools/server_tools.cr` | WebSearchTool, etc. |
+| `src/anthropic/tools/runner.cr` | ToolRunner |
+
+### Streaming Files
+
+| File | Purpose |
+|------|---------|
+| `src/anthropic/streaming/events.cr` | Stream event types |
+| `src/anthropic/streaming/stream.cr` | MessageStream, iterators |
+
+---
+
+## Testing Notes
+
+Tests use WebMock for HTTP stubbing. To run tests:
+
+```bash
+crystal spec              # Run all tests
+crystal spec spec/file.cr # Run specific test file
+```
+
+Test helpers:
+- `stub_and_capture(:post, url, response)` - Stub request and capture body
+- `WebMock.stub(:post, url).to_return(body: response)` - Simple stub
+
+---
+
+## Version Information
+
+- **Current Version**: 0.1.0
+- **API Version**: 2023-06-01
+- **Crystal Version**: 1.0+ recommended
+
+This documentation should provide all the information needed for an AI assistant to effectively work with the anthropic-cr Crystal SDK.
