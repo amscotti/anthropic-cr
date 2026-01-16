@@ -1,4 +1,4 @@
-require "../src/anthropic"
+require "../src/anthropic-cr"
 require "dotenv"
 
 # Citations example: Using document citations for source attribution

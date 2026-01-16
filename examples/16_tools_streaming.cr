@@ -1,4 +1,4 @@
-require "../src/anthropic"
+require "../src/anthropic-cr"
 require "dotenv"
 
 # Tools Streaming example: Watch tool calls being built in real-time

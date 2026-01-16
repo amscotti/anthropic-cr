@@ -47,7 +47,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 ## Quick Start
 
 ```crystal
-require "anthropic"
+require "anthropic-cr"
 
 # Initialize the client (uses ANTHROPIC_API_KEY from environment)
 client = Anthropic::Client.new

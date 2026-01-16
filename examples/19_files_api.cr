@@ -1,4 +1,4 @@
-require "../src/anthropic"
+require "../src/anthropic-cr"
 require "dotenv"
 
 # Files API example: Upload, manage, and use files with Claude

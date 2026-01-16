@@ -1,4 +1,4 @@
-require "../src/anthropic"
+require "../src/anthropic-cr"
 require "dotenv"
 
 # Web Search example: Using Claude's built-in web search capability

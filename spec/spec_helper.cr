@@ -1,7 +1,7 @@
 require "spec"
 require "webmock"
 require "vcr"
-require "../src/anthropic"
+require "../src/anthropic-cr"
 
 # Load fixtures
 require "./fixtures/responses"

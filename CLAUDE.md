@@ -19,7 +19,7 @@ crystal spec
 crystal spec spec/anthropic/resources/messages_spec.cr
 
 # Type check without building
-crystal build --no-codegen src/anthropic.cr
+crystal build --no-codegen src/anthropic-cr.cr
 
 # Format code
 crystal tool format

@@ -67,4 +67,4 @@ jobs:
         run: shards install
 
       - name: Type check library
-        run: crystal build --no-codegen src/anthropic.cr
+        run: crystal build --no-codegen src/anthropic-cr.cr

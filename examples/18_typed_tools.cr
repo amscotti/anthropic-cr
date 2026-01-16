@@ -1,4 +1,4 @@
-require "../src/anthropic"
+require "../src/anthropic-cr"
 require "dotenv"
 
 # Typed Tools example: Ruby BaseTool-like pattern with typed inputs

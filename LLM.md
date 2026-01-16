@@ -62,7 +62,7 @@ dependencies:
 ### Basic Usage
 
 ```crystal
-require "anthropic"
+require "anthropic-cr"
 
 client = Anthropic::Client.new  # Uses ANTHROPIC_API_KEY env var
 
