@@ -188,6 +188,70 @@ client.beta.messages   # Beta Messages API
 client.beta.files      # Beta Files API
 ```
 
+### Custom Base URL (Alternative Providers)
+
+The SDK supports custom `base_url` configuration, enabling use with any Anthropic-compatible API endpoint. This includes local model servers, API gateways, and proxy services.
+
+```crystal
+client = Anthropic::Client.new(
+  api_key: "your-api-key",
+  base_url: "https://your-provider.com/api"
+)
+```
+
+#### Ollama (Local Models)
+
+Run local models via Ollama's Anthropic-compatible API.
+See: https://ollama.com/blog/claude
+
+```crystal
+client = Anthropic::Client.new(
+  api_key: "ollama",  # Required by SDK but ignored by Ollama
+  base_url: "http://localhost:11434"
+)
+
+message = client.messages.create(
+  model: "qwen3-coder",  # Any Ollama model you have pulled
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Hello!"}]
+)
+```
+
+**Setup:** Install Ollama, run `ollama serve`, then `ollama pull qwen3-coder`
+
+#### OpenRouter
+
+Access multiple LLM providers through a unified API with Anthropic-compatible endpoint.
+See: https://openrouter.ai/docs
+
+```crystal
+client = Anthropic::Client.new(
+  api_key: ENV["OPENROUTER_API_KEY"],
+  base_url: "https://openrouter.ai/api"
+)
+```
+
+#### LiteLLM Proxy
+
+Open-source LLM gateway supporting 100+ providers with Anthropic API support.
+See: https://docs.litellm.ai/docs/anthropic_unified
+
+```crystal
+# Unified endpoint - adds load balancing, fallbacks, cost tracking
+client = Anthropic::Client.new(
+  api_key: ENV["LITELLM_API_KEY"],
+  base_url: "http://localhost:4000"
+)
+
+# Passthrough endpoint - direct proxy with no translation
+client = Anthropic::Client.new(
+  api_key: ENV["LITELLM_API_KEY"],
+  base_url: "http://localhost:4000/anthropic"
+)
+```
+
+**Note:** When using third-party providers, consult their documentation for supported features, model names, and any API differences.
+
 ---
 
 ## Messages API
