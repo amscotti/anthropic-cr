@@ -12,6 +12,8 @@ module Fixtures
 
     MESSAGE_WITH_THINKING = %({"id":"msg_thinking_01","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"Let me think about this carefully...","signature":"sig123"},{"type":"text","text":"After consideration, here is my answer."}],"model":"claude-sonnet-4-5-20250929","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":40,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}})
 
+    MESSAGE_OPUS_46 = %({"id":"msg_opus46_01","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"Adaptive thinking in action...","signature":"sig456"},{"type":"text","text":"Hello from Opus 4.6!"}],"model":"claude-opus-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":15,"output_tokens":25}})
+
     # Model API responses
     MODEL_INFO = %({"type":"model","id":"claude-sonnet-4-5-20250929","display_name":"Claude Sonnet 4.5","created_at":"2025-09-29T00:00:00Z"})
 

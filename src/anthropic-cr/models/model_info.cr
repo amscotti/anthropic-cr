@@ -1,7 +1,10 @@
 module Anthropic
   # Model ID constants for all available Claude models
   module Model
-    # Latest Claude 4.5 models
+    # Claude 4.6
+    CLAUDE_OPUS_4_6 = "claude-opus-4-6"
+
+    # Claude 4.5 models
     CLAUDE_OPUS_4_5   = "claude-opus-4-5-20251101"
     CLAUDE_SONNET_4_5 = "claude-sonnet-4-5-20250929"
     CLAUDE_HAIKU_4_5  = "claude-haiku-4-5-20251001"
@@ -20,13 +23,15 @@ module Anthropic
   # Shorthand helper for accessing model IDs via symbols
   #
   # ```
-  # Anthropic.model_name(:opus)   # => "claude-opus-4-5-20251101"
-  # Anthropic.model_name(:sonnet) # => "claude-sonnet-4-5-20250929"
-  # Anthropic.model_name(:haiku)  # => "claude-haiku-4-5-20251001"
+  # Anthropic.model_name(:opus)     # => "claude-opus-4-6"
+  # Anthropic.model_name(:sonnet)   # => "claude-sonnet-4-5-20250929"
+  # Anthropic.model_name(:haiku)    # => "claude-haiku-4-5-20251001"
+  # Anthropic.model_name(:opus_4_5) # => "claude-opus-4-5-20251101"
   # ```
   def self.model_name(shorthand : Symbol) : String
     case shorthand
-    when :opus      then Model::CLAUDE_OPUS_4_5
+    when :opus      then Model::CLAUDE_OPUS_4_6
+    when :opus_4_5  then Model::CLAUDE_OPUS_4_5
     when :sonnet    then Model::CLAUDE_SONNET_4_5
     when :haiku     then Model::CLAUDE_HAIKU_4_5
     when :opus_4    then Model::CLAUDE_OPUS_4
@@ -38,7 +43,7 @@ module Anthropic
     else
       raise ArgumentError.new(
         "Unknown model shorthand: #{shorthand}. " \
-        "Valid options: :opus, :sonnet, :haiku, :opus_4, :sonnet_4, " \
+        "Valid options: :opus, :opus_4_5, :sonnet, :haiku, :opus_4, :sonnet_4, " \
         ":opus_3_7, :haiku_3_5, :opus_3, :haiku_3"
       )
     end

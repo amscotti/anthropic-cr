@@ -81,6 +81,9 @@ module Anthropic
     @max_iterations : Int32
     @system : String?
     @compaction : CompactionConfig?
+    @thinking : ThinkingConfig?
+    @output_config : OutputConfig?
+    @inference_geo : String?
 
     # Stateful iteration tracking
     @current_messages : Array(MessageParam)
@@ -97,6 +100,9 @@ module Anthropic
       @max_iterations : Int32 = 10,
       @system : String? = nil,
       @compaction : CompactionConfig? = nil,
+      @thinking : ThinkingConfig? = nil,
+      @output_config : OutputConfig? = nil,
+      @inference_geo : String? = nil,
     )
       @initial_messages = messages.dup
       @current_messages = messages.dup
@@ -162,7 +168,10 @@ module Anthropic
         max_tokens: @max_tokens,
         messages: @current_messages,
         tools: @tools,
-        system: @system
+        system: @system,
+        thinking: @thinking,
+        output_config: @output_config,
+        inference_geo: @inference_geo
       )
 
       @last_response = response
@@ -315,7 +324,10 @@ module Anthropic
           max_tokens: @max_tokens,
           messages: @current_messages,
           tools: @tools,
-          system: @system
+          system: @system,
+          thinking: @thinking,
+          output_config: @output_config,
+          inference_geo: @inference_geo
         ) do |event|
           # Yield every event to the caller
           block.call(event)

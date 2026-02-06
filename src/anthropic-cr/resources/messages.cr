@@ -54,6 +54,8 @@ module Anthropic
       metadata : Hash(String, String)? = nil,
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -75,7 +77,9 @@ module Anthropic
         stop_sequences: stop_sequences,
         metadata: metadata,
         service_tier: service_tier,
-        thinking: thinking
+        thinking: thinking,
+        output_config: output_config,
+        inference_geo: inference_geo
       )
 
       # Build beta headers for server tools (web search requires beta)
@@ -114,6 +118,8 @@ module Anthropic
       metadata : Hash(String, String)? = nil,
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
       &
     )
       # Convert messages to typed MessageParam array
@@ -136,7 +142,9 @@ module Anthropic
         stop_sequences: stop_sequences,
         metadata: metadata,
         service_tier: service_tier,
-        thinking: thinking
+        thinking: thinking,
+        output_config: output_config,
+        inference_geo: inference_geo
       )
 
       # Build beta headers for server tools
@@ -176,6 +184,8 @@ module Anthropic
       server_tools : Array(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       thinking : ThinkingConfig? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
     ) : TokenCountResponse
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -189,7 +199,9 @@ module Anthropic
         system: system,
         tools: tool_definitions,
         tool_choice: tool_choice,
-        thinking: thinking
+        thinking: thinking,
+        output_config: output_config,
+        inference_geo: inference_geo
       )
 
       # Build beta headers for server tools

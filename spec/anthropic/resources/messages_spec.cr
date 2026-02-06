@@ -165,6 +165,67 @@ describe Anthropic::Messages do
       stops[0].as_s.should eq("END")
       stops[1].as_s.should eq("STOP")
     end
+
+    it "sends output_config with effort" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_OPUS_46)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: Anthropic::Model::CLAUDE_OPUS_4_6,
+        max_tokens: 16384,
+        output_config: Anthropic::OutputConfig.new(effort: "high"),
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      body = JSON.parse(capture.body.not_nil!)
+      body["output_config"]["effort"].as_s.should eq("high")
+    end
+
+    it "sends inference_geo" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_OPUS_46)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: Anthropic::Model::CLAUDE_OPUS_4_6,
+        max_tokens: 16384,
+        inference_geo: "us",
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      body = JSON.parse(capture.body.not_nil!)
+      body["inference_geo"].as_s.should eq("us")
+    end
+
+    it "omits output_config and inference_geo when nil" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: "claude-sonnet-4-5-20250929",
+        max_tokens: 1024,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      body = JSON.parse(capture.body.not_nil!)
+      body["output_config"]?.should be_nil
+      body["inference_geo"]?.should be_nil
+    end
+
+    it "sends ThinkingConfig.adaptive" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_OPUS_46)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: Anthropic::Model::CLAUDE_OPUS_4_6,
+        max_tokens: 16384,
+        thinking: Anthropic::ThinkingConfig.adaptive,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      body = JSON.parse(capture.body.not_nil!)
+      body["thinking"]["type"].as_s.should eq("adaptive")
+      body["thinking"]["budget_tokens"]?.should be_nil
+    end
   end
 
   describe "#batches" do

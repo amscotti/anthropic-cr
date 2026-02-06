@@ -15,7 +15,9 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **Typed Tools** - Ruby BaseTool-like pattern with struct inputs
 - ✅ Tool runner (automatic tool execution loop)
 - ✅ **Web Search** - Built-in web search via server-side tool
-- ✅ **Extended Thinking** - Enable Claude's reasoning process
+- ✅ **Extended Thinking** - Enable Claude's reasoning process (including adaptive thinking)
+- ✅ **Effort Control** - Control output effort level via `output_config`
+- ✅ **Inference Geo** - Data residency control for inference requests
 - ✅ **Structured Outputs** - Type-safe JSON responses via beta API
 - ✅ **Citations** - Document citations with streaming support
 - ✅ **Beta Namespace** - `client.beta.messages` matching Ruby SDK
@@ -248,13 +250,55 @@ message = client.messages.create(
 
 # Response includes both thinking and final answer
 message.content.each do |block|
-  case block["type"]?.try(&.as_s)
-  when "thinking"
-    puts "Thinking: #{block["thinking"]?.try(&.as_s)}"
-  when "text"
-    puts "Answer: #{block["text"]?.try(&.as_s)}"
+  case block
+  when Anthropic::ThinkingContent
+    puts "Thinking: #{block.thinking}"
+  when Anthropic::TextContent
+    puts "Answer: #{block.text}"
   end
 end
+```
+
+#### Adaptive Thinking (Opus 4.6+)
+
+With Claude Opus 4.6, you can use adaptive thinking where the model decides how much to think:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_6,
+  max_tokens: 16384,
+  thinking: Anthropic::ThinkingConfig.adaptive,
+  messages: [{role: "user", content: "Explain quantum computing"}]
+)
+```
+
+#### Effort Control
+
+Control how much effort Claude puts into a response:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_6,
+  max_tokens: 16384,
+  thinking: Anthropic::ThinkingConfig.adaptive,
+  output_config: Anthropic::OutputConfig.new(effort: "high"),
+  messages: [{role: "user", content: "Write a detailed analysis..."}]
+)
+```
+
+Effort levels: `"low"`, `"medium"`, `"high"`, `"max"`
+
+#### Inference Geo
+
+Control where your request is processed for data residency:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_6,
+  max_tokens: 16384,
+  inference_geo: "us",
+  messages: [{role: "user", content: "Hello!"}]
+)
 ```
 
 ### Vision
@@ -370,14 +414,16 @@ puts final.text
 ## Model Constants
 
 ```crystal
-Anthropic::Model::CLAUDE_OPUS_4_5      # Latest Opus
+Anthropic::Model::CLAUDE_OPUS_4_6      # Latest Opus (4.6)
+Anthropic::Model::CLAUDE_OPUS_4_5      # Opus 4.5
 Anthropic::Model::CLAUDE_SONNET_4_5    # Latest Sonnet
 Anthropic::Model::CLAUDE_HAIKU_4_5     # Latest Haiku
 
 # Or use shorthands
-Anthropic.model_name(:opus)    # => "claude-opus-4-5-20251101"
-Anthropic.model_name(:sonnet)  # => "claude-sonnet-4-5-20250929"
-Anthropic.model_name(:haiku)   # => "claude-haiku-4-5-20251001"
+Anthropic.model_name(:opus)      # => "claude-opus-4-6"
+Anthropic.model_name(:opus_4_5)  # => "claude-opus-4-5-20251101"
+Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-5-20250929"
+Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
 ```
 
 ## Examples
@@ -413,6 +459,8 @@ See the [examples/](./examples/) directory for complete working examples:
 - `22_prompt_caching.cr` - Prompt caching for efficiency
 - `23_auto_compaction.cr` - Automatic context compaction
 - `24_advanced_streaming.cr` - Advanced streaming patterns
+- `25_ollama.cr` - Ollama local model integration
+- `26_opus_46.cr` - Claude Opus 4.6 (adaptive thinking, effort, inference geo)
 
 Run examples with:
 ```bash

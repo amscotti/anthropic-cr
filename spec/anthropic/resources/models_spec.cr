@@ -69,8 +69,17 @@ end
 
 describe Anthropic::Model do
   it "has model constants" do
+    Anthropic::Model::CLAUDE_OPUS_4_6.should eq("claude-opus-4-6")
     Anthropic::Model::CLAUDE_SONNET_4_5.should eq("claude-sonnet-4-5-20250929")
     Anthropic::Model::CLAUDE_OPUS_4_5.should eq("claude-opus-4-5-20251101")
     Anthropic::Model::CLAUDE_HAIKU_4_5.should eq("claude-haiku-4-5-20251001")
+  end
+
+  it "maps :opus shorthand to Opus 4.6" do
+    Anthropic.model_name(:opus).should eq("claude-opus-4-6")
+  end
+
+  it "maps :opus_4_5 shorthand to Opus 4.5" do
+    Anthropic.model_name(:opus_4_5).should eq("claude-opus-4-5-20251101")
   end
 end

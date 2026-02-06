@@ -468,6 +468,13 @@ module Anthropic
     def self.disabled : self
       new(type: "disabled")
     end
+
+    # Adaptive thinking (Opus 4.6+)
+    #
+    # Lets the model decide how much thinking to use based on the task.
+    def self.adaptive : self
+      new(type: "adaptive")
+    end
   end
 
   # Union type for all content blocks (including server tool content)

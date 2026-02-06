@@ -37,7 +37,9 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - Models API for listing/retrieving models
 - Files API for file uploads/downloads
 - Web Search server-side tool
-- Extended thinking / reasoning support
+- Extended thinking / reasoning support (including adaptive thinking)
+- Effort control via output_config
+- Inference geo for data residency
 - Structured outputs via beta API
 - Document citations with streaming support
 - Prompt caching support
@@ -300,7 +302,9 @@ client.messages.create(
   stop_sequences: Array(String)?,       # Stop sequences
   metadata: Hash(String, String)?,      # Request metadata
   service_tier: String?,                # Service tier
-  thinking: ThinkingConfig?             # Extended thinking configuration
+  thinking: ThinkingConfig?,            # Extended thinking configuration
+  output_config: OutputConfig?,         # Effort level and output format
+  inference_geo: String?                # Inference region (e.g. "us")
 )
 ```
 
@@ -738,11 +742,20 @@ puts result.confidence
 Enable Claude's reasoning process:
 
 ```crystal
+# Fixed budget thinking
 message = client.messages.create(
   model: Anthropic::Model::CLAUDE_SONNET_4_5,
   max_tokens: 8192,
   thinking: Anthropic::ThinkingConfig.enabled(budget_tokens: 4000),
   messages: [{role: "user", content: "Solve this logic puzzle..."}]
+)
+
+# Adaptive thinking (Opus 4.6+) - model decides how much to think
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_6,
+  max_tokens: 16384,
+  thinking: Anthropic::ThinkingConfig.adaptive,
+  messages: [{role: "user", content: "Explain quantum computing"}]
 )
 
 # Access thinking content
@@ -751,6 +764,35 @@ message.content.each do |block|
     puts "Reasoning: #{thinking.thinking}"
   end
 end
+```
+
+### Effort Control
+
+Control how much effort Claude puts into responses via `output_config`:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_6,
+  max_tokens: 16384,
+  thinking: Anthropic::ThinkingConfig.adaptive,
+  output_config: Anthropic::OutputConfig.new(effort: "high"),
+  messages: [{role: "user", content: "Write a detailed analysis..."}]
+)
+```
+
+Effort levels: `"low"`, `"medium"`, `"high"`, `"max"`
+
+### Inference Geo
+
+Control where inference is processed for data residency:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_6,
+  max_tokens: 16384,
+  inference_geo: "us",
+  messages: [{role: "user", content: "Hello!"}]
+)
 ```
 
 ### Web Search
@@ -832,14 +874,16 @@ puts model.description  # Model description
 
 ```crystal
 # Latest model versions
+Anthropic::Model::CLAUDE_OPUS_4_6   # "claude-opus-4-6"
 Anthropic::Model::CLAUDE_OPUS_4_5
 Anthropic::Model::CLAUDE_SONNET_4_5
 Anthropic::Model::CLAUDE_HAIKU_4_5
 
 # Model shorthands
-Anthropic.model_name(:opus)    # => "claude-opus-4-5-20251101"
-Anthropic.model_name(:sonnet)  # => "claude-sonnet-4-5-20250929"
-Anthropic.model_name(:haiku)   # => "claude-haiku-4-5-20251001"
+Anthropic.model_name(:opus)      # => "claude-opus-4-6"
+Anthropic.model_name(:opus_4_5)  # => "claude-opus-4-5-20251101"
+Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-5-20250929"
+Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
 ```
 
 ---
@@ -1084,6 +1128,8 @@ tool_choice: ToolChoice?         # Tool selection behavior
 
 # Advanced
 thinking: ThinkingConfig?        # Extended thinking configuration
+output_config: OutputConfig?     # Effort level and output format
+inference_geo: String?           # Inference region (e.g. "us")
 ```
 
 ### ToolChoice Types

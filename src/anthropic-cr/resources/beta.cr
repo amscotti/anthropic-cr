@@ -69,8 +69,11 @@ module Anthropic
       max_iterations : Int32 = 10,
       system : String? = nil,
       compaction : CompactionConfig? = nil,
+      thinking : ThinkingConfig? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
     ) : ToolRunner
-      ToolRunner.new(@client, model, max_tokens, messages, tools, max_iterations, system, compaction)
+      ToolRunner.new(@client, model, max_tokens, messages, tools, max_iterations, system, compaction, thinking, output_config, inference_geo)
     end
 
     # Create a message with beta features
@@ -101,6 +104,8 @@ module Anthropic
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
       output_schema : BaseOutputSchema? = nil,
+      effort : String? = nil,
+      inference_geo : String? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -110,6 +115,13 @@ module Anthropic
 
       # Build output format if schema provided
       output_format = output_schema.try { |schema| OutputFormat.from_output_schema(schema) }
+
+      # Build output_config when effort or output_format is provided
+      output_config = if effort || output_format
+                        OutputConfig.new(effort: effort, format: output_format)
+                      else
+                        nil
+                      end
 
       params = BetaMessageCreateParams.new(
         model: model,
@@ -126,7 +138,9 @@ module Anthropic
         metadata: metadata,
         service_tier: service_tier,
         thinking: thinking,
-        output_format: output_format
+        output_format: effort ? nil : output_format,
+        output_config: output_config,
+        inference_geo: inference_geo
       )
 
       beta_headers = {"anthropic-beta" => betas.join(",")}
@@ -164,6 +178,8 @@ module Anthropic
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
       output_schema : BaseOutputSchema? = nil,
+      effort : String? = nil,
+      inference_geo : String? = nil,
       &
     )
       # Convert messages to typed MessageParam array
@@ -174,6 +190,13 @@ module Anthropic
 
       # Build output format if schema provided
       output_format = output_schema.try { |schema| OutputFormat.from_output_schema(schema) }
+
+      # Build output_config when effort or output_format is provided
+      output_config = if effort || output_format
+                        OutputConfig.new(effort: effort, format: output_format)
+                      else
+                        nil
+                      end
 
       params = BetaMessageCreateParams.new(
         model: model,
@@ -190,7 +213,9 @@ module Anthropic
         metadata: metadata,
         service_tier: service_tier,
         thinking: thinking,
-        output_format: output_format
+        output_format: effort ? nil : output_format,
+        output_config: output_config,
+        inference_geo: inference_geo
       )
 
       beta_headers = {"anthropic-beta" => betas.join(",")}
