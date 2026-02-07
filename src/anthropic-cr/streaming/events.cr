@@ -83,8 +83,19 @@ module Anthropic
     end
   end
 
+  # Compaction delta - streaming compaction content
+  struct CompactionDelta
+    include JSON::Serializable
+
+    getter type : String = "compaction_delta"
+    getter content : String?
+
+    def initialize(@content : String? = nil)
+    end
+  end
+
   # Union of all delta types
-  alias StreamDelta = TextDelta | InputJsonDelta | ThinkingDelta | SignatureDelta | CitationsDelta
+  alias StreamDelta = TextDelta | InputJsonDelta | ThinkingDelta | SignatureDelta | CitationsDelta | CompactionDelta
 
   # Custom converter for StreamDelta discriminated union
   module StreamDeltaConverter
@@ -103,6 +114,8 @@ module Anthropic
         SignatureDelta.from_json(json.to_json)
       when "citations_delta"
         CitationsDelta.from_json(json.to_json)
+      when "compaction_delta"
+        CompactionDelta.from_json(json.to_json)
       else
         # Fallback to text delta for unknown types
         TextDelta.new(text: "")

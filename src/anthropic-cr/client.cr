@@ -167,7 +167,58 @@ module Anthropic
         @default_headers.each { |key, value| hdrs[key] = value }
         extra_headers.try &.each { |key, value| hdrs[key] = value }
 
-        response = client.post(path, headers: hdrs, body: io.to_s)
+        io.rewind
+        response = client.post(path, headers: hdrs, body: io)
+        handle_error(response) unless response.success?
+        return response
+      end
+
+      raise APIError.new("Request failed")
+    end
+
+    # POST multipart form data with multiple files and optional form fields
+    def post_multipart_files(
+      path : String,
+      files : Array(FileUpload),
+      form_fields : Hash(String, String)? = nil,
+      extra_headers : Hash(String, String)? = nil,
+    ) : HTTP::Client::Response
+      uri = URI.parse(@base_url)
+
+      HTTP::Client.new(uri) do |client|
+        client.connect_timeout = @timeout
+        client.read_timeout = @timeout
+
+        # Build multipart body using Crystal's FormData builder
+        body_io = IO::Memory.new
+        builder = HTTP::FormData::Builder.new(body_io)
+
+        # Form fields
+        form_fields.try &.each do |name, value|
+          builder.field(name, value)
+        end
+
+        # File parts
+        files.each do |file|
+          metadata = HTTP::FormData::FileMetadata.new(filename: file.filename)
+          file_headers = HTTP::Headers{"Content-Type" => file.content_type}
+          builder.file("files[]", file.io, metadata, headers: file_headers)
+        end
+
+        builder.finish
+
+        # Headers for multipart
+        hdrs = HTTP::Headers{
+          "x-api-key"         => @api_key,
+          "anthropic-version" => API_VERSION,
+          "content-type"      => builder.content_type,
+          "user-agent"        => "anthropic-crystal/#{VERSION}",
+        }
+        @default_headers.each { |key, value| hdrs[key] = value }
+        extra_headers.try &.each { |key, value| hdrs[key] = value }
+
+        body_io.rewind
+        response = client.post(path, headers: hdrs, body: body_io)
         handle_error(response) unless response.success?
         return response
       end

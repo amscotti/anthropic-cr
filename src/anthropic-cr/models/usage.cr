@@ -1,4 +1,35 @@
 module Anthropic
+  # Breakdown of cached tokens by TTL
+  struct CacheCreation
+    include JSON::Serializable
+
+    @[JSON::Field(key: "ephemeral_1h_input_tokens")]
+    getter ephemeral_1h_input_tokens : Int32
+
+    @[JSON::Field(key: "ephemeral_5m_input_tokens")]
+    getter ephemeral_5m_input_tokens : Int32
+
+    def initialize(
+      @ephemeral_1h_input_tokens : Int32 = 0,
+      @ephemeral_5m_input_tokens : Int32 = 0,
+    )
+    end
+  end
+
+  # Server tool usage statistics
+  struct ServerToolUsage
+    include JSON::Serializable
+
+    @[JSON::Field(key: "web_search_requests")]
+    getter web_search_requests : Int32
+
+    @[JSON::Field(key: "web_fetch_requests")]
+    getter web_fetch_requests : Int32?
+
+    def initialize(@web_search_requests : Int32 = 0, @web_fetch_requests : Int32? = nil)
+    end
+  end
+
   # Token usage statistics for API requests
   #
   # Tracks input and output tokens, as well as prompt caching statistics
@@ -25,6 +56,18 @@ module Anthropic
     # Service tier used for the request
     @[JSON::Field(key: "service_tier")]
     getter service_tier : String?
+
+    # Server tool usage statistics
+    @[JSON::Field(key: "server_tool_use")]
+    getter server_tool_use : ServerToolUsage?
+
+    # Breakdown of cached tokens by TTL
+    @[JSON::Field(key: "cache_creation")]
+    getter cache_creation : CacheCreation?
+
+    # Geographic region where inference was performed
+    @[JSON::Field(key: "inference_geo")]
+    getter inference_geo : String?
   end
 
   # Response from the token counting API

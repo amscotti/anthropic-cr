@@ -51,7 +51,7 @@ module Anthropic
       server_tools : Array(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
-      metadata : Hash(String, String)? = nil,
+      metadata : Metadata? = nil,
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
       output_config : OutputConfig? = nil,
@@ -115,7 +115,7 @@ module Anthropic
       server_tools : Array(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
-      metadata : Hash(String, String)? = nil,
+      metadata : Metadata? = nil,
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
       output_config : OutputConfig? = nil,
@@ -253,6 +253,22 @@ module Anthropic
         case tool
         when WebSearchTool
           betas << WEB_SEARCH_BETA unless betas.includes?(WEB_SEARCH_BETA)
+        when ComputerUseTool
+          betas << COMPUTER_USE_BETA unless betas.includes?(COMPUTER_USE_BETA)
+        when CodeExecutionTool
+          betas << CODE_EXECUTION_BETA unless betas.includes?(CODE_EXECUTION_BETA)
+        when WebFetchTool
+          betas << WEB_FETCH_BETA unless betas.includes?(WEB_FETCH_BETA)
+        when MemoryTool
+          betas << MEMORY_BETA unless betas.includes?(MEMORY_BETA)
+        when MCPTool
+          betas << MCP_CONNECTOR_BETA unless betas.includes?(MCP_CONNECTOR_BETA)
+        when MCPToolset
+          betas << MCP_CLIENT_BETA unless betas.includes?(MCP_CLIENT_BETA)
+        when ToolSearchBM25Tool, ToolSearchRegexTool
+          betas << ADVANCED_TOOL_USE_BETA unless betas.includes?(ADVANCED_TOOL_USE_BETA)
+        when BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
+          betas << COMPUTER_USE_LEGACY_BETA unless betas.includes?(COMPUTER_USE_LEGACY_BETA)
         end
       end
 

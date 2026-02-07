@@ -25,6 +25,21 @@ Lint/UselessAssign:
   Excluded:
     - examples/**/*  # Examples show API usage even if result isn't used
 
+Lint/UnusedArgument:
+  Enabled: true
+
+Lint/Shadowing:
+  Enabled: true
+
+Style/IdenticalConditionalBranches:
+  Enabled: true
+
+Lint/RedundantCondition:
+  Enabled: true
+
+Style/UnlessElse:
+  Enabled: true
+
 # Style rules - enforce consistent code style
 Style/RedundantBegin:
   Enabled: true

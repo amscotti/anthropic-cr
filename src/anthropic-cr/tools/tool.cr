@@ -19,6 +19,31 @@ module Anthropic
       raise NotImplementedError.new("Tool#call must be implemented for auto-execution")
     end
 
+    # Cache control for prompt caching on this tool definition
+    def cache_control : CacheControl?
+      nil
+    end
+
+    # Allowed callers for this tool (beta)
+    def allowed_callers : Array(String)?
+      nil
+    end
+
+    # Whether to defer loading this tool (beta)
+    def defer_loading? : Bool?
+      nil
+    end
+
+    # Input examples for this tool (beta)
+    def input_examples : Array(JSON::Any)?
+      nil
+    end
+
+    # Whether to enable eager input streaming for this tool (beta)
+    def eager_input_streaming : Bool?
+      nil
+    end
+
     # Convert to ToolDefinition for API requests (recommended)
     def to_definition : ToolDefinition
       ToolDefinition.new(
@@ -27,7 +52,12 @@ module Anthropic
         input_schema: InputSchema.build(
           properties: input_schema_properties,
           required: required_properties
-        )
+        ),
+        cache_control: cache_control,
+        allowed_callers: allowed_callers,
+        defer_loading: defer_loading?,
+        input_examples: input_examples,
+        eager_input_streaming: eager_input_streaming
       )
     end
 
@@ -43,6 +73,7 @@ module Anthropic
     @description : String
     @schema : Hash(String, Schema::Property)
     @required : Array(String)
+    @cache_control : CacheControl?
     @handler : Proc(JSON::Any, String)?
 
     def initialize(
@@ -50,6 +81,7 @@ module Anthropic
       @description : String,
       @schema : Hash(String, Schema::Property),
       @required : Array(String) = [] of String,
+      @cache_control : CacheControl? = nil,
       &handler : JSON::Any -> String
     )
       @handler = handler
@@ -69,6 +101,10 @@ module Anthropic
 
     def required_properties : Array(String)
       @required
+    end
+
+    def cache_control : CacheControl?
+      @cache_control
     end
 
     def call(input : JSON::Any) : String
@@ -102,9 +138,10 @@ module Anthropic
     description : String,
     schema : Hash(String, Schema::Property),
     required : Array(String) = [] of String,
+    cache_control : CacheControl? = nil,
     &handler : JSON::Any -> String
   ) : Tool
-    InlineTool.new(name, description, schema, required, &handler)
+    InlineTool.new(name, description, schema, required, cache_control, &handler)
   end
 
   # Typed tool with struct input (Ruby BaseTool-like pattern)
@@ -181,7 +218,12 @@ module Anthropic
         input_schema: InputSchema.build(
           properties: properties,
           required: required_arr
-        )
+        ),
+        cache_control: cache_control,
+        allowed_callers: allowed_callers,
+        defer_loading: defer_loading?,
+        input_examples: input_examples,
+        eager_input_streaming: eager_input_streaming
       )
     end
 

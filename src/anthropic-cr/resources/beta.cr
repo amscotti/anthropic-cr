@@ -26,6 +26,16 @@ module Anthropic
     def files : BetaFiles
       BetaFiles.new(@client)
     end
+
+    # Access beta skills API
+    #
+    # ```
+    # skills = client.beta.skills.list
+    # skill = client.beta.skills.retrieve("skill_abc123")
+    # ```
+    def skills : BetaSkills
+      BetaSkills.new(@client)
+    end
   end
 
   # Beta Messages API with explicit beta header support
@@ -100,12 +110,15 @@ module Anthropic
       server_tools : Array(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
-      metadata : Hash(String, String)? = nil,
+      metadata : Metadata? = nil,
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
       output_schema : BaseOutputSchema? = nil,
       effort : String? = nil,
       inference_geo : String? = nil,
+      context_management : ContextManagementConfig? = nil,
+      container : ContainerConfig? = nil,
+      mcp_servers : Array(MCPServerDefinition)? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -138,9 +151,12 @@ module Anthropic
         metadata: metadata,
         service_tier: service_tier,
         thinking: thinking,
-        output_format: effort ? nil : output_format,
+        output_format: output_config ? nil : output_format,
         output_config: output_config,
-        inference_geo: inference_geo
+        inference_geo: inference_geo,
+        context_management: context_management,
+        container: container,
+        mcp_servers: mcp_servers
       )
 
       beta_headers = {"anthropic-beta" => betas.join(",")}
@@ -174,12 +190,15 @@ module Anthropic
       server_tools : Array(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
-      metadata : Hash(String, String)? = nil,
+      metadata : Metadata? = nil,
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
       output_schema : BaseOutputSchema? = nil,
       effort : String? = nil,
       inference_geo : String? = nil,
+      context_management : ContextManagementConfig? = nil,
+      container : ContainerConfig? = nil,
+      mcp_servers : Array(MCPServerDefinition)? = nil,
       &
     )
       # Convert messages to typed MessageParam array
@@ -213,9 +232,12 @@ module Anthropic
         metadata: metadata,
         service_tier: service_tier,
         thinking: thinking,
-        output_format: effort ? nil : output_format,
+        output_format: output_config ? nil : output_format,
         output_config: output_config,
-        inference_geo: inference_geo
+        inference_geo: inference_geo,
+        context_management: context_management,
+        container: container,
+        mcp_servers: mcp_servers
       )
 
       beta_headers = {"anthropic-beta" => betas.join(",")}
