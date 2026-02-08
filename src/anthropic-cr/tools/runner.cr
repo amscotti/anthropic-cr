@@ -356,7 +356,7 @@ module Anthropic
                   name: current_tool_name,
                   input: parsed_input
                 )
-              rescue
+              rescue JSON::ParseException
                 # JSON parse failed, skip
               end
               current_tool_id = ""
@@ -443,7 +443,7 @@ module Anthropic
           system: @system
         )
         count.input_tokens > threshold
-      rescue
+      rescue ex : APIError | IO::Error | Socket::Error
         # If token counting fails, don't compact
         false
       end
@@ -461,7 +461,7 @@ module Anthropic
           tools: @tools,
           system: @system
         ).input_tokens
-      rescue
+      rescue ex : APIError | IO::Error | Socket::Error
         0
       end
 
@@ -518,7 +518,7 @@ module Anthropic
           tools: @tools,
           system: @system
         ).input_tokens
-      rescue
+      rescue ex : APIError | IO::Error | Socket::Error
         0
       end
 

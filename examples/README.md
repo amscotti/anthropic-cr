@@ -66,3 +66,9 @@ crystal run examples/01_basic_message.cr
 | `22_prompt_caching.cr` | Prompt caching |
 | `23_auto_compaction.cr` | Automatic context compaction |
 | `24_advanced_streaming.cr` | Advanced streaming patterns |
+| `25_ollama.cr` | Ollama local model integration |
+| `26_opus_46.cr` | Claude Opus 4.6 features |
+| `27_agent_tools.cr` | Agent tools (bash, text editor, computer use, web fetch, memory) |
+| `28_advanced_features.cr` | Redacted thinking, cache_control, metadata, extended tool fields |
+| `29_beta_params.cr` | MCP servers, container/skills, tool search, CompactionDelta |
+| `30_skills_api.cr` | Skills API (CRUD, versions, container integration) |

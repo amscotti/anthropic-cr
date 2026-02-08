@@ -215,6 +215,20 @@ module Anthropic
     end
   end
 
+  # Redacted thinking content block (extended thinking)
+  #
+  # Returned when thinking content has been redacted by the API.
+  # Must be preserved and passed back in multi-turn conversations.
+  struct RedactedThinkingContent
+    include JSON::Serializable
+
+    getter type : String = "redacted_thinking"
+    getter data : String
+
+    def initialize(@data : String)
+    end
+  end
+
   # Document source types (placeholder for future implementation)
   # These will be implemented when the Files API is added
   struct Base64PDFSource
@@ -382,6 +396,46 @@ module Anthropic
     end
   end
 
+  # Search result content block (input content)
+  #
+  # Used to provide search results as context in messages.
+  struct SearchResultContent
+    include JSON::Serializable
+
+    getter type : String = "search_result"
+    getter source : String
+    getter title : String
+    getter content : Array(TextContent)
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    @[JSON::Field(emit_null: false)]
+    getter citations : CitationConfig?
+
+    def initialize(
+      @source : String,
+      @title : String,
+      @content : Array(TextContent),
+      @cache_control : CacheControl? = nil,
+      @citations : CitationConfig? = nil,
+    )
+    end
+  end
+
+  # Compaction content block
+  #
+  # Returned during auto-compaction of conversation history.
+  struct CompactionContent
+    include JSON::Serializable
+
+    getter type : String = "compaction"
+    getter content : String?
+
+    def initialize(@content : String? = nil)
+    end
+  end
+
   # Citation configuration for documents
   struct CitationConfig
     include JSON::Serializable
@@ -479,7 +533,11 @@ module Anthropic
 
   # Union type for all content blocks (including server tool content)
   alias ContentBlock = TextContent | ImageContent | ToolUseContent | ToolResultContent |
-                       ThinkingContent | DocumentContent | ServerToolUseContent | WebSearchToolResultContent
+                       ThinkingContent | RedactedThinkingContent | DocumentContent |
+                       SearchResultContent | CompactionContent |
+                       ServerToolUseContent | WebSearchToolResultContent |
+                       CodeExecutionToolResultContent | WebFetchToolResultContent |
+                       MCPToolUseContent | MCPToolResultContent
 
   # JSON converter for discriminated union parsing of content blocks
   #
@@ -489,28 +547,35 @@ module Anthropic
     def self.from_json(pull : JSON::PullParser) : ContentBlock
       json = JSON::Any.new(pull)
       type = json["type"]?.try(&.as_s)
+      raw = json.to_json
 
+      parse_core_block(type, raw) ||
+        parse_server_block(type, raw) ||
+        TextContent.new(text: raw)
+    end
+
+    private def self.parse_core_block(type : String?, raw : String) : ContentBlock?
       case type
-      when "text"
-        TextContent.from_json(json.to_json)
-      when "tool_use"
-        ToolUseContent.from_json(json.to_json)
-      when "tool_result"
-        ToolResultContent.from_json(json.to_json)
-      when "thinking"
-        ThinkingContent.from_json(json.to_json)
-      when "image"
-        ImageContent.from_json(json.to_json)
-      when "document"
-        DocumentContent.from_json(json.to_json)
-      when "server_tool_use"
-        ServerToolUseContent.from_json(json.to_json)
-      when "web_search_tool_result"
-        WebSearchToolResultContent.from_json(json.to_json)
-      else
-        # Fallback: return as TextContent with the raw JSON as text
-        # This handles unknown future content types gracefully
-        TextContent.new(text: json.to_json)
+      when "text"              then TextContent.from_json(raw)
+      when "tool_use"          then ToolUseContent.from_json(raw)
+      when "tool_result"       then ToolResultContent.from_json(raw)
+      when "thinking"          then ThinkingContent.from_json(raw)
+      when "redacted_thinking" then RedactedThinkingContent.from_json(raw)
+      when "image"             then ImageContent.from_json(raw)
+      when "document"          then DocumentContent.from_json(raw)
+      when "search_result"     then SearchResultContent.from_json(raw)
+      when "compaction"        then CompactionContent.from_json(raw)
+      end
+    end
+
+    private def self.parse_server_block(type : String?, raw : String) : ContentBlock?
+      case type
+      when "server_tool_use"            then ServerToolUseContent.from_json(raw)
+      when "web_search_tool_result"     then WebSearchToolResultContent.from_json(raw)
+      when "code_execution_tool_result" then CodeExecutionToolResultContent.from_json(raw)
+      when "web_fetch_tool_result"      then WebFetchToolResultContent.from_json(raw)
+      when "mcp_tool_use"               then MCPToolUseContent.from_json(raw)
+      when "mcp_tool_result"            then MCPToolResultContent.from_json(raw)
       end
     end
 

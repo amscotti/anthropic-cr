@@ -27,13 +27,17 @@ require "./anthropic-cr/tools/runner"
 # Request params (typed structs for API requests)
 require "./anthropic-cr/models/params"
 
-# Client and resources
-require "./anthropic-cr/client"
+# Resources
+require "./anthropic-cr/resources/file_upload"
 require "./anthropic-cr/resources/messages"
 require "./anthropic-cr/resources/batches"
 require "./anthropic-cr/resources/models"
 require "./anthropic-cr/resources/files"
+require "./anthropic-cr/resources/skills"
 require "./anthropic-cr/resources/beta"
+
+# Client (must come after resources that define types used in Client methods)
+require "./anthropic-cr/client"
 
 module Anthropic
 end

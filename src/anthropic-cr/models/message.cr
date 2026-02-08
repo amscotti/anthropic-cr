@@ -54,6 +54,11 @@ module Anthropic
       content.compact_map { |block| block.as?(ThinkingContent) }
     end
 
+    # Extract redacted thinking blocks (typed)
+    def redacted_thinking_blocks : Array(RedactedThinkingContent)
+      content.compact_map { |block| block.as?(RedactedThinkingContent) }
+    end
+
     # Get combined text from all text blocks
     #
     # Returns empty string if no text blocks exist.

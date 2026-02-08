@@ -16,12 +16,13 @@ This document provides comprehensive information for working with the anthropic-
 10. [Models API](#models-api)
 11. [Batches API](#batches-api)
 12. [Files API](#files-api)
-13. [Error Handling](#error-handling)
-14. [Configuration Reference](#configuration-reference)
-15. [Common Patterns](#common-patterns)
-16. [Best Practices](#best-practices)
-17. [Migration from Ruby SDK](#migration-from-ruby-sdk)
-18. [Known Limitations](#known-limitations)
+13. [Skills API](#skills-api)
+14. [Error Handling](#error-handling)
+15. [Configuration Reference](#configuration-reference)
+16. [Common Patterns](#common-patterns)
+17. [Best Practices](#best-practices)
+18. [Migration from Ruby SDK](#migration-from-ruby-sdk)
+19. [Known Limitations](#known-limitations)
 
 ---
 
@@ -37,12 +38,27 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - Models API for listing/retrieving models
 - Files API for file uploads/downloads
 - Web Search server-side tool
+- Agent tools (BashTool, TextEditorTool, ComputerUseTool)
+- Web Fetch server-side tool
+- Memory server-side tool
+- Code Execution server-side tool
+- Strict mode on tool definitions
 - Extended thinking / reasoning support (including adaptive thinking)
+- Redacted thinking block support (multi-turn preservation)
 - Effort control via output_config
 - Inference geo for data residency
+- Context management (beta) - auto-compaction, clear tool uses, clear thinking
 - Structured outputs via beta API
 - Document citations with streaming support
 - Prompt caching support
+- MCP servers parameter (beta) for server-side MCP server definitions
+- Container parameter (beta) for skills-based tool use
+- Tool search tools (BM25 and Regex) for deferred tool loading
+- Extended tool fields (beta): allowed_callers, defer_loading, input_examples, eager_input_streaming
+- Compaction streaming delta for context management
+- Usage enrichments: CacheCreation breakdown (ephemeral TTL tokens), inference_geo on Usage
+- Legacy tool versions (October 2024): BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
+- Skills API (beta): full CRUD for skills and skill versions via client.beta.skills
 - Comprehensive error handling with automatic retries
 
 **Status**: Feature complete for core functionality.
@@ -102,7 +118,7 @@ end
 ### Module Structure
 
 ```
-src/anthropic/
+src/anthropic-cr/
 ├── client.cr              # HTTP client with retry logic
 ├── errors.cr              # Error hierarchy (APIError, RateLimitError, etc.)
 ├── schema.cr              # Schema DSL for tool definitions
@@ -114,10 +130,12 @@ src/anthropic/
 │   ├── usage.cr           # Usage struct
 │   └── model_info.cr      # Model information
 ├── resources/             # API resources
+│   ├── file_upload.cr     # FileUpload struct for multipart uploads
 │   ├── messages.cr        # Messages API
 │   ├── batches.cr         # Batches API
 │   ├── models.cr          # Models API
 │   ├── files.cr           # Files API (beta)
+│   ├── skills.cr          # Skills API (beta)
 │   └── beta.cr            # Beta namespace for beta features
 ├── streaming/             # SSE streaming
 │   ├── events.cr          # Event types
@@ -143,7 +161,7 @@ src/anthropic/
 - `Anthropic.tool(name:, input: MyStruct) { |input| }` - TypedTool with struct input
 - `client.beta.messages.tool_runner(...)` - Automatic tool execution loop
 
-**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array)
+**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array). Available server tools: WebSearchTool, BashTool, TextEditorTool, ComputerUseTool, WebFetchTool, MemoryTool, CodeExecutionTool, MCPTool, ToolSearchBM25Tool, ToolSearchRegexTool, BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
 
 ---
 
@@ -188,6 +206,7 @@ client.models          # Models API
 client.beta            # Beta namespace (files, messages with beta features)
 client.beta.messages   # Beta Messages API
 client.beta.files      # Beta Files API
+client.beta.skills     # Beta Skills API
 ```
 
 ### Custom Base URL (Alternative Providers)
@@ -300,7 +319,7 @@ client.messages.create(
   server_tools: Array(ServerTool)?,     # Server-side tools (WebSearch, etc.)
   tool_choice: ToolChoice?,             # How to use tools
   stop_sequences: Array(String)?,       # Stop sequences
-  metadata: Hash(String, String)?,      # Request metadata
+  metadata: Metadata?,                    # Request metadata (user_id)
   service_tier: String?,                # Service tier
   thinking: ThinkingConfig?,            # Extended thinking configuration
   output_config: OutputConfig?,         # Effort level and output format
@@ -330,10 +349,11 @@ message.content.each do |block|
 end
 
 # Convenience methods
-message.tool_use?          # Boolean - did Claude request tool use?
-message.tool_use_blocks    # Array of tool use content blocks
-message.text_blocks        # Array of text content blocks
-message.thinking_blocks    # Array of thinking content blocks
+message.tool_use?               # Boolean - did Claude request tool use?
+message.tool_use_blocks         # Array of tool use content blocks
+message.text_blocks             # Array of text content blocks
+message.thinking_blocks         # Array of thinking content blocks
+message.redacted_thinking_blocks  # Array of redacted thinking content blocks
 
 # Usage information
 puts message.usage.input_tokens
@@ -825,6 +845,89 @@ search = Anthropic::WebSearchTool.new(
 )
 ```
 
+### Agent Tools
+
+Agent tools allow Claude to interact with a computer environment:
+
+```crystal
+# BashTool - execute shell commands
+# TextEditorTool - view and edit files
+# ComputerUseTool - control a computer desktop
+
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 4096,
+  server_tools: [
+    Anthropic::BashTool.new,
+    Anthropic::TextEditorTool.new,
+    Anthropic::ComputerUseTool.new(display_width_px: 1920, display_height_px: 1080),
+  ] of Anthropic::ServerTool,
+  messages: [{role: "user", content: "List files in the current directory"}]
+)
+```
+
+ComputerUseTool options:
+- `display_width_px` (required): Display width in pixels
+- `display_height_px` (required): Display height in pixels
+- `display_number` (optional): For multi-monitor setups
+- `enable_zoom` (optional): Enable zoom for accessibility
+
+TextEditorTool options:
+- `max_characters` (optional): Maximum characters the tool can process
+
+### Web Fetch
+
+Let Claude fetch and read web pages:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 4096,
+  server_tools: [Anthropic::WebFetchTool.new],
+  messages: [{role: "user", content: "Read the content at https://example.com"}]
+)
+
+# With configuration
+fetch = Anthropic::WebFetchTool.new(
+  allowed_domains: ["example.com", "docs.example.com"],
+  max_uses: 5,
+  max_content_tokens: 10_000
+)
+
+# Convenience constructors
+fetch = Anthropic::WebFetchTool.limited_to("example.com", "docs.example.com")
+fetch = Anthropic::WebFetchTool.excluding("spam.com")
+```
+
+### Memory
+
+Let Claude store and retrieve information across conversations:
+
+```crystal
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  max_tokens: 4096,
+  server_tools: [Anthropic::MemoryTool.new],
+  messages: [{role: "user", content: "Remember that my favorite color is blue"}]
+)
+```
+
+### Strict Mode
+
+Enforce strict schema validation on tool definitions:
+
+```crystal
+definition = Anthropic::ToolDefinition.new(
+  name: "get_weather",
+  description: "Get weather for a location",
+  input_schema: Anthropic::InputSchema.build(
+    properties: {"location" => Anthropic::Schema.string("City name")},
+    required: ["location"]
+  ),
+  strict: true  # Enforce strict schema validation
+)
+```
+
 ### Citation Tracking
 
 ```crystal
@@ -1027,6 +1130,211 @@ puts deleted.id
 
 ---
 
+## Skills API
+
+The Skills API (beta) allows managing reusable skills that can be attached to containers for agentic workflows.
+
+### Accessing Skills API
+
+```crystal
+# Access via beta namespace
+client.beta.skills.create(...)
+client.beta.skills.list(...)
+client.beta.skills.retrieve(...)
+client.beta.skills.delete(...)
+
+# Skill versions sub-resource
+client.beta.skills.versions.create(...)
+client.beta.skills.versions.list(...)
+client.beta.skills.versions.retrieve(...)
+client.beta.skills.versions.delete(...)
+```
+
+### Create a Skill
+
+Skills require a `SKILL.md` file with YAML frontmatter at the root of the uploaded files:
+
+```markdown
+---
+name: my-skill
+description: A brief description of what this skill does.
+---
+
+# My Skill
+
+Detailed documentation about the skill...
+```
+
+Using the `FileUpload` struct:
+
+```crystal
+skill = client.beta.skills.create(
+  files: [
+    Anthropic::FileUpload.new(
+      io: File.open("skill/SKILL.md"),
+      filename: "my-skill/SKILL.md",
+      content_type: "text/markdown"
+    ),
+    Anthropic::FileUpload.new(
+      io: File.open("skill/tool.py"),
+      filename: "my-skill/tool.py",
+      content_type: "text/x-python"
+    ),
+  ],
+  display_title: "My Skill"
+)
+
+puts skill.id              # => "skill_..."
+puts skill.display_title   # => "My Skill"
+puts skill.latest_version  # => version timestamp
+```
+
+**Note:** All files must share a common root directory in their filename path (e.g., "my-skill/SKILL.md", "my-skill/tool.py").
+
+### FileUpload Convenience Methods
+
+```crystal
+# From file path with auto-detected content type
+file = Anthropic::FileUpload.from_path("src/tool.py")
+# => content_type: "text/x-python", filename: "tool.py"
+
+# Override filename (e.g. for skill directory structure)
+file = Anthropic::FileUpload.from_path(
+  "src/tool.py",
+  filename: "my-skill/tool.py"
+)
+
+# Override content type explicitly
+file = Anthropic::FileUpload.from_path(
+  "data/config",
+  content_type: "application/json"
+)
+
+# Query content type for any extension
+Anthropic::FileUpload.content_type_for(".py")  # => "text/x-python"
+
+# Supported extensions: .py, .js, .mjs, .ts, .rb, .cr, .md, .txt, .json, .yaml, .yml, .html, .htm, .css, .xml, .sh
+```
+
+### List Skills
+
+```crystal
+skills = client.beta.skills.list(limit: 10)
+
+skills.data.each do |s|
+  puts "#{s.display_title} (#{s.id})"
+  puts "  Source: #{s.source}"
+  puts "  Latest version: #{s.latest_version}"
+end
+
+puts "Has more: #{skills.has_more?}"
+puts "Next page: #{skills.next_page}"
+```
+
+### Retrieve a Skill
+
+```crystal
+skill = client.beta.skills.retrieve("skill_abc123")
+
+puts skill.id
+puts skill.display_title
+puts skill.source  # "custom" | "anthropic"
+puts skill.created_at
+puts skill.updated_at
+```
+
+### Create a Skill Version
+
+```crystal
+version = client.beta.skills.versions.create(
+  skill_id: "skill_abc123",
+  files: [
+    Anthropic::FileUpload.from_path(
+      "updated/tool.py",
+      filename: "my-skill/tool.py"
+    )
+  ]
+)
+
+puts version.id      # => "skill_version_..."
+puts version.version # Unix timestamp
+puts version.name    # From SKILL.md
+```
+
+### List Skill Versions
+
+```crystal
+versions = client.beta.skills.versions.list(
+  skill_id: "skill_abc123",
+  limit: 20
+)
+
+versions.data.each do |v|
+  puts "Version #{v.version} from #{v.created_at}"
+  puts "  Name: #{v.name}"
+  puts "  Description: #{v.description}"
+end
+```
+
+### Retrieve a Version
+
+```crystal
+version = client.beta.skills.versions.retrieve(
+  skill_id: "skill_abc123",
+  version: "1759178010641129"  # Unix timestamp
+)
+
+puts version.id
+puts version.version
+puts version.name
+puts version.directory
+```
+
+### Delete Skills and Versions
+
+**Important:** You must delete all versions before deleting a skill:
+
+```crystal
+skill_id = "skill_abc123"
+
+# First, delete all versions
+versions = client.beta.skills.versions.list(skill_id: skill_id)
+versions.data.each do |v|
+  client.beta.skills.versions.delete(
+    skill_id: skill_id,
+    version: v.version
+  )
+end
+
+# Then delete the skill
+deleted = client.beta.skills.delete(skill_id)
+puts deleted.id  # => "skill_abc123"
+puts deleted.type  # => "skill_deleted"
+```
+
+### Using Skills with Containers
+
+Skills are used with the `container` parameter:
+
+```crystal
+container = Anthropic::ContainerConfig.new(
+  skills: [
+    Anthropic::ContainerSkill.new(skill_id: "skill_abc123")
+  ]
+)
+
+message = client.beta.messages.create(
+  betas: [Anthropic::SKILLS_BETA],
+  model: Anthropic::Model::CLAUDE_OPUS_4_6,
+  max_tokens: 4096,
+  container: container,
+  server_tools: [Anthropic::CodeExecutionTool.new],
+  messages: [{role: "user", content: "Use the skill to..."}]
+)
+```
+
+---
+
 ## Error Handling
 
 ### Error Types
@@ -1118,7 +1426,7 @@ temperature: Float64?                     # Sampling temperature (0.0-1.0)
 top_p: Float64?                           # Top-p sampling (0.0-1.0)
 top_k: Int32?                             # Top-k sampling
 stop_sequences: Array(String)?            # Stop sequences
-metadata: Hash(String, String)?           # Request metadata
+metadata: Metadata?                      # Request metadata (user_id)
 service_tier: String?                     # Service tier
 
 # Tools
@@ -1209,7 +1517,7 @@ message = client.messages.create(
 message = client.messages.create(
   model: Anthropic::Model::CLAUDE_SONNET_4_5,
   max_tokens: 1024,
-  metadata: {"user_id" => "12345", "session_id" => "abc123"},
+  metadata: Anthropic::Metadata.new(user_id: "12345"),
   messages: [{role: "user", content: "Hello"}]
 )
 ```
@@ -1516,47 +1824,49 @@ client.beta.messages.tool_runner(
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic.cr` | Main module, requires all components |
-| `src/anthropic/client.cr` | HTTP client with retry logic |
-| `src/anthropic/errors.cr` | Error types |
-| `src/anthropic/schema.cr` | Schema DSL for tools |
+| `src/anthropic-cr.cr` | Main module, requires all components |
+| `src/anthropic-cr/client.cr` | HTTP client with retry logic |
+| `src/anthropic-cr/errors.cr` | Error types |
+| `src/anthropic-cr/schema.cr` | Schema DSL for tools |
 
 ### Model Files
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic/models/message.cr` | Message, MessageParam |
-| `src/anthropic/models/content.cr` | Content blocks (Text, Image, Tool, etc.) |
-| `src/anthropic/models/params.cr` | Request parameters |
-| `src/anthropic/models/role.cr` | Role enum |
-| `src/anthropic/models/usage.cr` | Usage struct |
-| `src/anthropic/models/model_info.cr` | Model information |
+| `src/anthropic-cr/models/message.cr` | Message, MessageParam |
+| `src/anthropic-cr/models/content.cr` | Content blocks (Text, Image, Tool, etc.) |
+| `src/anthropic-cr/models/params.cr` | Request parameters |
+| `src/anthropic-cr/models/role.cr` | Role enum |
+| `src/anthropic-cr/models/usage.cr` | Usage struct |
+| `src/anthropic-cr/models/model_info.cr` | Model information |
 
 ### Resource Files
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic/resources/messages.cr` | Messages API |
-| `src/anthropic/resources/batches.cr` | Batches API |
-| `src/anthropic/resources/models.cr` | Models API |
-| `src/anthropic/resources/files.cr` | Files API |
-| `src/anthropic/resources/beta.cr` | Beta namespace |
+| `src/anthropic-cr/resources/file_upload.cr` | FileUpload struct for multipart uploads |
+| `src/anthropic-cr/resources/messages.cr` | Messages API |
+| `src/anthropic-cr/resources/batches.cr` | Batches API |
+| `src/anthropic-cr/resources/models.cr` | Models API |
+| `src/anthropic-cr/resources/files.cr` | Files API |
+| `src/anthropic-cr/resources/skills.cr` | Skills API (beta) |
+| `src/anthropic-cr/resources/beta.cr` | Beta namespace |
 
 ### Tool Files
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic/tools/tool.cr` | Tool, InlineTool, TypedTool |
-| `src/anthropic/tools/tool_choice.cr` | ToolChoice types |
-| `src/anthropic/tools/server_tools.cr` | WebSearchTool, etc. |
-| `src/anthropic/tools/runner.cr` | ToolRunner |
+| `src/anthropic-cr/tools/tool.cr` | Tool, InlineTool, TypedTool |
+| `src/anthropic-cr/tools/tool_choice.cr` | ToolChoice types |
+| `src/anthropic-cr/tools/server_tools.cr` | WebSearchTool, BashTool, TextEditorTool, ComputerUseTool, WebFetchTool, MemoryTool, CodeExecutionTool, MCPTool, ToolSearchBM25Tool, ToolSearchRegexTool |
+| `src/anthropic-cr/tools/runner.cr` | ToolRunner |
 
 ### Streaming Files
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic/streaming/events.cr` | Stream event types |
-| `src/anthropic/streaming/stream.cr` | MessageStream, iterators |
+| `src/anthropic-cr/streaming/events.cr` | Stream event types |
+| `src/anthropic-cr/streaming/stream.cr` | MessageStream, iterators |
 
 ---
 
@@ -1577,7 +1887,7 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.1.0
+- **Current Version**: 0.3.0
 - **API Version**: 2023-06-01
 - **Crystal Version**: 1.0+ recommended
 

@@ -37,6 +37,31 @@ module Fixtures
 
     FILE_DELETED = %({"id":"file_01abc123","type":"file_deleted"})
 
+    MESSAGE_WITH_REDACTED_THINKING = %({"id":"msg_redacted_01","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"Let me reason...","signature":"sig_abc"},{"type":"redacted_thinking","data":"cmVkYWN0ZWQ="},{"type":"text","text":"Here is the answer."}],"model":"claude-opus-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":50}})
+
+    MESSAGE_WITH_SERVER_TOOL_USAGE = %({"id":"msg_stu_01","type":"message","role":"assistant","content":[{"type":"text","text":"Search results..."}],"model":"claude-sonnet-4-5-20250929","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":30,"server_tool_use":{"web_search_requests":3}}})
+
+    MESSAGE_WITH_CACHE_CREATION = %({"id":"msg_cc_01","type":"message","role":"assistant","content":[{"type":"text","text":"Cached response."}],"model":"claude-sonnet-4-5-20250929","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":80,"cache_read_input_tokens":20,"cache_creation":{"ephemeral_1h_input_tokens":60,"ephemeral_5m_input_tokens":20},"inference_geo":"us"}})
+
+    MESSAGE_WITH_CODE_EXECUTION = %({"id":"msg_ce_01","type":"message","role":"assistant","content":[{"type":"server_tool_use","id":"stu_ce_01","name":"code_execution","input":{"code":"print(1+1)"},"caller":"code_execution_20250825"},{"type":"code_execution_tool_result","tool_use_id":"stu_ce_01","content":{"stdout":"2\\n","stderr":"","return_code":0}}],"model":"claude-sonnet-4-5-20250929","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":40}})
+
+    MESSAGE_WITH_MCP = %({"id":"msg_mcp_01","type":"message","role":"assistant","content":[{"type":"mcp_tool_use","id":"mcp_tu_01","name":"get_data","server_name":"my_server","input":{"query":"test"}},{"type":"mcp_tool_result","tool_use_id":"mcp_tu_01","content":{"result":"data"},"is_error":false}],"model":"claude-sonnet-4-5-20250929","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":40}})
+
+    MESSAGE_WITH_COMPACTION = %({"id":"msg_compact_01","type":"message","role":"assistant","content":[{"type":"compaction","content":"Compacted conversation summary."}],"model":"claude-sonnet-4-5-20250929","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":500,"output_tokens":100}})
+
+    # Skills API responses
+    SKILL_RESPONSE = %({"id":"skill_01abc","type":"skill","created_at":"2025-10-01T00:00:00Z","updated_at":"2025-10-01T00:00:00Z","display_title":"My Skill","latest_version":"v1","source":"upload"})
+
+    SKILL_LIST = %({"data":[{"id":"skill_01abc","type":"skill","created_at":"2025-10-01T00:00:00Z","updated_at":"2025-10-01T00:00:00Z","display_title":"My Skill","latest_version":"v1","source":"upload"},{"id":"skill_02def","type":"skill","created_at":"2025-10-02T00:00:00Z","updated_at":"2025-10-02T00:00:00Z","display_title":"Another Skill","latest_version":"v2","source":"upload"}],"has_more":false,"next_page":null})
+
+    SKILL_DELETED = %({"id":"skill_01abc","type":"skill_deleted"})
+
+    SKILL_VERSION_RESPONSE = %({"id":"sv_01abc","type":"skill_version","created_at":"2025-10-01T00:00:00Z","description":"Initial version","directory":"/tools","name":"my_tool","skill_id":"skill_01abc","version":"v1"})
+
+    SKILL_VERSION_LIST = %({"data":[{"id":"sv_01abc","type":"skill_version","created_at":"2025-10-01T00:00:00Z","description":"Initial version","directory":"/tools","name":"my_tool","skill_id":"skill_01abc","version":"v1"}],"has_more":false,"next_page":null})
+
+    SKILL_VERSION_DELETED = %({"id":"sv_01abc","type":"skill_version_deleted"})
+
     # Token counting responses
     TOKEN_COUNT_BASIC = %({"input_tokens":25})
 
@@ -72,6 +97,8 @@ module Fixtures
       MESSAGE_DELTA = %(data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":15}})
 
       MESSAGE_STOP = %(data: {"type":"message_stop"})
+
+      CONTENT_BLOCK_DELTA_COMPACTION = %(data: {"type":"content_block_delta","index":0,"delta":{"type":"compaction_delta","content":"Compacted summary of conversation."}})
 
       PING = %(data: {"type":"ping"})
 

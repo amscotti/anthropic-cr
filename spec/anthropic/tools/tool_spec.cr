@@ -171,6 +171,204 @@ describe "Anthropic.tool macro with typed input" do
   end
 end
 
+describe Anthropic::ToolDefinition do
+  describe "strict field" do
+    it "serializes strict: true" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")},
+          required: ["x"]
+        ),
+        strict: true
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["strict"].as_bool.should be_true
+    end
+
+    it "omits strict when nil" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        )
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["strict"]?.should be_nil
+    end
+  end
+
+  describe "type field" do
+    it "omits type by default (matches Ruby SDK)" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        )
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["type"]?.should be_nil
+    end
+
+    it "serializes type when explicitly set" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        ),
+        type: "custom"
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["type"].as_s.should eq("custom")
+    end
+  end
+
+  describe "allowed_callers field" do
+    it "serializes allowed_callers when set" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        ),
+        allowed_callers: ["code_execution_20250825"]
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["allowed_callers"].as_a.map(&.as_s).should eq(["code_execution_20250825"])
+    end
+
+    it "omits allowed_callers when nil" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        )
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["allowed_callers"]?.should be_nil
+    end
+  end
+
+  describe "defer_loading field" do
+    it "serializes defer_loading when set" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        ),
+        defer_loading: true
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["defer_loading"].as_bool.should be_true
+    end
+  end
+
+  describe "input_examples field" do
+    it "serializes input_examples when set" do
+      examples = [JSON.parse(%({"x": "example_value"}))]
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        ),
+        input_examples: examples
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["input_examples"].as_a.size.should eq(1)
+      parsed["input_examples"][0]["x"].as_s.should eq("example_value")
+    end
+  end
+
+  describe "eager_input_streaming field" do
+    it "serializes eager_input_streaming when set" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        ),
+        eager_input_streaming: true
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["eager_input_streaming"].as_bool.should be_true
+    end
+  end
+
+  describe "cache_control field" do
+    it "serializes cache_control when set" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        ),
+        cache_control: Anthropic::CacheControl.ephemeral
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["cache_control"]["type"].as_s.should eq("ephemeral")
+    end
+
+    it "omits cache_control when nil" do
+      definition = Anthropic::ToolDefinition.new(
+        name: "test",
+        description: "A test tool",
+        input_schema: Anthropic::InputSchema.build(
+          properties: {"x" => Anthropic::Schema.string("A value")}
+        )
+      )
+
+      json = definition.to_json
+      parsed = JSON.parse(json)
+      parsed["cache_control"]?.should be_nil
+    end
+  end
+end
+
+describe Anthropic::InlineTool do
+  describe "cache_control" do
+    it "passes cache_control through to definition" do
+      tool = Anthropic::InlineTool.new(
+        name: "cached_tool",
+        description: "A cached tool",
+        schema: {"x" => Anthropic::Schema.string("A value")},
+        cache_control: Anthropic::CacheControl.ephemeral
+      ) { |_input| "result" }
+
+      tool.cache_control.should_not be_nil
+      definition = tool.to_definition
+      definition.cache_control.should_not be_nil
+      definition.cache_control.not_nil!.type.should eq("ephemeral")
+    end
+  end
+end
+
 # Test input struct
 struct TypedToolTestInput
   include JSON::Serializable

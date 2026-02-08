@@ -98,6 +98,69 @@ describe Anthropic::ThinkingContent do
   end
 end
 
+describe Anthropic::RedactedThinkingContent do
+  it "parses redacted thinking content" do
+    json = %({"type":"redacted_thinking","data":"cmVkYWN0ZWQ="})
+    content = Anthropic::RedactedThinkingContent.from_json(json)
+
+    content.type.should eq("redacted_thinking")
+    content.data.should eq("cmVkYWN0ZWQ=")
+  end
+
+  it "creates with data" do
+    content = Anthropic::RedactedThinkingContent.new(data: "base64data")
+    content.type.should eq("redacted_thinking")
+    content.data.should eq("base64data")
+  end
+end
+
+describe Anthropic::SearchResultContent do
+  it "creates with required fields" do
+    content = Anthropic::SearchResultContent.new(
+      source: "https://example.com",
+      title: "Example Page",
+      content: [Anthropic::TextContent.new(text: "Some text")]
+    )
+
+    content.type.should eq("search_result")
+    content.source.should eq("https://example.com")
+    content.title.should eq("Example Page")
+    content.content.size.should eq(1)
+  end
+
+  it "serializes with optional fields" do
+    content = Anthropic::SearchResultContent.new(
+      source: "https://example.com",
+      title: "Example",
+      content: [Anthropic::TextContent.new(text: "text")],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      citations: Anthropic::CitationConfig.enable
+    )
+
+    json = content.to_json
+    parsed = JSON.parse(json)
+    parsed["type"].as_s.should eq("search_result")
+    parsed["cache_control"]["type"].as_s.should eq("ephemeral")
+    parsed["citations"]["enabled"].as_bool.should be_true
+  end
+end
+
+describe Anthropic::CompactionContent do
+  it "parses compaction content" do
+    json = %({"type":"compaction","content":"Summary of conversation."})
+    content = Anthropic::CompactionContent.from_json(json)
+
+    content.type.should eq("compaction")
+    content.content.should eq("Summary of conversation.")
+  end
+
+  it "creates with nil content" do
+    content = Anthropic::CompactionContent.new
+    content.type.should eq("compaction")
+    content.content.should be_nil
+  end
+end
+
 describe Anthropic::DocumentContent do
   describe ".text" do
     it "creates plain text document" do
@@ -192,6 +255,63 @@ describe Anthropic::ContentBlockConverter do
     content = Anthropic::ContentBlockConverter.from_json(pull)
 
     content.should be_a(Anthropic::ThinkingContent)
+  end
+
+  it "parses redacted_thinking content" do
+    json = %({"type":"redacted_thinking","data":"cmVkYWN0ZWQ="})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::RedactedThinkingContent)
+    content.as(Anthropic::RedactedThinkingContent).data.should eq("cmVkYWN0ZWQ=")
+  end
+
+  it "parses search_result content" do
+    json = %({"type":"search_result","source":"https://example.com","title":"Test","content":[{"type":"text","text":"hello"}]})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::SearchResultContent)
+  end
+
+  it "parses compaction content" do
+    json = %({"type":"compaction","content":"Summary."})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::CompactionContent)
+  end
+
+  it "parses code_execution_tool_result content" do
+    json = %({"type":"code_execution_tool_result","tool_use_id":"stu_01","content":{"stdout":"output"}})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::CodeExecutionToolResultContent)
+  end
+
+  it "parses web_fetch_tool_result content" do
+    json = %({"type":"web_fetch_tool_result","tool_use_id":"stu_02","content":{"html":"<p>hi</p>"}})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::WebFetchToolResultContent)
+  end
+
+  it "parses mcp_tool_use content" do
+    json = %({"type":"mcp_tool_use","id":"mcp_01","name":"get_data","server_name":"srv","input":{}})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::MCPToolUseContent)
+  end
+
+  it "parses mcp_tool_result content" do
+    json = %({"type":"mcp_tool_result","tool_use_id":"mcp_01","content":{"data":"val"},"is_error":false})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::MCPToolResultContent)
   end
 
   it "handles unknown type gracefully" do

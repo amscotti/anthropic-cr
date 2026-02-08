@@ -165,7 +165,7 @@ describe "Beta Constants" do
   end
 
   it "defines code execution beta header" do
-    Anthropic::CODE_EXECUTION_BETA.should eq("code-execution-2025-05-22")
+    Anthropic::CODE_EXECUTION_BETA.should eq("code-execution-2025-08-25")
   end
 
   it "defines MCP connector beta header" do

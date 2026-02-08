@@ -66,11 +66,54 @@ module Anthropic
     @[JSON::Field(key: "input_schema")]
     getter input_schema : InputSchema
 
+    @[JSON::Field(emit_null: false)]
+    getter type : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter strict : Bool?
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    @[JSON::Field(key: "allowed_callers", emit_null: false)]
+    getter allowed_callers : Array(String)?
+
+    @[JSON::Field(key: "defer_loading", emit_null: false)]
+    getter? defer_loading : Bool?
+
+    @[JSON::Field(key: "input_examples", emit_null: false)]
+    getter input_examples : Array(JSON::Any)?
+
+    @[JSON::Field(key: "eager_input_streaming", emit_null: false)]
+    getter eager_input_streaming : Bool?
+
     def initialize(
       @name : String,
       @description : String,
       @input_schema : InputSchema,
+      @type : String? = nil,
+      @strict : Bool? = nil,
+      @cache_control : CacheControl? = nil,
+      @allowed_callers : Array(String)? = nil,
+      @defer_loading : Bool? = nil,
+      @input_examples : Array(JSON::Any)? = nil,
+      @eager_input_streaming : Bool? = nil,
     )
+    end
+  end
+
+  # Metadata for message requests
+  #
+  # ```
+  # metadata = Anthropic::Metadata.new(user_id: "user-123")
+  # ```
+  struct Metadata
+    include JSON::Serializable
+
+    @[JSON::Field(key: "user_id", emit_null: false)]
+    getter user_id : String?
+
+    def initialize(@user_id : String? = nil)
     end
   end
 
@@ -123,7 +166,7 @@ module Anthropic
     getter stop_sequences : Array(String)?
 
     @[JSON::Field(emit_null: false)]
-    getter metadata : Hash(String, String)?
+    getter metadata : Metadata?
 
     @[JSON::Field(key: "service_tier", emit_null: false)]
     getter service_tier : String?
@@ -149,11 +192,149 @@ module Anthropic
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @stop_sequences : Array(String)? = nil,
-      @metadata : Hash(String, String)? = nil,
+      @metadata : Metadata? = nil,
       @service_tier : String? = nil,
       @thinking : ThinkingConfig? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
+    )
+    end
+  end
+
+  # Context management edit: compact conversation history
+  struct CompactEdit
+    include JSON::Serializable
+
+    getter type : String = "compact_20260112"
+
+    @[JSON::Field(emit_null: false)]
+    getter instructions : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter trigger : String?
+
+    @[JSON::Field(key: "pause_after_compaction", emit_null: false)]
+    getter pause_after_compaction : Bool?
+
+    def initialize(
+      @instructions : String? = nil,
+      @trigger : String? = nil,
+      @pause_after_compaction : Bool? = nil,
+    )
+    end
+  end
+
+  # Context management edit: clear tool use/result pairs
+  struct ClearToolUsesEdit
+    include JSON::Serializable
+
+    getter type : String = "clear_tool_uses_20250919"
+
+    @[JSON::Field(key: "exclude_tools", emit_null: false)]
+    getter exclude_tools : Array(String)?
+
+    def initialize(@exclude_tools : Array(String)? = nil)
+    end
+  end
+
+  # Context management edit: clear thinking blocks
+  struct ClearThinkingEdit
+    include JSON::Serializable
+
+    getter type : String = "clear_thinking_20251015"
+
+    def initialize
+    end
+  end
+
+  alias ContextManagementEdit = CompactEdit | ClearToolUsesEdit | ClearThinkingEdit
+
+  # Context management configuration for beta messages
+  #
+  # ```
+  # config = Anthropic::ContextManagementConfig.auto_compact
+  # ```
+  struct ContextManagementConfig
+    include JSON::Serializable
+
+    getter edits : Array(ContextManagementEdit)
+
+    def initialize(@edits : Array(ContextManagementEdit))
+    end
+
+    # Create a config with auto-compaction using default threshold
+    def self.auto_compact(
+      instructions : String? = nil,
+      trigger : String? = nil,
+      pause_after_compaction : Bool? = nil,
+    ) : self
+      new(edits: [CompactEdit.new(
+        instructions: instructions,
+        trigger: trigger,
+        pause_after_compaction: pause_after_compaction,
+      )] of ContextManagementEdit)
+    end
+  end
+
+  # Container skill configuration for skills-based tool use
+  struct ContainerSkill
+    include JSON::Serializable
+
+    getter type : String = "anthropic"
+
+    @[JSON::Field(key: "skill_id")]
+    getter skill_id : String
+
+    @[JSON::Field(emit_null: false)]
+    getter version : String?
+
+    def initialize(@skill_id : String, @type : String = "anthropic", @version : String? = nil)
+    end
+  end
+
+  # Container configuration for skills
+  struct ContainerConfig
+    include JSON::Serializable
+
+    getter skills : Array(ContainerSkill)
+
+    def initialize(@skills : Array(ContainerSkill))
+    end
+  end
+
+  # MCP tool configuration for mcp_servers parameter
+  struct MCPToolConfiguration
+    include JSON::Serializable
+
+    @[JSON::Field(key: "allowed_tools", emit_null: false)]
+    getter allowed_tools : Array(String)?
+
+    @[JSON::Field(emit_null: false)]
+    getter enabled : Bool?
+
+    def initialize(@allowed_tools : Array(String)? = nil, @enabled : Bool? = nil)
+    end
+  end
+
+  # MCP server definition for mcp_servers parameter
+  struct MCPServerDefinition
+    include JSON::Serializable
+
+    getter type : String = "url"
+    getter url : String
+    getter name : String
+
+    @[JSON::Field(key: "authorization_token", emit_null: false)]
+    getter authorization_token : String?
+
+    @[JSON::Field(key: "tool_configuration", emit_null: false)]
+    getter tool_configuration : MCPToolConfiguration?
+
+    def initialize(
+      @url : String,
+      @name : String,
+      @authorization_token : String? = nil,
+      @tool_configuration : MCPToolConfiguration? = nil,
     )
     end
   end
@@ -194,7 +375,7 @@ module Anthropic
     getter stop_sequences : Array(String)?
 
     @[JSON::Field(emit_null: false)]
-    getter metadata : Hash(String, String)?
+    getter metadata : Metadata?
 
     @[JSON::Field(key: "service_tier", emit_null: false)]
     getter service_tier : String?
@@ -211,6 +392,15 @@ module Anthropic
     @[JSON::Field(key: "inference_geo", emit_null: false)]
     getter inference_geo : String?
 
+    @[JSON::Field(key: "context_management", emit_null: false)]
+    getter context_management : ContextManagementConfig?
+
+    @[JSON::Field(emit_null: false)]
+    getter container : ContainerConfig?
+
+    @[JSON::Field(key: "mcp_servers", emit_null: false)]
+    getter mcp_servers : Array(MCPServerDefinition)?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
@@ -223,12 +413,15 @@ module Anthropic
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @stop_sequences : Array(String)? = nil,
-      @metadata : Hash(String, String)? = nil,
+      @metadata : Metadata? = nil,
       @service_tier : String? = nil,
       @thinking : ThinkingConfig? = nil,
       @output_format : OutputFormat? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
+      @context_management : ContextManagementConfig? = nil,
+      @container : ContainerConfig? = nil,
+      @mcp_servers : Array(MCPServerDefinition)? = nil,
     )
     end
   end

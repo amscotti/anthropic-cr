@@ -15,7 +15,20 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **Typed Tools** - Ruby BaseTool-like pattern with struct inputs
 - ✅ Tool runner (automatic tool execution loop)
 - ✅ **Web Search** - Built-in web search via server-side tool
+- ✅ **Agent Tools** - BashTool, TextEditorTool, ComputerUseTool for agentic workflows
+- ✅ **Web Fetch** - Built-in web page fetching via server-side tool
+- ✅ **Memory** - Persistent memory tool for cross-conversation context
+- ✅ **Code Execution** - Sandboxed code execution via server-side tool
+- ✅ **Strict Mode** - Enforce strict schema validation on tool definitions
 - ✅ **Extended Thinking** - Enable Claude's reasoning process (including adaptive thinking)
+- ✅ **Redacted Thinking** - Parse and preserve redacted thinking blocks in multi-turn
+- ✅ **Context Management** - Beta auto-compaction, clear tool uses, clear thinking, compaction streaming delta
+- ✅ **MCP Servers** - Beta `mcp_servers` parameter for server-side MCP server definitions
+- ✅ **Container/Skills** - Beta `container` parameter for skills-based tool use
+- ✅ **Tool Search** - BM25 and Regex tool search for deferred tool loading
+- ✅ **Legacy Tool Versions** - October 2024 tool versions (BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy)
+- ✅ **Skills API** - Full CRUD for skills and skill versions (beta)
+- ✅ **Extended Tool Fields** - Beta `allowed_callers`, `defer_loading`, `input_examples`, `eager_input_streaming`
 - ✅ **Effort Control** - Control output effort level via `output_config`
 - ✅ **Inference Geo** - Data residency control for inference requests
 - ✅ **Structured Outputs** - Type-safe JSON responses via beta API
@@ -411,6 +424,70 @@ final = runner.final_message
 puts final.text
 ```
 
+### Skills API (Beta)
+
+Manage reusable skills that can be attached to containers for agentic workflows:
+
+```crystal
+# Create a skill by uploading files
+skill = client.beta.skills.create(
+  files: [
+    Anthropic::FileUpload.new(
+      io: File.open("skill/SKILL.md"),
+      filename: "my-skill/SKILL.md",
+      content_type: "text/markdown"
+    ),
+    Anthropic::FileUpload.new(
+      io: File.open("skill/tool.py"),
+      filename: "my-skill/tool.py",
+      content_type: "text/x-python"
+    ),
+  ],
+  display_title: "My Skill"
+)
+
+# List skills
+skills = client.beta.skills.list(limit: 10)
+skills.data.each { |s| puts "#{s.display_title} (#{s.id})" }
+
+# Retrieve a skill
+skill = client.beta.skills.retrieve("skill_abc123")
+
+# Create a new version
+client.beta.skills.versions.create(
+  skill_id: skill.id,
+  files: [
+    Anthropic::FileUpload.from_path(
+      "updated/tool.py",
+      filename: "my-skill/tool.py"
+    )
+  ]
+)
+
+# List versions
+versions = client.beta.skills.versions.list(skill_id: skill.id)
+versions.data.each { |v| puts "Version #{v.version} from #{v.created_at}" }
+
+# Delete (must delete all versions first)
+versions.data.each do |v|
+  client.beta.skills.versions.delete(skill_id: skill.id, version: v.version)
+end
+client.beta.skills.delete(skill.id)
+```
+
+**Note:** Each skill requires a `SKILL.md` file with YAML frontmatter:
+
+```markdown
+---
+name: my-skill
+description: A brief description of what this skill does.
+---
+
+# My Skill
+
+Detailed documentation about the skill...
+```
+
 ## Model Constants
 
 ```crystal
@@ -461,6 +538,10 @@ See the [examples/](./examples/) directory for complete working examples:
 - `24_advanced_streaming.cr` - Advanced streaming patterns
 - `25_ollama.cr` - Ollama local model integration
 - `26_opus_46.cr` - Claude Opus 4.6 (adaptive thinking, effort, inference geo)
+- `27_agent_tools.cr` - Agent tools (bash, text editor, computer use, web fetch, memory)
+- `28_advanced_features.cr` - Redacted thinking, cache_control on tools, metadata, extended tool fields, CompactionDelta
+- `29_beta_params.cr` - MCP servers, container/skills, tool search tools, beta parameters
+- `30_skills_api.cr` - Skills API (CRUD, versions, container integration)
 
 Run examples with:
 ```bash
