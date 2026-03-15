@@ -118,7 +118,7 @@ module Anthropic
   # # Use in a message
   # message = client.beta.messages.create(
   #   betas: [Anthropic::FILES_API_BETA],
-  #   model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
   #   max_tokens: 1024,
   #   messages: [{
   #     role:    "user",

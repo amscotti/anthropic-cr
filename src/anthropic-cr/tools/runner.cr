@@ -48,7 +48,7 @@ module Anthropic
   # ```
   # # Basic usage - iterate all messages
   # runner = client.beta.messages.tool_runner(
-  #   model: "claude-sonnet-4-5-20250929",
+  #   model: "claude-sonnet-4-6",
   #   max_tokens: 1024,
   #   messages: [Anthropic::MessageParam.user("What's the weather?")],
   #   tools: [weather_tool]
@@ -81,15 +81,20 @@ module Anthropic
     @max_iterations : Int32
     @system : String?
     @compaction : CompactionConfig?
+    @speed : String?
     @thinking : ThinkingConfig?
     @output_config : OutputConfig?
     @inference_geo : String?
+    @container : String | ContainerConfig?
+    @betas : Array(String)
+    @use_beta : Bool
 
     # Stateful iteration tracking
     @current_messages : Array(MessageParam)
     @iteration : Int32 = 0
     @finished : Bool = false
     @last_response : Message? = nil
+    @initial_container : String | ContainerConfig?
 
     def initialize(
       @client : Client,
@@ -100,12 +105,17 @@ module Anthropic
       @max_iterations : Int32 = 10,
       @system : String? = nil,
       @compaction : CompactionConfig? = nil,
+      @speed : String? = nil,
       @thinking : ThinkingConfig? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
+      @container : String | ContainerConfig? = nil,
+      @betas : Array(String) = [] of String,
+      @use_beta : Bool = false,
     )
       @initial_messages = messages.dup
       @current_messages = messages.dup
+      @initial_container = @container
     end
 
     # Check if the runner has finished (no more tool calls or max iterations reached)
@@ -119,6 +129,7 @@ module Anthropic
       @iteration = 0
       @finished = false
       @last_response = nil
+      @container = @initial_container
     end
 
     # Iterate through messages, auto-executing tools
@@ -163,18 +174,20 @@ module Anthropic
         @current_messages = compact_messages(@current_messages)
       end
 
-      response = @client.messages.create(
-        model: @model,
+      response = create_message(
+        @current_messages,
         max_tokens: @max_tokens,
-        messages: @current_messages,
         tools: @tools,
         system: @system,
+        speed: @speed,
         thinking: @thinking,
         output_config: @output_config,
-        inference_geo: @inference_geo
+        inference_geo: @inference_geo,
+        container: @container
       )
 
       @last_response = response
+      update_container(response.container_id)
 
       # Check if tool use is requested
       unless response.tool_use?
@@ -260,6 +273,7 @@ module Anthropic
       max_iterations: Int32,
       iteration: Int32,
       system: String?,
+      container: String | ContainerConfig?,
       finished: Bool,
     )
       {
@@ -271,6 +285,7 @@ module Anthropic
         max_iterations:   @max_iterations,
         iteration:        @iteration,
         system:           @system,
+        container:        @container,
         finished:         @finished,
       }
     end
@@ -314,54 +329,31 @@ module Anthropic
 
         # Collect tool uses during streaming
         collected_tool_uses = [] of ToolUseContent
-        current_tool_id = ""
-        current_tool_name = ""
-        tool_json_buffer = ""
+        active_tool_uses = {} of Int32 => NamedTuple(id: String, name: String)
+        tool_json_buffers = {} of Int32 => String
         response_text = ""
 
-        @client.messages.stream(
-          model: @model,
+        stream_messages(
+          @current_messages,
           max_tokens: @max_tokens,
-          messages: @current_messages,
           tools: @tools,
           system: @system,
+          speed: @speed,
           thinking: @thinking,
           output_config: @output_config,
-          inference_geo: @inference_geo
+          inference_geo: @inference_geo,
+          container: @container
         ) do |event|
           # Yield every event to the caller
           block.call(event)
 
-          # Also track tool uses for execution
-          case event
-          when ContentBlockStartEvent
-            if event.content_block["type"]?.try(&.as_s) == "tool_use"
-              current_tool_id = event.content_block["id"]?.try(&.as_s) || ""
-              current_tool_name = event.content_block["name"]?.try(&.as_s) || ""
-              tool_json_buffer = ""
-            end
-          when ContentBlockDeltaEvent
-            if text = event.text
-              response_text += text
-            end
-            if partial = event.partial_json
-              tool_json_buffer += partial
-            end
-          when ContentBlockStopEvent
-            if !current_tool_id.empty?
-              begin
-                parsed_input = tool_json_buffer.empty? ? JSON::Any.new({} of String => JSON::Any) : JSON.parse(tool_json_buffer)
-                collected_tool_uses << ToolUseContent.new(
-                  id: current_tool_id,
-                  name: current_tool_name,
-                  input: parsed_input
-                )
-              rescue JSON::ParseException
-                # JSON parse failed, skip
-              end
-              current_tool_id = ""
-              current_tool_name = ""
-            end
+          if text = process_streaming_event(
+               event,
+               collected_tool_uses,
+               active_tool_uses,
+               tool_json_buffers
+             )
+            response_text += text
           end
         end
 
@@ -436,12 +428,7 @@ module Anthropic
 
       # Count tokens using the API
       begin
-        count = @client.messages.count_tokens(
-          model: @model,
-          messages: messages,
-          tools: @tools,
-          system: @system
-        )
+        count = count_tokens(messages)
         count.input_tokens > threshold
       rescue ex : APIError | IO::Error | Socket::Error
         # If token counting fails, don't compact
@@ -455,12 +442,7 @@ module Anthropic
 
       # Get token count before compaction
       tokens_before = begin
-        @client.messages.count_tokens(
-          model: @model,
-          messages: messages,
-          tools: @tools,
-          system: @system
-        ).input_tokens
+        count_tokens(messages).input_tokens
       rescue ex : APIError | IO::Error | Socket::Error
         0
       end
@@ -482,16 +464,22 @@ module Anthropic
       end.join("\n\n")
 
       # Ask Claude to summarize
-      summary_response = @client.messages.create(
-        model: @model,
-        max_tokens: 2048,
-        messages: [
+      summary_response = create_message(
+        [
           MessageParam.user(
             "Please provide a concise summary of this conversation that preserves " \
             "all important context, tool usage, and results. Focus on key information " \
             "needed to continue the conversation:\n\n#{conversation_text}"
           ),
-        ]
+        ],
+        max_tokens: 2048,
+        tools: nil,
+        system: nil,
+        speed: @speed,
+        thinking: nil,
+        output_config: nil,
+        inference_geo: nil,
+        container: @container
       )
 
       # Extract text from first text block
@@ -512,12 +500,7 @@ module Anthropic
 
       # Get token count after compaction and call callback
       tokens_after = begin
-        @client.messages.count_tokens(
-          model: @model,
-          messages: compacted,
-          tools: @tools,
-          system: @system
-        ).input_tokens
+        count_tokens(compacted).input_tokens
       rescue ex : APIError | IO::Error | Socket::Error
         0
       end
@@ -525,6 +508,187 @@ module Anthropic
       @compaction.try(&.on_compact).try(&.call(tokens_before, tokens_after))
 
       compacted
+    end
+
+    private def process_streaming_event(
+      event : AnyStreamEvent,
+      collected_tool_uses : Array(ToolUseContent),
+      active_tool_uses : Hash(Int32, NamedTuple(id: String, name: String)),
+      tool_json_buffers : Hash(Int32, String),
+    ) : String?
+      case event
+      when MessageStartEvent
+        update_container(event.message.container_id)
+      when MessageDeltaEvent
+        update_container(event.delta.container.try(&.id))
+      when ContentBlockStartEvent
+        if tool_use = event.content_block.as?(ToolUseContent)
+          active_tool_uses[event.index] = {id: tool_use.id, name: tool_use.name}
+          tool_json_buffers[event.index] = ""
+        end
+      when ContentBlockDeltaEvent
+        if partial = event.partial_json
+          if active_tool_uses.has_key?(event.index)
+            tool_json_buffers[event.index] = "#{tool_json_buffers[event.index]? || ""}#{partial}"
+          end
+        end
+
+        return event.text
+      when ContentBlockStopEvent
+        complete_streaming_tool_use(event.index, collected_tool_uses, active_tool_uses, tool_json_buffers)
+      end
+
+      nil
+    end
+
+    private def complete_streaming_tool_use(
+      index : Int32,
+      collected_tool_uses : Array(ToolUseContent),
+      active_tool_uses : Hash(Int32, NamedTuple(id: String, name: String)),
+      tool_json_buffers : Hash(Int32, String),
+    )
+      return unless active_tool_use = active_tool_uses[index]?
+
+      begin
+        tool_json = tool_json_buffers[index]? || ""
+        parsed_input = tool_json.empty? ? JSON::Any.new({} of String => JSON::Any) : JSON.parse(tool_json)
+        collected_tool_uses << ToolUseContent.new(
+          id: active_tool_use[:id],
+          name: active_tool_use[:name],
+          input: parsed_input
+        )
+      rescue JSON::ParseException
+      end
+
+      active_tool_uses.delete(index)
+      tool_json_buffers.delete(index)
+    end
+
+    private def create_message(
+      messages : Array(MessageParam),
+      max_tokens : Int32,
+      tools : Array(Tool)?,
+      system : String?,
+      speed : String?,
+      thinking : ThinkingConfig?,
+      output_config : OutputConfig?,
+      inference_geo : String?,
+      container : String | ContainerConfig?,
+    ) : Message
+      if @use_beta
+        @client.beta.messages.create(
+          betas: @betas,
+          model: @model,
+          max_tokens: max_tokens,
+          messages: messages,
+          tools: tools,
+          system: system,
+          speed: speed,
+          thinking: thinking,
+          output_config: output_config,
+          inference_geo: inference_geo,
+          container: container
+        )
+      else
+        @client.messages.create(
+          model: @model,
+          max_tokens: max_tokens,
+          messages: messages,
+          tools: tools,
+          system: system,
+          thinking: thinking,
+          output_config: output_config,
+          inference_geo: inference_geo,
+          container: non_beta_container_id(container)
+        )
+      end
+    end
+
+    private def stream_messages(
+      messages : Array(MessageParam),
+      max_tokens : Int32,
+      tools : Array(Tool)?,
+      system : String?,
+      speed : String?,
+      thinking : ThinkingConfig?,
+      output_config : OutputConfig?,
+      inference_geo : String?,
+      container : String | ContainerConfig?,
+      &block : AnyStreamEvent ->
+    )
+      if @use_beta
+        @client.beta.messages.stream(
+          betas: @betas,
+          model: @model,
+          max_tokens: max_tokens,
+          messages: messages,
+          tools: tools,
+          system: system,
+          speed: speed,
+          thinking: thinking,
+          output_config: output_config,
+          inference_geo: inference_geo,
+          container: container
+        ) do |event|
+          block.call(event)
+        end
+      else
+        @client.messages.stream(
+          model: @model,
+          max_tokens: max_tokens,
+          messages: messages,
+          tools: tools,
+          system: system,
+          thinking: thinking,
+          output_config: output_config,
+          inference_geo: inference_geo,
+          container: non_beta_container_id(container)
+        ) do |event|
+          block.call(event)
+        end
+      end
+    end
+
+    private def count_tokens(messages : Array(MessageParam)) : TokenCountResponse
+      if @use_beta
+        @client.beta.messages.count_tokens(
+          betas: @betas,
+          model: @model,
+          messages: messages,
+          tools: @tools,
+          system: @system,
+          thinking: @thinking,
+          output_config: @output_config,
+          inference_geo: @inference_geo,
+          container: @container,
+          speed: @speed
+        )
+      else
+        @client.messages.count_tokens(
+          model: @model,
+          messages: messages,
+          tools: @tools,
+          system: @system,
+          thinking: @thinking,
+          output_config: @output_config,
+          inference_geo: @inference_geo
+        )
+      end
+    end
+
+    private def update_container(container_id : String?)
+      return unless container_id
+
+      @container = container_id
+    end
+
+    private def non_beta_container_id(container : String | ContainerConfig?) : String?
+      case container
+      when String
+        container
+      else
+        nil
+      end
     end
   end
 end

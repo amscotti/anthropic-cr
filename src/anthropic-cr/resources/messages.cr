@@ -18,14 +18,14 @@ module Anthropic
     # ```
     # # Basic message
     # message = client.messages.create(
-    #   model: Anthropic::Model::CLAUDE_SONNET_4_5,
+    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
     #   max_tokens: 1024,
     #   messages: [{role: "user", content: "Hello!"}]
     # )
     #
     # # With extended thinking
     # message = client.messages.create(
-    #   model: Anthropic::Model::CLAUDE_SONNET_4_5,
+    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
     #   max_tokens: 4096,
     #   thinking: Anthropic::ThinkingConfig.enabled(budget_tokens: 2000),
     #   messages: [{role: "user", content: "Solve this problem..."}]
@@ -33,7 +33,7 @@ module Anthropic
     #
     # # With web search
     # message = client.messages.create(
-    #   model: Anthropic::Model::CLAUDE_SONNET_4_5,
+    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
     #   max_tokens: 1024,
     #   tools: [Anthropic::WebSearchTool.new],
     #   messages: [{role: "user", content: "What's the latest AI news?"}]
@@ -54,6 +54,8 @@ module Anthropic
       metadata : Metadata? = nil,
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
+      cache_control : CacheControl? = nil,
+      container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
     ) : Message
@@ -78,22 +80,23 @@ module Anthropic
         metadata: metadata,
         service_tier: service_tier,
         thinking: thinking,
+        cache_control: cache_control,
+        container: container,
         output_config: output_config,
         inference_geo: inference_geo
       )
 
-      # Build beta headers for server tools (web search requires beta)
-      beta_headers = build_beta_headers(server_tools)
+      beta_headers = build_beta_headers(server_tools, cache_control)
 
       response = @client.post("/v1/messages", params, beta_headers)
       Message.from_json(response.body)
     end
 
-    # Stream a message with block
+    # Stream a message with individual events
     #
     # ```
     # client.messages.stream(
-    #   model: Anthropic::Model::CLAUDE_SONNET_4_5,
+    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
     #   max_tokens: 1024,
     #   messages: [{role: "user", content: "Tell me a story"}]
     # ) do |event|
@@ -118,14 +121,59 @@ module Anthropic
       metadata : Metadata? = nil,
       service_tier : String? = nil,
       thinking : ThinkingConfig? = nil,
+      cache_control : CacheControl? = nil,
+      container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
       &
     )
-      # Convert messages to typed MessageParam array
-      typed_messages = normalize_messages(messages)
+      open_stream(
+        model: model,
+        max_tokens: max_tokens,
+        messages: messages,
+        system: system,
+        temperature: temperature,
+        top_p: top_p,
+        top_k: top_k,
+        tools: tools,
+        server_tools: server_tools,
+        tool_choice: tool_choice,
+        stop_sequences: stop_sequences,
+        metadata: metadata,
+        service_tier: service_tier,
+        thinking: thinking,
+        cache_control: cache_control,
+        container: container,
+        output_config: output_config,
+        inference_geo: inference_geo
+      ) do |stream|
+        stream.each { |event| yield event }
+      end
+    end
 
-      # Build tool definitions
+    # Open a streaming response and yield a richer stream helper object.
+    def open_stream(
+      model : String,
+      max_tokens : Int32,
+      messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
+      system : String | Array(TextContent)? = nil,
+      temperature : Float64? = nil,
+      top_p : Float64? = nil,
+      top_k : Int32? = nil,
+      tools : Array(Tool)? = nil,
+      server_tools : Array(ServerTool)? = nil,
+      tool_choice : ToolChoice? = nil,
+      stop_sequences : Array(String)? = nil,
+      metadata : Metadata? = nil,
+      service_tier : String? = nil,
+      thinking : ThinkingConfig? = nil,
+      cache_control : CacheControl? = nil,
+      container : String? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
+      &
+    )
+      typed_messages = normalize_messages(messages)
       tool_definitions = build_tool_definitions(tools, server_tools)
 
       params = MessageCreateParams.new(
@@ -143,21 +191,18 @@ module Anthropic
         metadata: metadata,
         service_tier: service_tier,
         thinking: thinking,
+        cache_control: cache_control,
+        container: container,
         output_config: output_config,
         inference_geo: inference_geo
       )
 
-      # Build beta headers for server tools
-      beta_headers = build_beta_headers(server_tools)
+      beta_headers = build_beta_headers(server_tools, cache_control)
 
       @client.post_stream("/v1/messages", params, beta_headers) do |response|
-        stream = MessageStream.new(response)
-        stream.each { |event| yield event }
+        yield MessageStream.new(response)
       end
     end
-
-    # Note: Iterator-based streaming (returning MessageStream) is not implemented yet
-    # due to HTTP connection lifecycle limitations. Use block-based streaming above.
 
     # Access batches sub-resource
     def batches : Batches
@@ -170,7 +215,7 @@ module Anthropic
     #
     # ```
     # count = client.messages.count_tokens(
-    #   model: Anthropic::Model::CLAUDE_SONNET_4_5,
+    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
     #   messages: [{role: "user", content: "Hello, Claude!"}],
     #   system: "You are a helpful assistant."
     # )
@@ -184,6 +229,7 @@ module Anthropic
       server_tools : Array(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       thinking : ThinkingConfig? = nil,
+      cache_control : CacheControl? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
     ) : TokenCountResponse
@@ -200,12 +246,12 @@ module Anthropic
         tools: tool_definitions,
         tool_choice: tool_choice,
         thinking: thinking,
+        cache_control: cache_control,
         output_config: output_config,
         inference_geo: inference_geo
       )
 
-      # Build beta headers for server tools
-      beta_headers = build_beta_headers(server_tools)
+      beta_headers = build_beta_headers(server_tools, cache_control)
 
       response = @client.post("/v1/messages/count_tokens", params, beta_headers)
       TokenCountResponse.from_json(response.body)
@@ -244,37 +290,22 @@ module Anthropic
     end
 
     # Build beta headers based on server tools used
-    private def build_beta_headers(server_tools : Array(ServerTool)?) : Hash(String, String)?
-      return nil if server_tools.nil? || server_tools.empty?
-
+    private def build_beta_headers(server_tools : Array(ServerTool)?, cache_control : CacheControl?) : Hash(String, String)?
       betas = [] of String
 
-      server_tools.each do |tool|
-        case tool
-        when WebSearchTool
-          betas << WEB_SEARCH_BETA unless betas.includes?(WEB_SEARCH_BETA)
-        when ComputerUseTool
-          betas << COMPUTER_USE_BETA unless betas.includes?(COMPUTER_USE_BETA)
-        when CodeExecutionTool
-          betas << CODE_EXECUTION_BETA unless betas.includes?(CODE_EXECUTION_BETA)
-        when WebFetchTool
-          betas << WEB_FETCH_BETA unless betas.includes?(WEB_FETCH_BETA)
-        when MemoryTool
-          betas << MEMORY_BETA unless betas.includes?(MEMORY_BETA)
-        when MCPTool
-          betas << MCP_CONNECTOR_BETA unless betas.includes?(MCP_CONNECTOR_BETA)
-        when MCPToolset
-          betas << MCP_CLIENT_BETA unless betas.includes?(MCP_CLIENT_BETA)
-        when ToolSearchBM25Tool, ToolSearchRegexTool
-          betas << ADVANCED_TOOL_USE_BETA unless betas.includes?(ADVANCED_TOOL_USE_BETA)
-        when BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
-          betas << COMPUTER_USE_LEGACY_BETA unless betas.includes?(COMPUTER_USE_LEGACY_BETA)
-        end
+      if requires_extended_cache_beta?(cache_control)
+        betas << EXTENDED_CACHE_TTL_BETA
       end
+
+      betas.concat(Anthropic.beta_headers_for_tools(server_tools))
 
       return nil if betas.empty?
 
       {"anthropic-beta" => betas.join(",")}
+    end
+
+    private def requires_extended_cache_beta?(cache_control : CacheControl?) : Bool
+      (cache_control.try(&.ttl) || 0) > 0
     end
   end
 end

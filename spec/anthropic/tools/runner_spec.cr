@@ -10,6 +10,10 @@ private def create_dummy_tool(name = "test") : Anthropic::Tool
   ) { |_| "result" }
 end
 
+private def streaming_event(event_type : String, data : String) : String
+  (["event: #{event_type}", "data: #{data}"]).join("\n")
+end
+
 describe Anthropic::ToolRunner do
   describe "#params" do
     it "returns current runner parameters" do
@@ -22,7 +26,7 @@ describe Anthropic::ToolRunner do
       messages = [Anthropic::MessageParam.user("Hello")]
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: messages,
         tools: tools,
@@ -31,7 +35,7 @@ describe Anthropic::ToolRunner do
       )
 
       params = runner.params
-      params[:model].should eq("claude-sonnet-4-5-20250929")
+      params[:model].should eq("claude-sonnet-4-6")
       params[:max_tokens].should eq(1024)
       params[:max_iterations].should eq(5)
       params[:system].should eq("Be helpful")
@@ -47,7 +51,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -67,7 +71,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -97,7 +101,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -123,7 +127,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -142,7 +146,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -167,7 +171,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -188,7 +192,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -210,7 +214,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -229,7 +233,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -248,7 +252,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -266,7 +270,7 @@ describe Anthropic::ToolRunner do
 
       runner = Anthropic::ToolRunner.new(
         client: client,
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
         tools: tools
@@ -274,6 +278,159 @@ describe Anthropic::ToolRunner do
 
       runner.next_message
       runner.last_response.should_not be_nil
+    end
+  end
+
+  describe "#each_streaming" do
+    it "collects streamed tool use content without hash-style block access" do
+      request_count = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        request_count += 1
+
+        body = if request_count == 1
+                 [
+                   streaming_event("message_start", %({"type":"message_start","message":{"id":"msg_stream_01","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+                   streaming_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_stream_01","name":"test","input":{}}})),
+                   streaming_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}})),
+                   streaming_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+                   streaming_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":10}})),
+                   streaming_event("message_stop", %({"type":"message_stop"})),
+                 ].join("\n\n")
+               else
+                 [
+                   streaming_event("message_start", %({"type":"message_start","message":{"id":"msg_stream_02","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":0}}})),
+                   streaming_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}})),
+                   streaming_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done"}})),
+                   streaming_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+                   streaming_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}})),
+                   streaming_event("message_stop", %({"type":"message_stop"})),
+                 ].join("\n\n")
+               end
+
+        HTTP::Client::Response.new(
+          200,
+          headers: HTTP::Headers{"Content-Type" => "text/event-stream"},
+          body_io: IO::Memory.new(body)
+        )
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      tools = [create_dummy_tool] of Anthropic::Tool
+
+      runner = Anthropic::ToolRunner.new(
+        client: client,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: tools
+      )
+
+      events = [] of Anthropic::AnyStreamEvent
+      runner.each_streaming { |event| events << event }
+
+      runner.finished?.should be_true
+      request_count.should eq(2)
+      events.any?(Anthropic::ContentBlockDeltaEvent).should be_true
+
+      tool_result_message = runner.current_messages.last
+      blocks = tool_result_message.content.as(Array(Anthropic::ContentBlock))
+      tool_result = blocks.first.as(Anthropic::ToolResultContent)
+      tool_result.tool_use_id.should eq("toolu_stream_01")
+      tool_result.content.should eq("result")
+    end
+  end
+
+  describe "container propagation" do
+    it "reuses returned beta container ids on subsequent tool-calling requests" do
+      request_bodies = [] of String
+      request_count = 0
+
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |request|
+        request_bodies << request.body.to_s
+        request_count += 1
+
+        body = if request_count == 1
+                 %({"id":"msg_container_01","type":"message","role":"assistant","container":{"id":"cont_123","expires_at":"2026-03-14T12:00:00Z","skills":[{"skill_id":"skill_123","type":"anthropic","version":"latest"}]},"content":[{"type":"tool_use","id":"toolu_01xyz","name":"test","input":{}}],"model":"claude-sonnet-4-6","stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":50,"output_tokens":80}})
+               else
+                 Fixtures::Responses::MESSAGE_BASIC
+               end
+
+        HTTP::Client::Response.new(200, body: body, headers: HTTP::Headers{"Content-Type" => "application/json"})
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = client.beta.messages.tool_runner(
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: [create_dummy_tool] of Anthropic::Tool,
+        container: Anthropic::ContainerConfig.new(
+          skills: [Anthropic::ContainerSkill.new(skill_id: "skill_123", version: "latest")]
+        )
+      )
+
+      runner.run_until_finished
+
+      request_bodies.size.should eq(2)
+
+      first_request = JSON.parse(request_bodies[0])
+      first_request["container"]["skills"][0]["skill_id"].as_s.should eq("skill_123")
+
+      second_request = JSON.parse(request_bodies[1])
+      second_request["container"].as_s.should eq("cont_123")
+    end
+
+    it "reuses streamed beta container ids on subsequent tool-calling requests" do
+      request_bodies = [] of String
+      request_count = 0
+
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |request|
+        request_bodies << request.body.to_s
+        request_count += 1
+
+        body = if request_count == 1
+                 [
+                   streaming_event("message_start", %({"type":"message_start","message":{"id":"msg_stream_01","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+                   streaming_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_stream_01","name":"test","input":{}}})),
+                   streaming_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}})),
+                   streaming_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+                   streaming_event("message_delta", %({"type":"message_delta","delta":{"container":{"id":"cont_stream_123","expires_at":"2026-03-14T12:00:00Z"},"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":10}})),
+                   streaming_event("message_stop", %({"type":"message_stop"})),
+                 ].join("\n\n")
+               else
+                 [
+                   streaming_event("message_start", %({"type":"message_start","message":{"id":"msg_stream_02","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":0}}})),
+                   streaming_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}})),
+                   streaming_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done"}})),
+                   streaming_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+                   streaming_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}})),
+                   streaming_event("message_stop", %({"type":"message_stop"})),
+                 ].join("\n\n")
+               end
+
+        HTTP::Client::Response.new(
+          200,
+          headers: HTTP::Headers{"Content-Type" => "text/event-stream"},
+          body_io: IO::Memory.new(body)
+        )
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = client.beta.messages.tool_runner(
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: [create_dummy_tool] of Anthropic::Tool,
+        container: Anthropic::ContainerConfig.new(
+          skills: [Anthropic::ContainerSkill.new(skill_id: "skill_123", version: "latest")]
+        )
+      )
+
+      runner.each_streaming { |_event| }
+
+      request_bodies.size.should eq(2)
+      second_request = JSON.parse(request_bodies[1])
+      second_request["container"].as_s.should eq("cont_stream_123")
     end
   end
 end

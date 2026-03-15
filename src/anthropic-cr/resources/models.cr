@@ -29,12 +29,42 @@ module Anthropic
     #
     # ```
     # client = Anthropic::Client.new
-    # model = client.models.retrieve("claude-sonnet-4-5-20250929")
+    # model = client.models.retrieve("claude-sonnet-4-6")
     # puts model.display_name
     # ```
     def retrieve(model_id : String) : ModelInfo
       response = @client.get("/v1/models/#{model_id}")
       ModelInfo.from_json(response.body)
+    end
+  end
+
+  class BetaModels
+    def initialize(@client : Client)
+    end
+
+    def list(
+      after_id : String? = nil,
+      before_id : String? = nil,
+      limit : Int32 = 20,
+      betas : Array(String) = [] of String,
+    ) : BetaModelListResponse
+      params = {"limit" => limit.to_s}
+      params["after_id"] = after_id if after_id
+      params["before_id"] = before_id if before_id
+
+      response = @client.get("/v1/models?beta=true", params, beta_headers(betas))
+      BetaModelListResponse.from_json(response.body)
+    end
+
+    def retrieve(model_id : String, betas : Array(String) = [] of String) : ModelInfo
+      response = @client.get("/v1/models/#{model_id}?beta=true", nil, beta_headers(betas))
+      ModelInfo.from_json(response.body)
+    end
+
+    private def beta_headers(betas : Array(String)) : Hash(String, String)?
+      return nil if betas.empty?
+
+      {"anthropic-beta" => betas.join(",")}
     end
   end
 
@@ -86,6 +116,37 @@ module Anthropic
 
       while current_response.has_more? && (last = current_response.last_id)
         current_response = Models.new(client).list(after_id: last)
+        results.concat(current_response.data)
+      end
+
+      results
+    end
+  end
+
+  struct BetaModelListResponse
+    include JSON::Serializable
+
+    getter data : Array(ModelInfo)
+
+    @[JSON::Field(key: "has_more")]
+    getter? has_more : Bool
+
+    @[JSON::Field(key: "first_id")]
+    getter first_id : String?
+
+    @[JSON::Field(key: "last_id")]
+    getter last_id : String?
+
+    def each(&)
+      data.each { |model| yield model }
+    end
+
+    def auto_paging_all(client : Client, betas : Array(String) = [] of String) : Array(ModelInfo)
+      results = data.dup
+      current_response = self
+
+      while current_response.has_more? && (last = current_response.last_id)
+        current_response = BetaModels.new(client).list(after_id: last, betas: betas)
         results.concat(current_response.data)
       end
 

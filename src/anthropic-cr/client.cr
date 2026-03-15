@@ -47,7 +47,7 @@ module Anthropic
     #
     # ```
     # client.beta.messages.create(
-    #   betas: ["structured-outputs-2025-11-13"],
+    #   betas: ["structured-outputs-2025-12-15"],
     #   ...
     # )
     # ```
@@ -58,7 +58,8 @@ module Anthropic
     # HTTP methods
     def get(path : String, params : Hash(String, String)? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
       full_path = if params && !params.empty?
-                    "#{path}?#{URI::Params.encode(params)}"
+                    separator = path.includes?('?') ? '&' : '?'
+                    "#{path}#{separator}#{URI::Params.encode(params)}"
                   else
                     path
                   end
@@ -89,14 +90,14 @@ module Anthropic
       end
     end
 
-    def get_stream(path : String, &)
+    def get_stream(path : String, extra_headers : Hash(String, String)? = nil, &)
       uri = URI.parse(@base_url)
 
       HTTP::Client.new(uri) do |client|
         client.connect_timeout = @timeout
         client.read_timeout = @timeout
 
-        client.get(path, headers: headers) do |response|
+        client.get(path, headers: headers(extra_headers)) do |response|
           handle_error(response) unless response.success?
           yield response
         end
@@ -232,22 +233,28 @@ module Anthropic
       req_headers = headers(extra_headers)
 
       (@max_retries + 1).times do |attempt|
-        HTTP::Client.new(uri) do |client|
-          client.connect_timeout = @timeout
-          client.read_timeout = @timeout
+        begin
+          HTTP::Client.new(uri) do |client|
+            client.connect_timeout = @timeout
+            client.read_timeout = @timeout
 
-          response = case method
-                     when "GET"    then client.get(path, headers: req_headers)
-                     when "POST"   then client.post(path, headers: req_headers, body: body)
-                     when "DELETE" then client.delete(path, headers: req_headers)
-                     else               raise "Unknown HTTP method: #{method}"
-                     end
+            response = case method
+                       when "GET"    then client.get(path, headers: req_headers)
+                       when "POST"   then client.post(path, headers: req_headers, body: body)
+                       when "DELETE" then client.delete(path, headers: req_headers)
+                       else               raise "Unknown HTTP method: #{method}"
+                       end
 
-          # Check if we should retry (respects x-should-retry header)
-          if response.success? || !should_retry?(response)
-            handle_error(response) unless response.success?
-            return response
+            # Check if we should retry (respects x-should-retry header)
+            if response.success? || !should_retry?(response)
+              handle_error(response) unless response.success?
+              return response
+            end
           end
+        rescue ex : IO::TimeoutError
+          raise APITimeoutError.new("Request timed out") if attempt >= @max_retries
+        rescue ex : IO::Error | Socket::Error
+          raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex) if attempt >= @max_retries
         end
 
         # Use server-provided retry delay if available
@@ -261,10 +268,6 @@ module Anthropic
         handle_error(resp)
       end
       raise APIError.new("Request failed after #{@max_retries} retries")
-    rescue ex : IO::Error | Socket::Error
-      raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex)
-    rescue ex : IO::TimeoutError
-      raise APITimeoutError.new("Request timed out")
     end
 
     private def headers(extra_headers : Hash(String, String)? = nil) : HTTP::Headers
@@ -340,7 +343,13 @@ module Anthropic
           if seconds = retry_after.to_i?
             return seconds.seconds
           end
-          # Could also parse HTTP date format, but numeric is more common
+
+          begin
+            retry_time = Time::Format::HTTP_DATE.parse(retry_after)
+            delay = (retry_time - Time.utc).total_seconds
+            return delay.clamp(0.0, @max_retry_delay).seconds
+          rescue Time::Format::Error
+          end
         end
       end
 

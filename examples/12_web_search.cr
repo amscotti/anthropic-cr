@@ -25,7 +25,7 @@ puts "Example 1: Basic web search"
 puts "-" * 60
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 2048,
   server_tools: [Anthropic::WebSearchTool.new],
   messages: [
@@ -47,7 +47,7 @@ search_tool = Anthropic::WebSearchTool.new(
 )
 
 message2 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 2048,
   server_tools: [search_tool],
   messages: [
@@ -75,7 +75,7 @@ location_search = Anthropic::WebSearchTool.new(
 )
 
 message3 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 2048,
   # System prompt tells Claude the user's location
   system: "The user is located in San Francisco, California. Use this context for location-based questions.",

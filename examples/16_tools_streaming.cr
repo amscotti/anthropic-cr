@@ -49,7 +49,7 @@ tool_json_parts = [] of String
 current_tool_name = ""
 
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   tools: [search_tool],
   messages: [{role: "user", content: "Search for wireless headphones under $100, sorted by rating"}]
@@ -107,7 +107,7 @@ end
 
 print "Tool deltas: "
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   tools: [weather_tool],
   messages: [{role: "user", content: "What's the weather in Tokyo, London, and New York? Use fahrenheit."}]
@@ -157,7 +157,7 @@ end
 
 tool_count = 0
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   tools: [calculator_tool],
   messages: [{role: "user", content: "Calculate: (15 + 7) and (100 / 4)"}]

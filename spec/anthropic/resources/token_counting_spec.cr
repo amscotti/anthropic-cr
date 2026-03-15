@@ -41,7 +41,7 @@ describe "Token Counting API" do
 
         client = Anthropic::Client.new(api_key: "sk-ant-test")
         count = client.messages.count_tokens(
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           messages: [{role: "user", content: "Hello!"}]
         )
 
@@ -54,7 +54,7 @@ describe "Token Counting API" do
 
         client = Anthropic::Client.new(api_key: "sk-ant-test")
         count = client.messages.count_tokens(
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           messages: [{role: "user", content: "Hello!"}],
           system: "You are helpful."
         )
@@ -62,6 +62,25 @@ describe "Token Counting API" do
         count.should be_a(Anthropic::TokenCountResponse)
         count.input_tokens.should eq(1500)
         count.cache_creation_input_tokens.should eq(1200)
+      end
+
+      it "sends top-level cache_control and extended cache beta when needed" do
+        capture = stub_and_capture(
+          :post,
+          "https://api.anthropic.com/v1/messages/count_tokens",
+          Fixtures::Responses::TOKEN_COUNT_BASIC
+        )
+
+        client = Anthropic::Client.new(api_key: "sk-ant-test")
+        client.messages.count_tokens(
+          model: "claude-sonnet-4-6",
+          cache_control: Anthropic::CacheControl.one_hour,
+          messages: [{role: "user", content: "Hello!"}]
+        )
+
+        body = JSON.parse(capture.body.not_nil!)
+        body["cache_control"]["ttl"].as_i.should eq(3600)
+        capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::EXTENDED_CACHE_TTL_BETA)
       end
     end
   end
@@ -145,7 +164,7 @@ describe "Beta Constants" do
   end
 
   it "defines structured output beta header" do
-    Anthropic::STRUCTURED_OUTPUT_BETA.should eq("structured-outputs-2025-11-13")
+    Anthropic::STRUCTURED_OUTPUT_BETA.should eq("structured-outputs-2025-12-15")
   end
 
   it "defines files API beta header" do
@@ -162,6 +181,10 @@ describe "Beta Constants" do
 
   it "defines fine-grained streaming beta header" do
     Anthropic::FINE_GRAINED_STREAMING_BETA.should eq("fine-grained-tool-streaming-2025-05-14")
+  end
+
+  it "defines token counting beta header" do
+    Anthropic::TOKEN_COUNTING_BETA.should eq("token-counting-2024-11-01")
   end
 
   it "defines code execution beta header" do

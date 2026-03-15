@@ -57,4 +57,8 @@ module Anthropic
   # Timeout errors
   class APITimeoutError < APIConnectionError
   end
+
+  # Structured output parsing errors
+  class StructuredOutputParseError < APIError
+  end
 end

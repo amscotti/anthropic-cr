@@ -72,7 +72,7 @@ class Chatbot
   @server_tools : Array(Anthropic::ServerTool)
 
   def initialize(
-    @model : String = Anthropic::Model::CLAUDE_SONNET_4_5,
+    @model : String = Anthropic::Model::CLAUDE_SONNET_4_6,
     @system_prompt : String = "You are a helpful AI assistant with access to web search and calculator tools. Be concise but thorough. When you need current information, use the web_search tool.",
   )
     @client = Anthropic::Client.new

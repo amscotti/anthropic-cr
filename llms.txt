@@ -85,7 +85,7 @@ require "anthropic-cr"
 client = Anthropic::Client.new  # Uses ANTHROPIC_API_KEY env var
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello, Claude!"}]
 )
@@ -282,14 +282,14 @@ client = Anthropic::Client.new(
 ```crystal
 # Simple message with NamedTuple
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello, Claude!"}]
 )
 
 # With typed MessageParam
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     Anthropic::MessageParam.new(role: "user", content: "Hello!")
@@ -298,7 +298,7 @@ message = client.messages.create(
 
 # Convenience constructors
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [Anthropic::MessageParam.user("Hello!")]
 )
@@ -368,7 +368,7 @@ puts message.stop_reason   # "end_turn" | "max_tokens" | "tool_use" | etc.
 ```crystal
 # Include conversation history
 response = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     {role: "user", content: "Hello!"},
@@ -383,7 +383,7 @@ response = client.messages.create(
 ```crystal
 # Count tokens without sending message
 count = client.messages.count_tokens(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   messages: [{role: "user", content: "Hello, Claude!"}],
   system: "You are a helpful assistant."
 )
@@ -401,7 +401,7 @@ puts count.cache_read_input_tokens      # nil if not using cache
 
 ```crystal
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "Tell me a story"}]
 ) do |event|
@@ -428,25 +428,39 @@ client.messages.stream(
 end
 ```
 
-### Streaming Implementation Note
+### Richer Streaming with `open_stream`
 
-The SDK currently only supports block-based streaming. The `stream` method requires a block and yields events directly:
+For scenarios where you need access to accumulated text, thinking, citations, or the final reconstructed message while the stream is active, use `open_stream`:
 
 ```crystal
-# This is the ONLY supported pattern for streaming
-client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+client.messages.open_stream(
+  model: Anthropic::Model::CLAUDE_HAIKU_4_5,
   max_tokens: 1024,
-  messages: [{role: "user", content: "Tell me a story"}]
-) do |event|
-  case event
-  when Anthropic::ContentBlockDeltaEvent
-    print event.text if event.text
-  end
+  messages: [{role: "user", content: "Write a haiku about programming"}]
+) do |stream|
+  # Access accumulated helpers during streaming
+  print stream.collect_text  # Collects all text deltas
+  final = stream.final_message
+  puts "\nStop reason: #{final.try(&.stop_reason)}"
 end
 ```
 
-**Note**: Iterator-based streaming (returning a stream object) is not yet implemented due to HTTP connection lifecycle limitations. The `MessageStream` class exists internally with helper methods (`.text`, `.thinking`, `.citations`, `.final_message`), but these are not directly accessible from the public API.
+`MessageStream` helpers available inside `open_stream` block:
+- `stream.text` - accumulated text so far
+- `stream.thinking` - accumulated thinking content
+- `stream.citations` - collected citations
+- `stream.collect_text` - returns all text as a String (convenience)
+- `stream.final_message` - reconstructed Message after stream ends
+
+### Streaming Implementation Note
+
+The SDK supports two streaming patterns:
+
+1. **`stream`** - Event-by-event handling, yields events directly. Best for simple text output or custom event handling.
+
+2. **`open_stream`** - Block-scoped streaming with access to `MessageStream` helpers. Best when you need accumulated text or final message.
+
+**Note**: Iterator-based streaming (returning a stream object without a block) is not supported due to HTTP connection lifecycle limitations in Crystal's stdlib.
 
 ### Stream Event Types
 
@@ -491,7 +505,7 @@ end
 
 # Use the tool
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "What's the weather in Tokyo?"}],
   tools: [weather_tool]
@@ -591,7 +605,7 @@ end
 
 # Use in message
 response = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "What's 15 * 7?"}],
   tools: [calculator]
@@ -637,7 +651,7 @@ time_tool = Anthropic.tool(...) { |input| ... }
 
 # Create tool runner
 runner = client.beta.messages.tool_runner(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [Anthropic::MessageParam.user("What time is it? Also calculate 15 + 27")],
   tools: [calculator, time_tool] of Anthropic::Tool,
@@ -662,7 +676,7 @@ puts final.text
 
 ```crystal
 runner = client.beta.messages.tool_runner(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [Anthropic::MessageParam.user("Calculate 15 + 27")],
   tools: [calculator],
@@ -687,7 +701,7 @@ compaction = Anthropic::CompactionConfig.enabled(threshold: 3000) do |before, af
 end
 
 runner = client.beta.messages.tool_runner(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: messages,
   tools: tools,
@@ -699,7 +713,7 @@ runner = client.beta.messages.tool_runner(
 
 ```crystal
 runner = client.beta.messages.tool_runner(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [Anthropic::MessageParam.user("Calculate 15 + 27")],
   tools: [calculator]
@@ -745,7 +759,7 @@ schema = Anthropic.output_schema(
 # Use with beta API
 message = client.beta.messages.create(
   betas: ["structured-outputs-2025-11-13"],
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 512,
   output_schema: schema,
   messages: [{role: "user", content: "Analyze: 'Great product!'"}]
@@ -764,7 +778,7 @@ Enable Claude's reasoning process:
 ```crystal
 # Fixed budget thinking
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 8192,
   thinking: Anthropic::ThinkingConfig.enabled(budget_tokens: 4000),
   messages: [{role: "user", content: "Solve this logic puzzle..."}]
@@ -821,7 +835,7 @@ Let Claude search the internet:
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 2048,
   server_tools: [Anthropic::WebSearchTool.new],
   messages: [{role: "user", content: "What are the latest developments in Crystal programming?"}]
@@ -855,7 +869,7 @@ Agent tools allow Claude to interact with a computer environment:
 # ComputerUseTool - control a computer desktop
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [
     Anthropic::BashTool.new,
@@ -881,7 +895,7 @@ Let Claude fetch and read web pages:
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [Anthropic::WebFetchTool.new],
   messages: [{role: "user", content: "Read the content at https://example.com"}]
@@ -905,7 +919,7 @@ Let Claude store and retrieve information across conversations:
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [Anthropic::MemoryTool.new],
   messages: [{role: "user", content: "Remember that my favorite color is blue"}]
@@ -933,7 +947,7 @@ definition = Anthropic::ToolDefinition.new(
 ```crystal
 stream = client.beta.messages.stream(
   betas: ["citations-2025-02-19"],
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "What is Crystal programming language?"}]
 )
@@ -964,10 +978,10 @@ all_models = client.models.list.auto_paging_all(client)
 ### Retrieve Specific Model
 
 ```crystal
-model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_5)
+model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_6)
 
-puts model.id           # "claude-sonnet-4-5-20250929"
-puts model.display_name # "Claude Sonnet 4.5"
+puts model.id           # "claude-sonnet-4-6"
+puts model.display_name # "Claude Sonnet 4.6"
 puts model.type         # "model"
 puts model.version      # e.g., "20250929"
 puts model.description  # Model description
@@ -979,13 +993,13 @@ puts model.description  # Model description
 # Latest model versions
 Anthropic::Model::CLAUDE_OPUS_4_6   # "claude-opus-4-6"
 Anthropic::Model::CLAUDE_OPUS_4_5
-Anthropic::Model::CLAUDE_SONNET_4_5
+Anthropic::Model::CLAUDE_SONNET_4_6
 Anthropic::Model::CLAUDE_HAIKU_4_5
 
 # Model shorthands
 Anthropic.model_name(:opus)      # => "claude-opus-4-6"
 Anthropic.model_name(:opus_4_5)  # => "claude-opus-4-5-20251101"
-Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-5-20250929"
+Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-6"
 Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
 ```
 
@@ -1464,7 +1478,7 @@ tool_choice: Anthropic::ToolChoiceNone.new
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     Anthropic::MessageParam.new(
@@ -1493,7 +1507,7 @@ message = client.messages.create(
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   temperature: 0.7,  # More creative
   messages: [{role: "user", content: "Write a creative story"}]
@@ -1504,7 +1518,7 @@ message = client.messages.create(
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   stop_sequences: ["END", "STOP"],
   messages: [{role: "user", content: "Write a story ending with 'The End'"}]
@@ -1515,7 +1529,7 @@ message = client.messages.create(
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   metadata: Anthropic::Metadata.new(user_id: "12345"),
   messages: [{role: "user", content: "Hello"}]
@@ -1527,7 +1541,7 @@ message = client.messages.create(
 ```crystal
 # For higher throughput workloads
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   service_tier: "priority",  # or "auto" (default)
   messages: [{role: "user", content: "Hello"}]
@@ -1538,7 +1552,7 @@ message = client.messages.create(
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   system: "You are a helpful assistant...",  # This gets cached
   messages: [{role: "user", content: "Hello"}]
@@ -1675,7 +1689,7 @@ end
 ```ruby
 client = Anthropic::Client.new
 message = client.messages.create(
-  model: "claude-sonnet-4-5-20250929",
+  model: "claude-sonnet-4-6",
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello"}]
 )
@@ -1686,7 +1700,7 @@ puts message.content
 ```crystal
 client = Anthropic::Client.new
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello"}]
 )
@@ -1698,7 +1712,7 @@ puts message.text  # Note: .text instead of .content
 **Ruby:**
 ```ruby
 stream = client.messages.stream(
-  model: "claude-sonnet-4-5-20250929",
+  model: "claude-sonnet-4-6",
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello"}]
 )
@@ -1712,7 +1726,7 @@ end
 ```crystal
 # Crystal uses block-based streaming (iterator-based not yet implemented)
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello"}]
 ) do |event|
@@ -1741,7 +1755,7 @@ weather = Anthropic::Tool.new(
 end
 
 message = client.messages.create(
-  model: "claude-sonnet-4-5-20250929",
+  model: "claude-sonnet-4-6",
   max_tokens: 1024,
   messages: [{role: "user", content: "Weather?"}],
   tools: [weather]
@@ -1762,7 +1776,7 @@ weather = Anthropic.tool(
 end
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "Weather?"}],
   tools: [weather]
@@ -1774,7 +1788,7 @@ message = client.messages.create(
 **Ruby:**
 ```ruby
 client.beta.messages.tool_runner(
-  model: "claude-sonnet-4-5-20250929",
+  model: "claude-sonnet-4-6",
   max_tokens: 1024,
   messages: [{role: "user", content: "Calculate 15 + 27"}],
   tools: [calculator]
@@ -1784,7 +1798,7 @@ client.beta.messages.tool_runner(
 **Crystal:**
 ```crystal
 client.beta.messages.tool_runner(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [Anthropic::MessageParam.user("Calculate 15 + 27")],
   tools: [calculator] of Anthropic::Tool
@@ -1887,7 +1901,7 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.3.0
+- **Current Version**: 0.4.0
 - **API Version**: 2023-06-01
 - **Crystal Version**: 1.0+ recommended
 

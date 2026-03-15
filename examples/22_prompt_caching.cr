@@ -88,7 +88,7 @@ cached_doc = Anthropic::TextContent.new(
 
 # First request - will create cache
 message1 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 256,
   messages: [
     Anthropic::MessageParam.new(
@@ -111,7 +111,7 @@ puts
 
 # Second request with same cached content - should read from cache
 message2 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 256,
   messages: [
     Anthropic::MessageParam.new(
@@ -144,7 +144,7 @@ system_prompt = Anthropic::TextContent.new(
 )
 
 message3 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 256,
   system: [system_prompt],
   messages: [{role: "user", content: "What's the best way to handle API pagination?"}]
@@ -174,7 +174,7 @@ puts
 # To use extended cache:
 # message = client.beta.messages.create(
 #   betas: [Anthropic::EXTENDED_CACHE_TTL_BETA],
-#   model: Anthropic::Model::CLAUDE_SONNET_4_5,
+#   model: Anthropic::Model::CLAUDE_SONNET_4_6,
 #   max_tokens: 256,
 #   messages: [...]
 # )

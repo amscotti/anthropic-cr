@@ -29,7 +29,7 @@ search_started = false
 text_started = false
 
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 2048,
   server_tools: [Anthropic::WebSearchTool.new],
   messages: [{role: "user", content: "What are the latest news about the Crystal programming language? Be brief."}]
@@ -71,7 +71,7 @@ limited_search = Anthropic::WebSearchTool.new(
 print "Searching crystal-lang.org and github.com: "
 
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   server_tools: [limited_search],
   messages: [{role: "user", content: "Find the latest Crystal version and any recent updates. Keep it short."}]
@@ -101,7 +101,7 @@ search_count = 0
 
 print "Response: "
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   server_tools: [Anthropic::WebSearchTool.new(max_uses: 1)],
   messages: [{role: "user", content: "What's the current population of Tokyo? Just give me the number and source."}]
@@ -134,7 +134,7 @@ puts "-" * 60
 content_blocks = [] of String
 
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   server_tools: [Anthropic::WebSearchTool.new],
   messages: [{role: "user", content: "What programming language has the fastest compile times? Brief answer."}]

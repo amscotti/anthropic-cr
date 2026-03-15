@@ -27,7 +27,7 @@ puts "-" * 60
 puts
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 8192,
   thinking: Anthropic::ThinkingConfig.enabled(budget_tokens: 4000),
   messages: [
@@ -70,7 +70,7 @@ print "🧠 Thinking: "
 thinking_shown = false
 
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   thinking: Anthropic::ThinkingConfig.enabled(budget_tokens: 2000),
   messages: [

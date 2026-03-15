@@ -178,7 +178,7 @@ puts "Example 1: Weather tool with typed input"
 puts "-" * 60
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   tools: [weather_tool],
   messages: [{role: "user", content: "What's the weather in Tokyo? Use celsius."}]
@@ -200,7 +200,7 @@ puts "Example 2: Search tool with multiple typed fields"
 puts "-" * 60
 
 message2 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   tools: [search_tool],
   messages: [{role: "user", content: "Search for wireless headphones in electronics under $100, sorted by rating"}]
@@ -222,7 +222,7 @@ puts "Example 3: Calculator with enum operation"
 puts "-" * 60
 
 message3 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   tools: [calculator_tool],
   messages: [{role: "user", content: "Calculate 15 multiplied by 7"}]

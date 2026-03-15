@@ -17,7 +17,7 @@ puts "Example: Claude as a pirate..."
 puts "-" * 50
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 500,
   system: "You are a friendly pirate captain. Respond to all questions in pirate speak, using phrases like 'arr', 'matey', and 'ahoy'. Keep responses brief.",
   messages: [
@@ -36,7 +36,7 @@ puts
 puts "Low temperature (0.2) - more focused:"
 puts "-" * 50
 analytical = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 100,
   temperature: 0.2,
   messages: [
@@ -51,7 +51,7 @@ puts
 puts "High temperature (1.0) - more creative:"
 puts "-" * 50
 creative = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 100,
   temperature: 1.0,
   messages: [

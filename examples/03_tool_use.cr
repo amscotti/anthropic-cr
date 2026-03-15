@@ -36,7 +36,7 @@ puts "=== First Request ==="
 puts
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "What's the weather in San Francisco?"}],
   tools: [weather_tool]
@@ -63,7 +63,7 @@ if message.stop_reason == "tool_use"
 
   # Build the conversation with tool result
   message2 = client.messages.create(
-    model: Anthropic::Model::CLAUDE_SONNET_4_5,
+    model: Anthropic::Model::CLAUDE_SONNET_4_6,
     max_tokens: 1024,
     messages: [
       Anthropic::MessageParam.user("What's the weather in San Francisco?"),

@@ -239,4 +239,61 @@ puts "    Cache creation: #{enriched_message.usage.cache_creation.inspect}"
 puts "    Inference geo: #{enriched_message.usage.inference_geo.inspect}"
 puts ""
 
+# ── 11. Typed Code Execution Result Blocks ─────────────────────
+puts "=== Typed Code Execution Result Blocks ==="
+puts "Nested code execution result payloads are parsed into typed structs."
+puts ""
+
+code_exec_json = %({
+  "type":"code_execution_tool_result",
+  "tool_use_id":"stu_ce_01",
+  "content":{
+    "type":"code_execution_result",
+    "stdout":"2\\n",
+    "stderr":"",
+    "return_code":0,
+    "content":[{"type":"code_execution_output","file_id":"file_123"}]
+  }
+})
+
+code_exec_result = Anthropic::CodeExecutionToolResultContent.from_json(code_exec_json)
+case content = code_exec_result.content
+when Anthropic::CodeExecutionResultValueContent
+  puts "  Return code: #{content.return_code}"
+  puts "  Stdout: #{content.stdout.inspect}"
+  puts "  Output file ids: #{content.content.try(&.map(&.file_id)).inspect}"
+when Anthropic::EncryptedCodeExecutionResultValueContent
+  puts "  Encrypted stdout present: #{content.encrypted_stdout[0, 16]}..."
+when Anthropic::CodeExecutionToolResultErrorContent
+  puts "  Error code: #{content.error_code}"
+end
+puts ""
+
+text_editor_json = %({
+  "type":"text_editor_code_execution_tool_result",
+  "tool_use_id":"stu_te_01",
+  "content":{
+    "type":"text_editor_code_execution_view_result",
+    "content":"line 1\\nline 2",
+    "file_type":"text",
+    "start_line":1,
+    "total_lines":2
+  }
+})
+
+text_editor_result = Anthropic::TextEditorCodeExecutionToolResultContent.from_json(text_editor_json)
+case content = text_editor_result.content
+when Anthropic::TextEditorCodeExecutionViewResultContent
+  puts "  File type: #{content.file_type}"
+  puts "  Start line: #{content.start_line.inspect}"
+  puts "  Preview: #{content.content.inspect}"
+when Anthropic::TextEditorCodeExecutionCreateResultContent
+  puts "  File update? #{content.is_file_update?}"
+when Anthropic::TextEditorCodeExecutionStrReplaceResultContent
+  puts "  Replacement lines: #{content.lines.inspect}"
+when Anthropic::TextEditorCodeExecutionToolResultErrorContent
+  puts "  Error: #{content.error_code} #{content.error_message.inspect}"
+end
+puts ""
+
 puts "Done! All advanced features demonstrated."

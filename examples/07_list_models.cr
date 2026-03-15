@@ -36,7 +36,7 @@ puts
 puts "\nRetrieving specific model information:"
 puts "-" * 60
 
-model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_5)
+model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_6)
 puts "Model: #{model.display_name}"
 puts "ID: #{model.id}"
 puts "Type: #{model.type}"

@@ -74,7 +74,7 @@ module Anthropic
   #
   # ```
   # count = client.messages.count_tokens(
-  #   model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
   #   messages: [{role: "user", content: "Hello, Claude!"}]
   # )
   # puts "This message would use #{count.input_tokens} input tokens"
