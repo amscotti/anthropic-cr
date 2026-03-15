@@ -50,7 +50,7 @@ document = Anthropic::DocumentContent.text(
 )
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     Anthropic::MessageParam.new(
@@ -92,7 +92,7 @@ print "Response: "
 citations_found = [] of Anthropic::Citation
 
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     Anthropic::MessageParam.new(
@@ -163,7 +163,7 @@ doc2 = Anthropic::DocumentContent.text(
 )
 
 message3 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     Anthropic::MessageParam.new(

@@ -41,7 +41,7 @@ schema = Anthropic.output_schema(
 
 message = client.beta.messages.create(
   betas: [Anthropic::STRUCTURED_OUTPUT_BETA],
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   output_schema: schema,
   messages: [{role: "user", content: "List some famous mathematical numbers."}]

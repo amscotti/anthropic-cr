@@ -63,7 +63,7 @@ toolset = Anthropic::MCPToolset.new(mcp_server_name: "context7")
 begin
   mcp_message = client.beta.messages.create(
     betas: [Anthropic::MCP_CLIENT_BETA],
-    model: Anthropic::Model::CLAUDE_SONNET_4_5,
+    model: Anthropic::Model::CLAUDE_SONNET_4_6,
     max_tokens: 2048,
     mcp_servers: [context7_server],
     server_tools: [toolset] of Anthropic::ServerTool,
@@ -168,6 +168,14 @@ search_message.content.each do |block|
   case block
   when Anthropic::ServerToolUseContent
     puts "  [Server Tool Use] #{block.name} — input: #{block.input}"
+  when Anthropic::ToolSearchToolResultContent
+    case result = block.content
+    when Anthropic::ToolSearchToolSearchResultContent
+      tool_names = result.tool_references.map(&.tool_name)
+      puts "  [Tool Search Result] references: #{tool_names.join(", ")}"
+    when Anthropic::ToolSearchToolResultErrorContent
+      puts "  [Tool Search Error] #{result.error_code}: #{result.error_message || "Unknown error"}"
+    end
   when Anthropic::ToolUseContent
     puts "  [Tool Use] #{block.name} — input: #{block.input}"
   when Anthropic::TextContent

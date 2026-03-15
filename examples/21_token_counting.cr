@@ -28,7 +28,7 @@ puts "Example 1: Basic Message"
 puts "-" * 60
 
 count = client.messages.count_tokens(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   messages: [{role: "user", content: "Hello, Claude! How are you today?"}]
 )
 
@@ -40,7 +40,7 @@ puts "Example 2: With System Prompt"
 puts "-" * 60
 
 count = client.messages.count_tokens(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   system: "You are a helpful assistant who speaks like a pirate.",
   messages: [{role: "user", content: "Tell me about the weather."}]
 )
@@ -59,7 +59,7 @@ messages = [
 ]
 
 count = client.messages.count_tokens(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   messages: messages
 )
 
@@ -81,12 +81,12 @@ weather_tool = Anthropic.tool(
 ) { |_| "" }
 
 count_without_tools = client.messages.count_tokens(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   messages: [{role: "user", content: "What's the weather in Tokyo?"}]
 )
 
 count_with_tools = client.messages.count_tokens(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   messages: [{role: "user", content: "What's the weather in Tokyo?"}],
   tools: [weather_tool]
 )
@@ -104,7 +104,7 @@ puts "-" * 60
 large_context = "This is a paragraph of text. " * 100
 
 count = client.messages.count_tokens(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   messages: [{role: "user", content: large_context}]
 )
 

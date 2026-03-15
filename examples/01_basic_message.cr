@@ -19,7 +19,7 @@ puts "=== First Request ==="
 puts
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello!"}]
 )
@@ -39,7 +39,7 @@ puts
 
 # Include the conversation history
 message2 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     {role: "user", content: "Hello!"},

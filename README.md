@@ -2,14 +2,14 @@
 
 An unofficial Anthropic API client for Crystal. Access Claude AI models with idiomatic Crystal code.
 
-**Status:** Feature Complete - Full Messages API, Batches API, Models API, Files API, tool runner, web search, extended thinking, structured outputs, citations, prompt caching, and Schema DSL. API design inspired by official Ruby SDK patterns.
+**Status:** Feature Complete - Full Messages API, Batches API, Models API, Files API, tool runner, web search, extended thinking, structured outputs, citations, prompt caching, Schema DSL, and beta Anthropic-hosted features such as skills, MCP servers, and containers. API design inspired by official Ruby SDK patterns.
 
 > **Note:** A large portion of this library was written with the assistance of AI (Claude), including code, tests, and documentation.
 
 ## Features
 
 - ✅ Messages API (create and stream)
-- ✅ Streaming with Server-Sent Events
+- ✅ Streaming with Server-Sent Events (`stream` and `open_stream`)
 - ✅ Tool use / function calling
 - ✅ **Schema DSL** - Type-safe tool definitions (no more JSON::Any)
 - ✅ **Typed Tools** - Ruby BaseTool-like pattern with struct inputs
@@ -69,7 +69,7 @@ client = Anthropic::Client.new
 
 # Create a message
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     {role: "user", content: "Hello, Claude!"}
@@ -88,7 +88,7 @@ puts message.text
 client = Anthropic::Client.new(api_key: "sk-ant-...")
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "What is Crystal?"}]
 )
@@ -98,6 +98,8 @@ puts "Used #{message.usage.input_tokens} input tokens"
 ```
 
 ### Streaming
+
+Use `stream` for simple event-by-event handling:
 
 ```crystal
 client.messages.stream(
@@ -109,6 +111,20 @@ client.messages.stream(
     print event.text if event.text
     STDOUT.flush
   end
+end
+```
+
+Use `open_stream` when you want richer helpers like `text`, `collect_text`, and `final_message` while the stream is open:
+
+```crystal
+client.messages.open_stream(
+  model: Anthropic::Model::CLAUDE_HAIKU_4_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "Write a haiku about programming"}]
+) do |stream|
+  print stream.collect_text
+  final_message = stream.final_message
+  puts "\nStop reason: #{final_message.try(&.stop_reason)}"
 end
 ```
 
@@ -134,7 +150,7 @@ end
 
 # Use it
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [{role: "user", content: "What's the weather in Tokyo?"}],
   tools: [weather_tool]
@@ -205,7 +221,7 @@ schema = Anthropic.output_schema(
 # Use with beta API
 message = client.beta.messages.create(
   betas: [Anthropic::STRUCTURED_OUTPUT_BETA],
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 512,
   output_schema: schema,
   messages: [{role: "user", content: "Analyze: 'Great product!'"}]
@@ -223,7 +239,7 @@ Let Claude search the internet for current information:
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 2048,
   server_tools: [Anthropic::WebSearchTool.new],
   messages: [{role: "user", content: "What are the latest developments in Crystal programming?"}]
@@ -255,7 +271,7 @@ Enable Claude's reasoning process for complex problems:
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 8192,
   thinking: Anthropic::ThinkingConfig.enabled(budget_tokens: 4000),
   messages: [{role: "user", content: "Solve this logic puzzle..."}]
@@ -318,7 +334,7 @@ message = client.messages.create(
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     Anthropic::MessageParam.new(
@@ -395,8 +411,8 @@ response.each do |model|
 end
 
 # Retrieve specific model
-model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_5)
-puts model.display_name  # => "Claude Sonnet 4.5"
+model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_6)
+puts model.display_name  # => "Claude Sonnet 4.6"
 ```
 
 ### Tool Runner (Beta)
@@ -410,7 +426,7 @@ time_tool = Anthropic.tool(...) { |input| Time.local.to_s }
 
 # Create runner (in beta namespace, matching Ruby SDK)
 runner = client.beta.messages.tool_runner(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [Anthropic::MessageParam.user("What time is it? Also calculate 15 + 27")],
   tools: [calculator, time_tool] of Anthropic::Tool
@@ -493,13 +509,13 @@ Detailed documentation about the skill...
 ```crystal
 Anthropic::Model::CLAUDE_OPUS_4_6      # Latest Opus (4.6)
 Anthropic::Model::CLAUDE_OPUS_4_5      # Opus 4.5
-Anthropic::Model::CLAUDE_SONNET_4_5    # Latest Sonnet
+Anthropic::Model::CLAUDE_SONNET_4_6    # Latest Sonnet
 Anthropic::Model::CLAUDE_HAIKU_4_5     # Latest Haiku
 
 # Or use shorthands
 Anthropic.model_name(:opus)      # => "claude-opus-4-6"
 Anthropic.model_name(:opus_4_5)  # => "claude-opus-4-5-20251101"
-Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-5-20250929"
+Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-6"
 Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
 ```
 
@@ -535,13 +551,14 @@ See the [examples/](./examples/) directory for complete working examples:
 - `21_token_counting.cr` - Token counting for context management
 - `22_prompt_caching.cr` - Prompt caching for efficiency
 - `23_auto_compaction.cr` - Automatic context compaction
-- `24_advanced_streaming.cr` - Advanced streaming patterns
+- `24_advanced_streaming.cr` - Advanced streaming patterns with `open_stream`
 - `25_ollama.cr` - Ollama local model integration
 - `26_opus_46.cr` - Claude Opus 4.6 (adaptive thinking, effort, inference geo)
 - `27_agent_tools.cr` - Agent tools (bash, text editor, computer use, web fetch, memory)
 - `28_advanced_features.cr` - Redacted thinking, cache_control on tools, metadata, extended tool fields, CompactionDelta
 - `29_beta_params.cr` - MCP servers, container/skills, tool search tools, beta parameters
 - `30_skills_api.cr` - Skills API (CRUD, versions, container integration)
+- `31_open_stream.cr` - Richer block-scoped streaming with `open_stream`
 
 Run examples with:
 ```bash
@@ -564,7 +581,7 @@ crystal tool format
 ./bin/ameba
 
 # Type check
-crystal build --no-codegen src/anthropic.cr
+crystal build --no-codegen src/anthropic-cr.cr
 ```
 
 

@@ -85,6 +85,53 @@ describe Anthropic::ToolResultContent do
 
     result.is_error.should eq(true)
   end
+
+  it "supports structured content blocks including tool references" do
+    result = Anthropic::ToolResultContent.new(
+      tool_use_id: "toolu_123",
+      content: [
+        Anthropic::TextContent.new(text: "Related tools:"),
+        Anthropic::ToolReferenceContent.new(tool_name: "web_search"),
+      ] of Anthropic::ToolResultBlockContent,
+      cache_control: Anthropic::CacheControl.ephemeral
+    )
+
+    json = result.to_json
+    parsed = JSON.parse(json)
+
+    parsed["content"].as_a[1]["type"].as_s.should eq("tool_reference")
+    parsed["cache_control"]["type"].as_s.should eq("ephemeral")
+  end
+end
+
+describe Anthropic::ToolReferenceContent do
+  it "parses tool references" do
+    json = %({"type":"tool_reference","tool_name":"web_search"})
+    content = Anthropic::ToolReferenceContent.from_json(json)
+
+    content.type.should eq("tool_reference")
+    content.tool_name.should eq("web_search")
+  end
+end
+
+describe Anthropic::ToolSearchToolResultContent do
+  it "parses search result payloads" do
+    json = %({"type":"tool_search_tool_result","tool_use_id":"stu_01","content":{"type":"tool_search_tool_search_result","tool_references":[{"type":"tool_reference","tool_name":"web_search"},{"type":"tool_reference","tool_name":"memory"}]}})
+    content = Anthropic::ToolSearchToolResultContent.from_json(json)
+
+    content.tool_use_id.should eq("stu_01")
+    search_result = content.content.as(Anthropic::ToolSearchToolSearchResultContent)
+    search_result.tool_references.map(&.tool_name).should eq(["web_search", "memory"])
+  end
+
+  it "parses error payloads" do
+    json = %({"type":"tool_search_tool_result","tool_use_id":"stu_01","content":{"type":"tool_search_tool_result_error","error_code":"no_tools_available","error_message":"No tools found"}})
+    content = Anthropic::ToolSearchToolResultContent.from_json(json)
+
+    error = content.content.as(Anthropic::ToolSearchToolResultErrorContent)
+    error.error_code.should eq("no_tools_available")
+    error.error_message.should eq("No tools found")
+  end
 end
 
 describe Anthropic::ThinkingContent do
@@ -189,6 +236,19 @@ describe Anthropic::DocumentContent do
   end
 end
 
+describe Anthropic::ContainerUploadContent do
+  it "creates container upload content" do
+    content = Anthropic::ContainerUploadContent.new(
+      file_id: "file_123",
+      cache_control: Anthropic::CacheControl.ephemeral
+    )
+
+    content.type.should eq("container_upload")
+    content.file_id.should eq("file_123")
+    content.cache_control.should_not be_nil
+  end
+end
+
 describe Anthropic::CacheControl do
   describe ".ephemeral" do
     it "creates 5-minute cache" do
@@ -249,6 +309,16 @@ describe Anthropic::ContentBlockConverter do
     content.should be_a(Anthropic::ToolUseContent)
   end
 
+  it "parses tool_result content with tool references" do
+    json = %({"type":"tool_result","tool_use_id":"t1","content":[{"type":"tool_reference","tool_name":"web_search"}]})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::ToolResultContent)
+    references = content.as(Anthropic::ToolResultContent).content.as(Array(Anthropic::ToolResultBlockContent))
+    references.first.should be_a(Anthropic::ToolReferenceContent)
+  end
+
   it "parses thinking content" do
     json = %({"type":"thinking","thinking":"hmm","signature":"sig"})
     pull = JSON::PullParser.new(json)
@@ -274,6 +344,15 @@ describe Anthropic::ContentBlockConverter do
     content.should be_a(Anthropic::SearchResultContent)
   end
 
+  it "parses container_upload content" do
+    json = %({"type":"container_upload","file_id":"file_123"})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::ContainerUploadContent)
+    content.as(Anthropic::ContainerUploadContent).file_id.should eq("file_123")
+  end
+
   it "parses compaction content" do
     json = %({"type":"compaction","content":"Summary."})
     pull = JSON::PullParser.new(json)
@@ -283,11 +362,29 @@ describe Anthropic::ContentBlockConverter do
   end
 
   it "parses code_execution_tool_result content" do
-    json = %({"type":"code_execution_tool_result","tool_use_id":"stu_01","content":{"stdout":"output"}})
+    json = %({"type":"code_execution_tool_result","tool_use_id":"stu_01","content":{"type":"code_execution_result","stdout":"output","stderr":"","return_code":0,"content":[{"type":"code_execution_output","file_id":"file_123"}]}})
     pull = JSON::PullParser.new(json)
     content = Anthropic::ContentBlockConverter.from_json(pull)
 
     content.should be_a(Anthropic::CodeExecutionToolResultContent)
+  end
+
+  it "parses bash_code_execution_tool_result content" do
+    json = %({"type":"bash_code_execution_tool_result","tool_use_id":"stu_01","content":{"type":"bash_code_execution_result","stdout":"ok","stderr":"","return_code":0,"content":[{"type":"bash_code_execution_output","file_id":"file_123"}]}})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::BashCodeExecutionToolResultContent)
+    content.as(Anthropic::BashCodeExecutionToolResultContent).tool_use_id.should eq("stu_01")
+  end
+
+  it "parses text_editor_code_execution_tool_result content" do
+    json = %({"type":"text_editor_code_execution_tool_result","tool_use_id":"stu_02","content":{"type":"text_editor_code_execution_view_result","content":"hello","file_type":"text","start_line":1,"total_lines":1}})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::TextEditorCodeExecutionToolResultContent)
+    content.as(Anthropic::TextEditorCodeExecutionToolResultContent).tool_use_id.should eq("stu_02")
   end
 
   it "parses web_fetch_tool_result content" do
@@ -312,6 +409,14 @@ describe Anthropic::ContentBlockConverter do
     content = Anthropic::ContentBlockConverter.from_json(pull)
 
     content.should be_a(Anthropic::MCPToolResultContent)
+  end
+
+  it "parses tool_search_tool_result content" do
+    json = %({"type":"tool_search_tool_result","tool_use_id":"stu_01","content":{"type":"tool_search_tool_search_result","tool_references":[{"type":"tool_reference","tool_name":"web_search"}]}})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::ToolSearchToolResultContent)
   end
 
   it "handles unknown type gracefully" do

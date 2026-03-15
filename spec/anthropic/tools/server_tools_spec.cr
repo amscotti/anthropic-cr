@@ -31,6 +31,20 @@ describe Anthropic::WebSearchTool do
     tool.user_location.not_nil!.city.should eq("San Francisco")
   end
 
+  it "supports advanced option fields" do
+    tool = Anthropic::WebSearchTool.new(
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      strict: true
+    )
+
+    tool.allowed_callers.should eq(["direct"])
+    tool.cache_control.should_not be_nil
+    tool.defer_loading.should be_true
+    tool.strict.should be_true
+  end
+
   describe ".limited_to" do
     it "creates tool with allowed domains" do
       tool = Anthropic::WebSearchTool.limited_to("docs.example.com", "api.example.com")
@@ -94,6 +108,33 @@ describe Anthropic::CodeExecutionTool do
     json = tool.to_json
     json.should contain("code_execution_20250825")
   end
+
+  it "supports advanced option fields" do
+    tool = Anthropic::CodeExecutionTool.new(
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      strict: true
+    )
+
+    json = tool.to_json
+    json.should contain("allowed_callers")
+    json.should contain("strict")
+  end
+end
+
+describe Anthropic::CodeExecutionTool20260120 do
+  it "creates with expected fields" do
+    tool = Anthropic::CodeExecutionTool20260120.new(
+      allowed_callers: ["direct", "code_execution_20260120"],
+      defer_loading: true,
+      strict: true
+    )
+
+    tool.type.should eq("code_execution_20260120")
+    tool.name.should eq("code_execution")
+    tool.allowed_callers.should eq(["direct", "code_execution_20260120"])
+  end
 end
 
 describe Anthropic::BashTool do
@@ -109,6 +150,21 @@ describe Anthropic::BashTool do
     json.should contain("bash_20250124")
     json.should contain("bash")
   end
+
+  it "supports advanced option fields" do
+    tool = Anthropic::BashTool.new(
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      input_examples: [JSON.parse(%({"command":"ls"}))],
+      strict: true
+    )
+
+    json = tool.to_json
+    json.should contain("allowed_callers")
+    json.should contain("input_examples")
+    json.should contain("strict")
+  end
 end
 
 describe Anthropic::TextEditorTool do
@@ -121,6 +177,21 @@ describe Anthropic::TextEditorTool do
   it "creates with max_characters" do
     tool = Anthropic::TextEditorTool.new(max_characters: 100_000)
     tool.max_characters.should eq(100_000)
+  end
+
+  it "supports advanced option fields" do
+    tool = Anthropic::TextEditorTool.new(
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      input_examples: [JSON.parse(%({"path":"README.md"}))],
+      strict: true
+    )
+
+    tool.allowed_callers.should eq(["direct"])
+    tool.cache_control.should_not be_nil
+    tool.defer_loading.should be_true
+    tool.strict.should be_true
   end
 
   it "serializes to JSON" do
@@ -159,6 +230,24 @@ describe Anthropic::ComputerUseTool do
     tool.enable_zoom.should eq(true)
   end
 
+  it "supports advanced option fields" do
+    tool = Anthropic::ComputerUseTool.new(
+      display_width_px: 1920,
+      display_height_px: 1080,
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      input_examples: [JSON.parse(%({"action":"screenshot"}))],
+      strict: true
+    )
+
+    tool.allowed_callers.should eq(["direct"])
+    tool.cache_control.should_not be_nil
+    tool.defer_loading.should be_true
+    tool.input_examples.should_not be_nil
+    tool.strict.should be_true
+  end
+
   it "serializes to JSON" do
     tool = Anthropic::ComputerUseTool.new(display_width_px: 1920, display_height_px: 1080)
     json = tool.to_json
@@ -175,6 +264,23 @@ describe Anthropic::ComputerUseTool do
     json = tool.to_json
     json.should_not contain("display_number")
     json.should_not contain("enable_zoom")
+  end
+end
+
+describe Anthropic::ComputerUseTool20251124 do
+  it "creates with advanced beta fields" do
+    tool = Anthropic::ComputerUseTool20251124.new(
+      display_width_px: 1920,
+      display_height_px: 1080,
+      allowed_callers: ["direct"],
+      enable_zoom: true,
+      strict: true
+    )
+
+    tool.type.should eq("computer_20251124")
+    tool.allowed_callers.should eq(["direct"])
+    tool.enable_zoom.should be_true
+    tool.strict.should be_true
   end
 end
 
@@ -200,6 +306,20 @@ describe Anthropic::WebFetchTool do
     tool.allowed_domains.should eq(["example.com"])
     tool.blocked_domains.should eq(["spam.com"])
     tool.max_content_tokens.should eq(10_000)
+  end
+
+  it "supports advanced option fields" do
+    tool = Anthropic::WebFetchTool.new(
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      strict: true
+    )
+
+    tool.allowed_callers.should eq(["direct"])
+    tool.cache_control.should_not be_nil
+    tool.defer_loading.should be_true
+    tool.strict.should be_true
   end
 
   describe ".limited_to" do
@@ -249,6 +369,38 @@ describe Anthropic::WebFetchTool do
   end
 end
 
+describe Anthropic::WebSearchTool20260209 do
+  it "creates with advanced beta fields" do
+    tool = Anthropic::WebSearchTool20260209.new(
+      allowed_callers: ["direct"],
+      allowed_domains: ["example.com"],
+      defer_loading: true,
+      strict: true
+    )
+
+    tool.type.should eq("web_search_20260209")
+    tool.allowed_domains.should eq(["example.com"])
+    tool.strict.should be_true
+  end
+end
+
+describe Anthropic::WebFetchTool20260209 do
+  it "creates with advanced beta fields" do
+    tool = Anthropic::WebFetchTool20260209.new(
+      allowed_callers: ["direct"],
+      max_uses: 2,
+      max_content_tokens: 4000,
+      citations: Anthropic::CitationConfig.enable,
+      strict: true
+    )
+
+    tool.type.should eq("web_fetch_20260209")
+    tool.max_uses.should eq(2)
+    tool.max_content_tokens.should eq(4000)
+    tool.citations.should_not be_nil
+  end
+end
+
 describe Anthropic::MemoryTool do
   it "creates with correct type and name" do
     tool = Anthropic::MemoryTool.new
@@ -261,6 +413,21 @@ describe Anthropic::MemoryTool do
     json = tool.to_json
     json.should contain("memory_20250818")
     json.should contain("memory")
+  end
+
+  it "supports advanced option fields" do
+    tool = Anthropic::MemoryTool.new(
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      input_examples: [JSON.parse(%({"memory":"favorite color is blue"}))],
+      strict: true
+    )
+
+    json = tool.to_json
+    json.should contain("allowed_callers")
+    json.should contain("input_examples")
+    json.should contain("strict")
   end
 end
 
@@ -366,14 +533,24 @@ describe Anthropic::WebSearchToolResultContent do
 end
 
 describe Anthropic::CodeExecutionToolResultContent do
-  it "parses from JSON" do
-    json = %({"type":"code_execution_tool_result","tool_use_id":"stu_ce_01","content":{"stdout":"2\\n","stderr":"","return_code":0}})
+  it "parses result payloads from JSON" do
+    json = %({"type":"code_execution_tool_result","tool_use_id":"stu_ce_01","content":{"type":"code_execution_result","stdout":"2\\n","stderr":"","return_code":0,"content":[{"type":"code_execution_output","file_id":"file_123"}]}})
     content = Anthropic::CodeExecutionToolResultContent.from_json(json)
 
     content.type.should eq("code_execution_tool_result")
     content.tool_use_id.should eq("stu_ce_01")
-    content.content["stdout"].as_s.should eq("2\n")
-    content.content["return_code"].as_i.should eq(0)
+    result = content.content.as(Anthropic::CodeExecutionResultValueContent)
+    result.stdout.should eq("2\n")
+    result.return_code.should eq(0)
+    result.content.not_nil!.first.file_id.should eq("file_123")
+  end
+
+  it "parses error payloads from JSON" do
+    json = %({"type":"code_execution_tool_result","tool_use_id":"stu_ce_01","content":{"type":"code_execution_tool_result_error","error_code":"execution_failed"}})
+    content = Anthropic::CodeExecutionToolResultContent.from_json(json)
+
+    error = content.content.as(Anthropic::CodeExecutionToolResultErrorContent)
+    error.error_code.should eq("execution_failed")
   end
 end
 
@@ -443,6 +620,19 @@ describe Anthropic::ToolSearchBM25Tool do
     json.should contain("tool_search_tool_bm25_20251119")
     json.should contain("tool_search_tool_bm25")
   end
+
+  it "supports advanced option fields" do
+    tool = Anthropic::ToolSearchBM25Tool.new(
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      strict: true
+    )
+
+    json = tool.to_json
+    json.should contain("allowed_callers")
+    json.should contain("strict")
+  end
 end
 
 describe Anthropic::ToolSearchRegexTool do
@@ -457,6 +647,19 @@ describe Anthropic::ToolSearchRegexTool do
     json = tool.to_json
     json.should contain("tool_search_tool_regex_20251119")
     json.should contain("tool_search_tool_regex")
+  end
+
+  it "supports advanced option fields" do
+    tool = Anthropic::ToolSearchRegexTool.new(
+      allowed_callers: ["direct"],
+      cache_control: Anthropic::CacheControl.ephemeral,
+      defer_loading: true,
+      strict: true
+    )
+
+    json = tool.to_json
+    json.should contain("allowed_callers")
+    json.should contain("strict")
   end
 end
 

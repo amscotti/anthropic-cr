@@ -144,6 +144,9 @@ module Anthropic
     struct MessageDelta
       include JSON::Serializable
 
+      @[JSON::Field(emit_null: false)]
+      getter container : ContainerInfo?
+
       @[JSON::Field(key: "stop_reason")]
       getter stop_reason : String?
 

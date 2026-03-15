@@ -47,7 +47,7 @@ puts "-" * 50
 begin
   # This will fail because max_tokens is 0
   message = client.messages.create(
-    model: Anthropic::Model::CLAUDE_SONNET_4_5,
+    model: Anthropic::Model::CLAUDE_SONNET_4_6,
     max_tokens: 0, # Invalid!
     messages: [{role: "user", content: "Hello"}]
   )

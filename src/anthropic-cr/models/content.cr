@@ -183,6 +183,24 @@ module Anthropic
     end
   end
 
+  # Tool reference content block.
+  #
+  # Used in tool search results and tool result content arrays.
+  struct ToolReferenceContent
+    include JSON::Serializable
+
+    getter type : String = "tool_reference"
+
+    @[JSON::Field(key: "tool_name")]
+    getter tool_name : String
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(@tool_name : String, @cache_control : CacheControl? = nil)
+    end
+  end
+
   # Tool result content block (from user)
   struct ToolResultContent
     include JSON::Serializable
@@ -192,12 +210,21 @@ module Anthropic
     @[JSON::Field(key: "tool_use_id")]
     getter tool_use_id : String
 
-    getter content : String | Array(TextContent | ImageContent)?
+    @[JSON::Field(converter: Anthropic::ToolResultValueConverter)]
+    getter content : String | Array(ToolResultBlockContent)?
 
     @[JSON::Field(key: "is_error")]
     getter is_error : Bool?
 
-    def initialize(@tool_use_id : String, @content : String | Array(TextContent | ImageContent)? = nil, @is_error : Bool? = nil)
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(
+      @tool_use_id : String,
+      @content : String | Array(ToolResultBlockContent)? = nil,
+      @is_error : Bool? = nil,
+      @cache_control : CacheControl? = nil,
+    )
       @type = "tool_result"
     end
   end
@@ -295,6 +322,24 @@ module Anthropic
   end
 
   alias DocumentSource = Base64PDFSource | PlainTextSource | URLPDFSource | FileSource
+
+  # Container upload content block
+  #
+  # Represents a file uploaded to a container for code execution workflows.
+  struct ContainerUploadContent
+    include JSON::Serializable
+
+    getter type : String = "container_upload"
+
+    @[JSON::Field(key: "file_id")]
+    getter file_id : String
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(@file_id : String, @cache_control : CacheControl? = nil)
+    end
+  end
 
   # Document content block
   struct DocumentContent
@@ -423,6 +468,180 @@ module Anthropic
     end
   end
 
+  alias ToolResultBlockContent = TextContent | ImageContent | DocumentContent | SearchResultContent | ToolReferenceContent
+
+  module ToolResultBlockContentConverter
+    def self.from_json(pull : JSON::PullParser) : ToolResultBlockContent
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s)
+      raw = json.to_json
+
+      case type
+      when "text"
+        TextContent.from_json(raw)
+      when "image"
+        ImageContent.from_json(raw)
+      when "document"
+        DocumentContent.from_json(raw)
+      when "search_result"
+        SearchResultContent.from_json(raw)
+      when "tool_reference"
+        ToolReferenceContent.from_json(raw)
+      else
+        TextContent.new(text: raw)
+      end
+    end
+
+    def self.to_json(value : ToolResultBlockContent, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  module ToolResultBlockContentArrayConverter
+    def self.from_json(pull : JSON::PullParser) : Array(ToolResultBlockContent)
+      result = [] of ToolResultBlockContent
+      pull.read_array do
+        result << ToolResultBlockContentConverter.from_json(pull)
+      end
+      result
+    end
+
+    def self.to_json(value : Array(ToolResultBlockContent), builder : JSON::Builder)
+      builder.array do
+        value.each(&.to_json(builder))
+      end
+    end
+  end
+
+  module ToolResultValueConverter
+    def self.from_json(pull : JSON::PullParser) : String | Array(ToolResultBlockContent)?
+      case pull.kind
+      when .string?
+        pull.read_string
+      when .begin_array?
+        ToolResultBlockContentArrayConverter.from_json(pull)
+      when .null?
+        pull.read_null
+        nil
+      else
+        raise "Invalid tool_result content"
+      end
+    end
+
+    def self.to_json(value : String | Array(ToolResultBlockContent) | Nil, builder : JSON::Builder)
+      case value
+      when String
+        builder.string(value)
+      when Array(ToolResultBlockContent)
+        ToolResultBlockContentArrayConverter.to_json(value, builder)
+      when Nil
+        builder.null
+      end
+    end
+  end
+
+  struct ToolSearchToolResultErrorContent
+    include JSON::Serializable
+
+    getter type : String = "tool_search_tool_result_error"
+
+    @[JSON::Field(key: "error_code")]
+    getter error_code : String
+
+    @[JSON::Field(key: "error_message", emit_null: false)]
+    getter error_message : String?
+
+    def initialize(@error_code : String, @error_message : String? = nil)
+    end
+  end
+
+  struct ToolSearchToolSearchResultContent
+    include JSON::Serializable
+
+    getter type : String = "tool_search_tool_search_result"
+
+    @[JSON::Field(key: "tool_references")]
+    getter tool_references : Array(ToolReferenceContent)
+
+    def initialize(@tool_references : Array(ToolReferenceContent))
+    end
+  end
+
+  alias ToolSearchToolResultValue = ToolSearchToolResultErrorContent | ToolSearchToolSearchResultContent
+
+  module ToolSearchToolResultValueConverter
+    def self.from_json(pull : JSON::PullParser) : ToolSearchToolResultValue
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s)
+      raw = json.to_json
+
+      case type
+      when "tool_search_tool_result_error"
+        ToolSearchToolResultErrorContent.from_json(raw)
+      when "tool_search_tool_search_result"
+        ToolSearchToolSearchResultContent.from_json(raw)
+      else
+        raise "Invalid tool_search_tool_result content"
+      end
+    end
+
+    def self.to_json(value : ToolSearchToolResultValue, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  struct ToolSearchToolResultContent
+    include JSON::Serializable
+
+    getter type : String = "tool_search_tool_result"
+
+    @[JSON::Field(key: "tool_use_id")]
+    getter tool_use_id : String
+
+    @[JSON::Field(converter: Anthropic::ToolSearchToolResultValueConverter)]
+    getter content : ToolSearchToolResultValue
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(
+      @tool_use_id : String,
+      @content : ToolSearchToolResultValue,
+      @cache_control : CacheControl? = nil,
+    )
+    end
+  end
+
+  struct BashCodeExecutionToolResultContent
+    include JSON::Serializable
+
+    getter type : String = "bash_code_execution_tool_result"
+
+    @[JSON::Field(key: "tool_use_id")]
+    getter tool_use_id : String
+
+    @[JSON::Field(converter: Anthropic::BashCodeExecutionToolResultValueConverter)]
+    getter content : BashCodeExecutionToolResultValue
+
+    def initialize(@tool_use_id : String, @content : BashCodeExecutionToolResultValue)
+    end
+  end
+
+  struct TextEditorCodeExecutionToolResultContent
+    include JSON::Serializable
+
+    getter type : String = "text_editor_code_execution_tool_result"
+
+    @[JSON::Field(key: "tool_use_id")]
+    getter tool_use_id : String
+
+    @[JSON::Field(converter: Anthropic::TextEditorCodeExecutionToolResultValueConverter)]
+    getter content : TextEditorCodeExecutionToolResultValue
+
+    def initialize(@tool_use_id : String, @content : TextEditorCodeExecutionToolResultValue)
+    end
+  end
+
   # Compaction content block
   #
   # Returned during auto-compaction of conversation history.
@@ -534,9 +753,11 @@ module Anthropic
   # Union type for all content blocks (including server tool content)
   alias ContentBlock = TextContent | ImageContent | ToolUseContent | ToolResultContent |
                        ThinkingContent | RedactedThinkingContent | DocumentContent |
-                       SearchResultContent | CompactionContent |
+                       SearchResultContent | ContainerUploadContent | CompactionContent |
                        ServerToolUseContent | WebSearchToolResultContent |
                        CodeExecutionToolResultContent | WebFetchToolResultContent |
+                       ToolSearchToolResultContent | BashCodeExecutionToolResultContent |
+                       TextEditorCodeExecutionToolResultContent |
                        MCPToolUseContent | MCPToolResultContent
 
   # JSON converter for discriminated union parsing of content blocks
@@ -564,18 +785,22 @@ module Anthropic
       when "image"             then ImageContent.from_json(raw)
       when "document"          then DocumentContent.from_json(raw)
       when "search_result"     then SearchResultContent.from_json(raw)
+      when "container_upload"  then ContainerUploadContent.from_json(raw)
       when "compaction"        then CompactionContent.from_json(raw)
       end
     end
 
     private def self.parse_server_block(type : String?, raw : String) : ContentBlock?
       case type
-      when "server_tool_use"            then ServerToolUseContent.from_json(raw)
-      when "web_search_tool_result"     then WebSearchToolResultContent.from_json(raw)
-      when "code_execution_tool_result" then CodeExecutionToolResultContent.from_json(raw)
-      when "web_fetch_tool_result"      then WebFetchToolResultContent.from_json(raw)
-      when "mcp_tool_use"               then MCPToolUseContent.from_json(raw)
-      when "mcp_tool_result"            then MCPToolResultContent.from_json(raw)
+      when "server_tool_use"                        then ServerToolUseContent.from_json(raw)
+      when "web_search_tool_result"                 then WebSearchToolResultContent.from_json(raw)
+      when "code_execution_tool_result"             then CodeExecutionToolResultContent.from_json(raw)
+      when "bash_code_execution_tool_result"        then BashCodeExecutionToolResultContent.from_json(raw)
+      when "text_editor_code_execution_tool_result" then TextEditorCodeExecutionToolResultContent.from_json(raw)
+      when "web_fetch_tool_result"                  then WebFetchToolResultContent.from_json(raw)
+      when "tool_search_tool_result"                then ToolSearchToolResultContent.from_json(raw)
+      when "mcp_tool_use"                           then MCPToolUseContent.from_json(raw)
+      when "mcp_tool_result"                        then MCPToolResultContent.from_json(raw)
       end
     end
 

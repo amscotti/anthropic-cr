@@ -2,7 +2,8 @@ module Anthropic
   # Model ID constants for all available Claude models
   module Model
     # Claude 4.6
-    CLAUDE_OPUS_4_6 = "claude-opus-4-6"
+    CLAUDE_OPUS_4_6   = "claude-opus-4-6"
+    CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
 
     # Claude 4.5 models
     CLAUDE_OPUS_4_5   = "claude-opus-4-5-20251101"
@@ -11,40 +12,36 @@ module Anthropic
 
     # Claude 4 models
     CLAUDE_SONNET_4 = "claude-sonnet-4-20250514"
+    CLAUDE_OPUS_4_1 = "claude-opus-4-1-20250805"
     CLAUDE_OPUS_4   = "claude-opus-4-20250514"
-
-    # Legacy Claude 3 models
-    CLAUDE_3_7_SONNET = "claude-3-7-sonnet-20250219"
-    CLAUDE_3_5_HAIKU  = "claude-3-5-haiku-20241022"
-    CLAUDE_3_OPUS     = "claude-3-opus-20240229"
-    CLAUDE_3_HAIKU    = "claude-3-haiku-20240307"
   end
 
   # Shorthand helper for accessing model IDs via symbols
   #
   # ```
-  # Anthropic.model_name(:opus)     # => "claude-opus-4-6"
-  # Anthropic.model_name(:sonnet)   # => "claude-sonnet-4-5-20250929"
-  # Anthropic.model_name(:haiku)    # => "claude-haiku-4-5-20251001"
-  # Anthropic.model_name(:opus_4_5) # => "claude-opus-4-5-20251101"
+  # Anthropic.model_name(:opus)       # => "claude-opus-4-6"
+  # Anthropic.model_name(:sonnet)     # => "claude-sonnet-4-6"
+  # Anthropic.model_name(:haiku)      # => "claude-haiku-4-5-20251001"
+  # Anthropic.model_name(:opus_4_5)   # => "claude-opus-4-5-20251101"
+  # Anthropic.model_name(:sonnet_4_5) # => "claude-sonnet-4-5-20250929"
   # ```
   def self.model_name(shorthand : Symbol) : String
     case shorthand
-    when :opus      then Model::CLAUDE_OPUS_4_6
-    when :opus_4_5  then Model::CLAUDE_OPUS_4_5
-    when :sonnet    then Model::CLAUDE_SONNET_4_5
-    when :haiku     then Model::CLAUDE_HAIKU_4_5
-    when :opus_4    then Model::CLAUDE_OPUS_4
-    when :sonnet_4  then Model::CLAUDE_SONNET_4
-    when :opus_3_7  then Model::CLAUDE_3_7_SONNET
-    when :haiku_3_5 then Model::CLAUDE_3_5_HAIKU
-    when :opus_3    then Model::CLAUDE_3_OPUS
-    when :haiku_3   then Model::CLAUDE_3_HAIKU
+    when :opus       then Model::CLAUDE_OPUS_4_6
+    when :sonnet     then Model::CLAUDE_SONNET_4_6
+    when :haiku      then Model::CLAUDE_HAIKU_4_5
+    when :opus_4_6   then Model::CLAUDE_OPUS_4_6
+    when :sonnet_4_6 then Model::CLAUDE_SONNET_4_6
+    when :opus_4_5   then Model::CLAUDE_OPUS_4_5
+    when :sonnet_4_5 then Model::CLAUDE_SONNET_4_5
+    when :opus_4_1   then Model::CLAUDE_OPUS_4_1
+    when :opus_4     then Model::CLAUDE_OPUS_4
+    when :sonnet_4   then Model::CLAUDE_SONNET_4
     else
       raise ArgumentError.new(
         "Unknown model shorthand: #{shorthand}. " \
-        "Valid options: :opus, :opus_4_5, :sonnet, :haiku, :opus_4, :sonnet_4, " \
-        ":opus_3_7, :haiku_3_5, :opus_3, :haiku_3"
+        "Valid options: :opus, :sonnet, :haiku, :opus_4_6, :sonnet_4_6, :opus_4_5, :sonnet_4_5, " \
+        ":opus_4_1, :opus_4, :sonnet_4"
       )
     end
   end

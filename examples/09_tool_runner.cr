@@ -50,7 +50,7 @@ puts
 
 # Create a tool runner (in beta namespace, matching Ruby SDK)
 runner = client.beta.messages.tool_runner(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     Anthropic::MessageParam.user("What time is it right now? Also, what is 15 + 27?"),

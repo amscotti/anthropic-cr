@@ -1,7 +1,7 @@
 require "../src/anthropic-cr"
 require "dotenv"
 
-# Streaming example: Stream Claude's response in real-time
+# Streaming example: compare `stream` and `open_stream`
 #
 # Make sure ANTHROPIC_API_KEY is set in your environment or .env file
 #
@@ -16,9 +16,9 @@ client = Anthropic::Client.new
 puts "Streaming response from Claude..."
 puts "-" * 50
 
-# Method 1: Stream with block (yields each event)
+# Method 1: `stream` yields each parsed event
 client.messages.stream(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     {role: "user", content: "Write a haiku about Crystal programming."},
@@ -37,24 +37,22 @@ puts
 puts "-" * 50
 puts
 
-# Method 2: Using text iterator within the stream
-puts "Using text iterator for just text:"
+# Method 2: `open_stream` yields a MessageStream helper
+puts "Using open_stream for helpers like collect_text and final_message:"
 puts "-" * 50
 
-text_buffer = ""
-client.messages.stream(
+client.messages.open_stream(
   model: Anthropic::Model::CLAUDE_HAIKU_4_5,
   max_tokens: 100,
   messages: [
     {role: "user", content: "Count from 1 to 5 in words."},
   ]
-) do |event|
-  if event.is_a?(Anthropic::ContentBlockDeltaEvent)
-    if text = event.text
-      text_buffer += text
-    end
-  end
-end
+) do |stream|
+  text_buffer = stream.collect_text
+  final_message = stream.final_message
 
-puts text_buffer
+  puts text_buffer
+  puts
+  puts "Final stop reason: #{final_message.try(&.stop_reason) || "unknown"}"
+end
 puts "-" * 50

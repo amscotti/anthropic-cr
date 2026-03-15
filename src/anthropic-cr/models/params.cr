@@ -124,7 +124,7 @@ module Anthropic
   #
   # ```
   # params = MessageCreateParams.new(
-  #   model: "claude-sonnet-4-5-20250929",
+  #   model: "claude-sonnet-4-6",
   #   max_tokens: 1024,
   #   messages: [MessageParam.user("Hello!")],
   #   stream: false
@@ -174,6 +174,12 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter thinking : ThinkingConfig?
 
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    @[JSON::Field(emit_null: false)]
+    getter container : String?
+
     @[JSON::Field(key: "output_config", emit_null: false)]
     getter output_config : OutputConfig?
 
@@ -195,6 +201,8 @@ module Anthropic
       @metadata : Metadata? = nil,
       @service_tier : String? = nil,
       @thinking : ThinkingConfig? = nil,
+      @cache_control : CacheControl? = nil,
+      @container : String? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
     )
@@ -381,7 +389,13 @@ module Anthropic
     getter service_tier : String?
 
     @[JSON::Field(emit_null: false)]
+    getter speed : String?
+
+    @[JSON::Field(emit_null: false)]
     getter thinking : ThinkingConfig?
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
 
     @[JSON::Field(key: "output_format", emit_null: false)]
     getter output_format : OutputFormat?
@@ -396,7 +410,7 @@ module Anthropic
     getter context_management : ContextManagementConfig?
 
     @[JSON::Field(emit_null: false)]
-    getter container : ContainerConfig?
+    getter container : String | ContainerConfig?
 
     @[JSON::Field(key: "mcp_servers", emit_null: false)]
     getter mcp_servers : Array(MCPServerDefinition)?
@@ -415,12 +429,76 @@ module Anthropic
       @stop_sequences : Array(String)? = nil,
       @metadata : Metadata? = nil,
       @service_tier : String? = nil,
+      @speed : String? = nil,
       @thinking : ThinkingConfig? = nil,
+      @cache_control : CacheControl? = nil,
       @output_format : OutputFormat? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
       @context_management : ContextManagementConfig? = nil,
-      @container : ContainerConfig? = nil,
+      @container : String | ContainerConfig? = nil,
+      @mcp_servers : Array(MCPServerDefinition)? = nil,
+    )
+    end
+  end
+
+  # Beta token count request parameters
+  struct BetaTokenCountParams
+    include JSON::Serializable
+
+    getter model : String
+    getter messages : Array(MessageParam)
+
+    @[JSON::Field(emit_null: false)]
+    getter system : SystemPrompt?
+
+    @[JSON::Field(emit_null: false)]
+    getter tools : Array(ToolDefinition | ServerTool)?
+
+    @[JSON::Field(key: "tool_choice", emit_null: false)]
+    getter tool_choice : ToolChoice?
+
+    @[JSON::Field(emit_null: false)]
+    getter speed : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter thinking : ThinkingConfig?
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    @[JSON::Field(key: "output_format", emit_null: false)]
+    getter output_format : OutputFormat?
+
+    @[JSON::Field(key: "output_config", emit_null: false)]
+    getter output_config : OutputConfig?
+
+    @[JSON::Field(key: "inference_geo", emit_null: false)]
+    getter inference_geo : String?
+
+    @[JSON::Field(key: "context_management", emit_null: false)]
+    getter context_management : ContextManagementConfig?
+
+    @[JSON::Field(emit_null: false)]
+    getter container : String | ContainerConfig?
+
+    @[JSON::Field(key: "mcp_servers", emit_null: false)]
+    getter mcp_servers : Array(MCPServerDefinition)?
+
+    def initialize(
+      @model : String,
+      @messages : Array(MessageParam),
+      @system : SystemPrompt? = nil,
+      @tools : Array(ToolDefinition | ServerTool)? = nil,
+      @tool_choice : ToolChoice? = nil,
+      @speed : String? = nil,
+      @thinking : ThinkingConfig? = nil,
+      @cache_control : CacheControl? = nil,
+      @output_format : OutputFormat? = nil,
+      @output_config : OutputConfig? = nil,
+      @inference_geo : String? = nil,
+      @context_management : ContextManagementConfig? = nil,
+      @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
     )
     end
@@ -445,6 +523,9 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter thinking : ThinkingConfig?
 
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
     @[JSON::Field(key: "output_config", emit_null: false)]
     getter output_config : OutputConfig?
 
@@ -458,6 +539,7 @@ module Anthropic
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @thinking : ThinkingConfig? = nil,
+      @cache_control : CacheControl? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
     )

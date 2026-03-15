@@ -30,7 +30,7 @@ puts "Example 1: Coding agent tools setup"
 puts "-" * 60
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [
     Anthropic::BashTool.new,
@@ -50,7 +50,7 @@ puts "Example 2: Computer use tool setup"
 puts "-" * 60
 
 message2 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [
     Anthropic::ComputerUseTool.new(display_width_px: 1920, display_height_px: 1080),
@@ -71,7 +71,7 @@ puts "Example 3: Web fetch tool"
 puts "-" * 60
 
 message3 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [Anthropic::WebFetchTool.new] of Anthropic::ServerTool,
   messages: [
@@ -94,7 +94,7 @@ restricted_fetch = Anthropic::WebFetchTool.new(
 )
 
 message4 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [restricted_fetch] of Anthropic::ServerTool,
   messages: [
@@ -111,7 +111,7 @@ puts "Example 5: Memory tool"
 puts "-" * 60
 
 message5 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [Anthropic::MemoryTool.new] of Anthropic::ServerTool,
   messages: [
@@ -133,7 +133,7 @@ fetch_with_citations = Anthropic::WebFetchTool.new(
 )
 
 message6 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 4096,
   server_tools: [fetch_with_citations] of Anthropic::ServerTool,
   messages: [

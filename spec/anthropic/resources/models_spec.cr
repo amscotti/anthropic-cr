@@ -21,9 +21,9 @@ describe Anthropic::Models do
       result = client.models.list
 
       model = result.data[0]
-      model.id.should eq("claude-sonnet-4-5-20250929")
+      model.id.should eq("claude-sonnet-4-6")
       model.type.should eq("model")
-      model.display_name.should eq("Claude Sonnet 4.5")
+      model.display_name.should eq("Claude Sonnet 4.6")
     end
 
     it "passes limit parameter" do
@@ -39,14 +39,14 @@ describe Anthropic::Models do
 
   describe "#retrieve" do
     it "returns specific model info" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/models/claude-sonnet-4-5-20250929")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/models/claude-sonnet-4-6")
         .to_return(body: Fixtures::Responses::MODEL_INFO)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
-      model = client.models.retrieve("claude-sonnet-4-5-20250929")
+      model = client.models.retrieve("claude-sonnet-4-6")
 
-      model.id.should eq("claude-sonnet-4-5-20250929")
-      model.display_name.should eq("Claude Sonnet 4.5")
+      model.id.should eq("claude-sonnet-4-6")
+      model.display_name.should eq("Claude Sonnet 4.6")
     end
   end
 end
@@ -70,7 +70,7 @@ end
 describe Anthropic::Model do
   it "has model constants" do
     Anthropic::Model::CLAUDE_OPUS_4_6.should eq("claude-opus-4-6")
-    Anthropic::Model::CLAUDE_SONNET_4_5.should eq("claude-sonnet-4-5-20250929")
+    Anthropic::Model::CLAUDE_SONNET_4_6.should eq("claude-sonnet-4-6")
     Anthropic::Model::CLAUDE_OPUS_4_5.should eq("claude-opus-4-5-20251101")
     Anthropic::Model::CLAUDE_HAIKU_4_5.should eq("claude-haiku-4-5-20251001")
   end

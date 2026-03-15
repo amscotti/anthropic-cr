@@ -52,7 +52,7 @@ describe Anthropic::Client do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test-key")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{role: "user", content: "Hello"}]
       )
@@ -72,7 +72,7 @@ describe Anthropic::Client do
         default_headers: {"X-Custom" => "custom-value"}
       )
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{role: "user", content: "Hello"}]
       )
@@ -89,7 +89,7 @@ describe Anthropic::Client do
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       expect_raises(Anthropic::BadRequestError) do
         client.messages.create(
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           max_tokens: 100,
           messages: [{role: "user", content: "Hello"}]
         )
@@ -103,7 +103,7 @@ describe Anthropic::Client do
       client = Anthropic::Client.new(api_key: "sk-ant-invalid")
       expect_raises(Anthropic::AuthenticationError) do
         client.messages.create(
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           max_tokens: 100,
           messages: [{role: "user", content: "Hello"}]
         )
@@ -131,7 +131,7 @@ describe Anthropic::Client do
       client = Anthropic::Client.new(api_key: "sk-ant-test", max_retries: 0)
       begin
         client.messages.create(
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           max_tokens: 100,
           messages: [{role: "user", content: "Hello"}]
         )
@@ -151,7 +151,7 @@ describe Anthropic::Client do
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       begin
         client.messages.create(
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           max_tokens: 100,
           messages: [{role: "user", content: "Hello"}]
         )
@@ -169,11 +169,129 @@ describe Anthropic::Client do
       client = Anthropic::Client.new(api_key: "sk-ant-test", max_retries: 0)
       expect_raises(Anthropic::InternalServerError) do
         client.messages.create(
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           max_tokens: 100,
           messages: [{role: "user", content: "Hello"}]
         )
       end
+    end
+  end
+
+  describe "retry behavior" do
+    it "retries retryable responses and eventually succeeds" do
+      attempts = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        attempts += 1
+
+        if attempts == 1
+          HTTP::Client::Response.new(500, body: Fixtures::Responses::ERROR_SERVER)
+        else
+          HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC)
+        end
+      end
+
+      client = Anthropic::Client.new(
+        api_key: "sk-ant-test",
+        initial_retry_delay: 0.0,
+        max_retry_delay: 0.0
+      )
+
+      message = client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      attempts.should eq(2)
+      message.id.should eq("msg_01XFDUDYJgAACzvnptvVoYEL")
+    end
+
+    it "respects x-should-retry false on otherwise retryable responses" do
+      attempts = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        attempts += 1
+        HTTP::Client::Response.new(
+          500,
+          body: Fixtures::Responses::ERROR_SERVER,
+          headers: HTTP::Headers{"x-should-retry" => "false"}
+        )
+      end
+
+      client = Anthropic::Client.new(
+        api_key: "sk-ant-test",
+        initial_retry_delay: 0.0,
+        max_retry_delay: 0.0
+      )
+
+      expect_raises(Anthropic::InternalServerError) do
+        client.messages.create(
+          model: "claude-sonnet-4-6",
+          max_tokens: 100,
+          messages: [{role: "user", content: "Hello"}]
+        )
+      end
+
+      attempts.should eq(1)
+    end
+
+    it "respects x-should-retry true on otherwise non-retryable responses" do
+      attempts = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        attempts += 1
+
+        if attempts == 1
+          HTTP::Client::Response.new(
+            400,
+            body: Fixtures::Responses::ERROR_BAD_REQUEST,
+            headers: HTTP::Headers{"x-should-retry" => "true"}
+          )
+        else
+          HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC)
+        end
+      end
+
+      client = Anthropic::Client.new(
+        api_key: "sk-ant-test",
+        initial_retry_delay: 0.0,
+        max_retry_delay: 0.0
+      )
+
+      message = client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      attempts.should eq(2)
+      message.id.should eq("msg_01XFDUDYJgAACzvnptvVoYEL")
+    end
+
+    it "retries transport errors and eventually succeeds" do
+      attempts = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        attempts += 1
+
+        if attempts == 1
+          raise IO::Error.new("connection dropped")
+        else
+          HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC)
+        end
+      end
+
+      client = Anthropic::Client.new(
+        api_key: "sk-ant-test",
+        initial_retry_delay: 0.0,
+        max_retry_delay: 0.0
+      )
+
+      message = client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      attempts.should eq(2)
+      message.id.should eq("msg_01XFDUDYJgAACzvnptvVoYEL")
     end
   end
 
@@ -203,6 +321,16 @@ describe Anthropic::Client do
       client.beta.files.should be_a(Anthropic::BetaFiles)
     end
 
+    it "provides beta.models" do
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.beta.models.should be_a(Anthropic::BetaModels)
+    end
+
+    it "provides beta.messages.batches" do
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.beta.messages.batches.should be_a(Anthropic::BetaBatches)
+    end
+
     it "provides beta.messages.tool_runner" do
       WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
         .to_return(body: Fixtures::Responses::MESSAGE_BASIC)
@@ -216,7 +344,7 @@ describe Anthropic::Client do
       ) { |_| "result" }] of Anthropic::Tool
 
       runner = client.beta.messages.tool_runner(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hello")],
         tools: tools

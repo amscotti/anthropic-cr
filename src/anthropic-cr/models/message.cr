@@ -1,4 +1,19 @@
 module Anthropic
+  struct ContainerInfo
+    include JSON::Serializable
+
+    getter id : String
+
+    @[JSON::Field(key: "expires_at")]
+    getter expires_at : String
+
+    @[JSON::Field(emit_null: false)]
+    getter skills : Array(ContainerSkill)?
+
+    def initialize(@id : String, @expires_at : String, @skills : Array(ContainerSkill)? = nil)
+    end
+  end
+
   # Message struct for API responses
   #
   # Content blocks are typed - use pattern matching or type checks:
@@ -20,6 +35,9 @@ module Anthropic
     getter id : String
     getter type : String # Always "message"
     getter role : String # "assistant"
+
+    @[JSON::Field(emit_null: false)]
+    getter container : ContainerInfo?
 
     @[JSON::Field(converter: Anthropic::ContentBlockArrayConverter)]
     getter content : Array(ContentBlock)
@@ -70,6 +88,10 @@ module Anthropic
       text_blocks.map(&.text).join
     end
 
+    def container_id : String?
+      container.try(&.id)
+    end
+
     # Get parsed output for structured outputs
     #
     # When using structured outputs, Claude returns JSON in the text content.
@@ -94,6 +116,42 @@ module Anthropic
     # Check if the response contains structured output
     def structured_output? : Bool
       !parsed_output.nil?
+    end
+
+    # Parse structured output into a typed Crystal value
+    def parsed_output_as(type : T.class) : T? forall T
+      text_block = content.find(&.is_a?(TextContent)).as?(TextContent)
+      return nil unless text_block
+      return nil if text_block.text.empty?
+
+      T.from_json(text_block.text)
+    rescue JSON::ParseException
+      nil
+    end
+
+    # Parse structured output into a typed Crystal value, raising on failure
+    def parsed_output_as!(type : T.class) : T forall T
+      text_block = content.find(&.is_a?(TextContent)).as?(TextContent)
+      raise StructuredOutputParseError.new("No text content available for structured output parsing") unless text_block
+      raise StructuredOutputParseError.new("No text content available for structured output parsing") if text_block.text.empty?
+
+      T.from_json(text_block.text)
+    rescue ex : JSON::ParseException
+      raise StructuredOutputParseError.new("Failed to parse structured output: #{ex.message}", cause: ex)
+    end
+  end
+
+  struct ParsedMessage(T)
+    getter message : Message
+    getter parsed_output : T
+
+    forward_missing_to @message
+
+    def initialize(@message : Message, @parsed_output : T)
+    end
+
+    def structured_output? : Bool
+      true
     end
   end
 

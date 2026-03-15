@@ -102,7 +102,7 @@ puts
 # Create tool runner with compaction
 runner = Anthropic::ToolRunner.new(
   client: client,
-  model: Anthropic::Model::CLAUDE_SONNET_4_5,
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
   max_tokens: 1024,
   messages: [
     Anthropic::MessageParam.user(

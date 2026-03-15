@@ -7,13 +7,13 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [{role: "user", content: "Hello, Claude!"}]
       )
 
       body = JSON.parse(capture.body.not_nil!)
-      body["model"].as_s.should eq("claude-sonnet-4-5-20250929")
+      body["model"].as_s.should eq("claude-sonnet-4-6")
       body["max_tokens"].as_i.should eq(1024)
       body["messages"].as_a.size.should eq(1)
       body["messages"][0]["role"].as_s.should eq("user")
@@ -26,7 +26,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       message = client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{role: "user", content: "Hello"}]
       )
@@ -34,7 +34,7 @@ describe Anthropic::Messages do
       message.id.should eq("msg_01XFDUDYJgAACzvnptvVoYEL")
       message.type.should eq("message")
       message.role.should eq("assistant")
-      message.model.should eq("claude-sonnet-4-5-20250929")
+      message.model.should eq("claude-sonnet-4-6")
       message.stop_reason.should eq("end_turn")
     end
 
@@ -44,7 +44,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       message = client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{role: "user", content: "Hello"}]
       )
@@ -61,7 +61,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       message = client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{role: "user", content: "Hello"}]
       )
@@ -76,7 +76,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       message = client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{role: "user", content: "What's the weather?"}]
       )
@@ -91,7 +91,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       message = client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{role: "user", content: "What's the weather?"}]
       )
@@ -108,7 +108,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         system: "You are a helpful assistant.",
         messages: [{role: "user", content: "Hello"}]
@@ -123,7 +123,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         temperature: 0.7,
         messages: [{role: "user", content: "Hello"}]
@@ -138,7 +138,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         top_p: 0.9,
         messages: [{role: "user", content: "Hello"}]
@@ -153,7 +153,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         stop_sequences: ["END", "STOP"],
         messages: [{role: "user", content: "Hello"}]
@@ -201,7 +201,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [{role: "user", content: "Hello"}]
       )
@@ -216,7 +216,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         server_tools: [Anthropic::ComputerUseTool.new(display_width_px: 1920, display_height_px: 1080)] of Anthropic::ServerTool,
         messages: [{role: "user", content: "Click the button"}]
@@ -231,7 +231,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         server_tools: [Anthropic::CodeExecutionTool.new] of Anthropic::ServerTool,
         messages: [{role: "user", content: "Run some code"}]
@@ -246,7 +246,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         server_tools: [Anthropic::WebFetchTool.new] of Anthropic::ServerTool,
         messages: [{role: "user", content: "Fetch a page"}]
@@ -261,7 +261,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         server_tools: [Anthropic::MemoryTool.new] of Anthropic::ServerTool,
         messages: [{role: "user", content: "Remember this"}]
@@ -276,7 +276,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         server_tools: [Anthropic::MCPTool.new(name: "test", server_label: "test", server_url: "https://example.com/mcp")] of Anthropic::ServerTool,
         messages: [{role: "user", content: "Use MCP"}]
@@ -291,7 +291,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         server_tools: [Anthropic::ToolSearchBM25Tool.new] of Anthropic::ServerTool,
         messages: [{role: "user", content: "Find a tool"}]
@@ -306,7 +306,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         server_tools: [Anthropic::ToolSearchRegexTool.new] of Anthropic::ServerTool,
         messages: [{role: "user", content: "Search tools"}]
@@ -316,12 +316,35 @@ describe Anthropic::Messages do
       headers["anthropic-beta"].should contain("advanced-tool-use-2025-11-20")
     end
 
+    it "sends the expected beta headers for newer server tool versions" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 4096,
+        server_tools: [
+          Anthropic::WebSearchTool20260209.new,
+          Anthropic::WebFetchTool20260209.new,
+          Anthropic::CodeExecutionTool20260120.new,
+          Anthropic::ComputerUseTool20251124.new(display_width_px: 1920, display_height_px: 1080),
+        ] of Anthropic::ServerTool,
+        messages: [{role: "user", content: "Use all the tools"}]
+      )
+
+      headers = capture.headers.not_nil!
+      headers["anthropic-beta"].should contain(Anthropic::WEB_SEARCH_BETA)
+      headers["anthropic-beta"].should contain(Anthropic::WEB_FETCH_BETA)
+      headers["anthropic-beta"].should contain(Anthropic::CODE_EXECUTION_BETA)
+      headers["anthropic-beta"].should contain(Anthropic::COMPUTER_USE_BETA)
+    end
+
     it "does not send beta headers for BashTool or TextEditorTool" do
       capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         server_tools: [Anthropic::BashTool.new, Anthropic::TextEditorTool.new] of Anthropic::ServerTool,
         messages: [{role: "user", content: "Do something"}]
@@ -336,7 +359,7 @@ describe Anthropic::Messages do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         metadata: Anthropic::Metadata.new(user_id: "user-123"),
         messages: [{role: "user", content: "Hello"}]
@@ -361,6 +384,50 @@ describe Anthropic::Messages do
       body["thinking"]["type"].as_s.should eq("adaptive")
       body["thinking"]["budget_tokens"]?.should be_nil
     end
+
+    it "sends top-level cache_control" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        cache_control: Anthropic::CacheControl.ephemeral,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      body = JSON.parse(capture.body.not_nil!)
+      body["cache_control"]["type"].as_s.should eq("ephemeral")
+    end
+
+    it "sends non-beta container identifier" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        container: "container_123",
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      body = JSON.parse(capture.body.not_nil!)
+      body["container"].as_s.should eq("container_123")
+    end
+
+    it "sends extended cache TTL beta header for top-level cache_control" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        cache_control: Anthropic::CacheControl.one_hour,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::EXTENDED_CACHE_TTL_BETA)
+    end
   end
 
   describe "#batches" do
@@ -378,7 +445,7 @@ describe Anthropic::Usage do
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     message = client.messages.create(
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-sonnet-4-6",
       max_tokens: 100,
       messages: [{role: "user", content: "Hello"}]
     )
@@ -397,7 +464,7 @@ describe Anthropic::Usage do
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     message = client.messages.create(
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-sonnet-4-6",
       max_tokens: 100,
       messages: [{role: "user", content: "Search for something"}]
     )
@@ -433,12 +500,104 @@ describe Anthropic::Message do
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       message = client.messages.create(
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{role: "user", content: "Hello"}]
       )
 
       message.parsed_output.should be_nil
+    end
+  end
+
+  describe "#parsed_output_as!" do
+    it "raises when structured output cannot be parsed" do
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
+        .to_return(body: Fixtures::Responses::MESSAGE_BASIC)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      message = client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      expect_raises(Anthropic::StructuredOutputParseError) do
+        message.parsed_output_as!(JSON::Any)
+      end
+    end
+  end
+
+  describe "#container_id" do
+    it "parses container information from message responses" do
+      response = %({"id":"msg_container_01","type":"message","role":"assistant","container":{"id":"cont_123","expires_at":"2026-03-14T12:00:00Z"},"content":[{"type":"text","text":"Hello"}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}})
+
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
+        .to_return(body: response)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      message = client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      message.container.should_not be_nil
+      message.container_id.should eq("cont_123")
+      message.container.not_nil!.expires_at.should eq("2026-03-14T12:00:00Z")
+    end
+  end
+
+  describe "#open_stream" do
+    it "yields a rich message stream helper" do
+      body = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream_01\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-4-6\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
+        .to_return do |_request|
+          HTTP::Client::Response.new(
+            200,
+            headers: HTTP::Headers{"Content-Type" => "text/event-stream"},
+            body_io: IO::Memory.new(body)
+          )
+        end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      collected = ""
+
+      client.messages.open_stream(
+        model: "claude-sonnet-4-6",
+        max_tokens: 16,
+        messages: [{role: "user", content: "Hello"}]
+      ) do |stream|
+        stream.should be_a(Anthropic::MessageStream)
+        collected = stream.collect_text
+      end
+
+      collected.should eq("Hello")
+    end
+
+    it "sends container in streaming requests" do
+      capture = RequestCapture.new
+
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
+        .to_return do |request|
+          capture.body = request.body.to_s
+          HTTP::Client::Response.new(
+            200,
+            headers: HTTP::Headers{"Content-Type" => "text/event-stream"},
+            body_io: IO::Memory.new("data: [DONE]\n\n")
+          )
+        end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+      client.messages.open_stream(
+        model: "claude-sonnet-4-6",
+        max_tokens: 16,
+        container: "container_123",
+        messages: [{role: "user", content: "Hello"}]
+      ) { |_stream| }
+
+      JSON.parse(capture.body.not_nil!)["container"].as_s.should eq("container_123")
     end
   end
 end
@@ -600,5 +759,37 @@ describe Anthropic::Metadata do
     metadata = Anthropic::Metadata.new
     json = metadata.to_json
     json.should_not contain("user_id")
+  end
+end
+
+describe Anthropic::ServerToolUseContent do
+  it "parses object-shaped caller info from API responses" do
+    response = %({"id":"msg_server_tool_use","type":"message","role":"assistant","content":[{"type":"server_tool_use","id":"stu_01","name":"web_search","input":{"query":"latest Crystal news"},"caller":{"type":"direct"}},{"type":"text","text":"done"}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}})
+
+    WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
+      .to_return(body: response)
+
+    client = Anthropic::Client.new(api_key: "sk-ant-test")
+    message = client.messages.create(
+      model: "claude-sonnet-4-6",
+      max_tokens: 100,
+      server_tools: [Anthropic::WebSearchTool.new] of Anthropic::ServerTool,
+      messages: [{role: "user", content: "Search for Crystal news"}]
+    )
+
+    block = message.content.first.as(Anthropic::ServerToolUseContent)
+    block.caller.should eq("direct")
+    block.caller_tool_id.should be_nil
+    block.caller_info.should_not be_nil
+    block.caller_info.not_nil!.direct?.should be_true
+  end
+
+  it "still parses legacy string caller values" do
+    block = Anthropic::ServerToolUseContent.from_json(
+      %({"type":"server_tool_use","id":"stu_02","name":"code_execution","input":{"code":"print(42)"},"caller":"code_execution_20250825"})
+    )
+
+    block.caller.should eq("code_execution_20250825")
+    block.caller_tool_id.should be_nil
   end
 end
