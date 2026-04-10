@@ -1,4 +1,16 @@
 module Anthropic
+  struct RefusalStopDetails
+    include JSON::Serializable
+
+    getter type : String = "refusal"
+
+    @[JSON::Field(emit_null: false)]
+    getter category : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter explanation : String?
+  end
+
   struct ContainerInfo
     include JSON::Serializable
 
@@ -46,6 +58,9 @@ module Anthropic
 
     @[JSON::Field(key: "stop_reason")]
     getter stop_reason : String? # "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | "pause_turn" | "refusal"
+
+    @[JSON::Field(key: "stop_details", emit_null: false)]
+    getter stop_details : RefusalStopDetails?
 
     @[JSON::Field(key: "stop_sequence")]
     getter stop_sequence : String?

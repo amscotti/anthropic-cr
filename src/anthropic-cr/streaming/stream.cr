@@ -43,6 +43,10 @@ module Anthropic
           data["stop_reason"] = JSON::Any.new(stop_reason)
         end
 
+        if stop_details = event.delta.stop_details
+          data["stop_details"] = JSON.parse(stop_details.to_json)
+        end
+
         if stop_sequence = event.delta.stop_sequence
           data["stop_sequence"] = JSON::Any.new(stop_sequence)
         end

@@ -137,6 +137,31 @@ describe Anthropic::CodeExecutionTool20260120 do
   end
 end
 
+describe Anthropic::WebFetchTool20260309 do
+  it "creates with expected fields" do
+    tool = Anthropic::WebFetchTool20260309.new(
+      allowed_callers: ["direct", "code_execution_20260120"],
+      allowed_domains: ["example.com"],
+      defer_loading: true,
+      strict: true,
+      use_cache: false
+    )
+
+    tool.type.should eq("web_fetch_20260309")
+    tool.name.should eq("web_fetch")
+    tool.allowed_domains.should eq(["example.com"])
+    tool.use_cache.should be_false
+  end
+
+  it "serializes use_cache" do
+    tool = Anthropic::WebFetchTool20260309.new(use_cache: false)
+    json = tool.to_json
+
+    json.should contain("web_fetch_20260309")
+    json.should contain("use_cache")
+  end
+end
+
 describe Anthropic::BashTool do
   it "creates with correct type and name" do
     tool = Anthropic::BashTool.new

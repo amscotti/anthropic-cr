@@ -15,9 +15,9 @@ module Fixtures
     MESSAGE_OPUS_46 = %({"id":"msg_opus46_01","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"Adaptive thinking in action...","signature":"sig456"},{"type":"text","text":"Hello from Opus 4.6!"}],"model":"claude-opus-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":15,"output_tokens":25}})
 
     # Model API responses
-    MODEL_INFO = %({"type":"model","id":"claude-sonnet-4-6","display_name":"Claude Sonnet 4.6","created_at":"2025-09-29T00:00:00Z"})
+    MODEL_INFO = %({"type":"model","id":"claude-sonnet-4-6","display_name":"Claude Sonnet 4.6","created_at":"2026-02-17T00:00:00Z","max_input_tokens":200000,"max_tokens":64000,"capabilities":{"batch":{"supported":true},"citations":{"supported":true},"code_execution":{"supported":true},"context_management":{"supported":true,"clear_thinking_20251015":{"supported":true},"clear_tool_uses_20250919":{"supported":true},"compact_20260112":{"supported":true}},"effort":{"supported":true,"low":{"supported":true},"medium":{"supported":true},"high":{"supported":true},"max":{"supported":true}},"image_input":{"supported":true},"pdf_input":{"supported":true},"structured_outputs":{"supported":true},"thinking":{"supported":true,"types":{"adaptive":{"supported":true},"enabled":{"supported":true}}}}})
 
-    MODEL_LIST = %({"data":[{"type":"model","id":"claude-sonnet-4-6","display_name":"Claude Sonnet 4.6","created_at":"2025-09-29T00:00:00Z"},{"type":"model","id":"claude-haiku-4-5-20251001","display_name":"Claude Haiku 4.5","created_at":"2025-10-01T00:00:00Z"}],"has_more":false,"first_id":"claude-sonnet-4-6","last_id":"claude-haiku-4-5-20251001"})
+    MODEL_LIST = %({"data":[{"type":"model","id":"claude-sonnet-4-6","display_name":"Claude Sonnet 4.6","created_at":"2026-02-17T00:00:00Z","max_input_tokens":200000,"max_tokens":64000,"capabilities":{"batch":{"supported":true},"citations":{"supported":true},"code_execution":{"supported":true},"context_management":{"supported":true},"effort":{"supported":true,"low":{"supported":true},"medium":{"supported":true},"high":{"supported":true},"max":{"supported":true}},"image_input":{"supported":true},"pdf_input":{"supported":true},"structured_outputs":{"supported":true},"thinking":{"supported":true,"types":{"adaptive":{"supported":true},"enabled":{"supported":true}}}}},{"type":"model","id":"claude-haiku-4-5-20251001","display_name":"Claude Haiku 4.5","created_at":"2025-10-15T00:00:00Z","max_input_tokens":200000,"max_tokens":64000}],"has_more":false,"first_id":"claude-sonnet-4-6","last_id":"claude-haiku-4-5-20251001"})
 
     MODEL_LIST_WITH_MORE = %({"data":[{"type":"model","id":"model1","display_name":"Model 1","created_at":"2025-01-01T00:00:00Z"}],"has_more":true,"first_id":"model1","last_id":"model1"})
 
@@ -45,6 +45,8 @@ module Fixtures
     FILE_DELETED = %({"id":"file_01abc123","type":"file_deleted"})
 
     MESSAGE_WITH_REDACTED_THINKING = %({"id":"msg_redacted_01","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"Let me reason...","signature":"sig_abc"},{"type":"redacted_thinking","data":"cmVkYWN0ZWQ="},{"type":"text","text":"Here is the answer."}],"model":"claude-opus-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":50}})
+
+    MESSAGE_WITH_REFUSAL = %({"id":"msg_refusal_01","type":"message","role":"assistant","content":[{"type":"text","text":"I can\u2019t help with that."}],"model":"claude-sonnet-4-6","stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"This request would meaningfully facilitate cyber abuse."},"stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":18}})
 
     MESSAGE_WITH_SERVER_TOOL_USAGE = %({"id":"msg_stu_01","type":"message","role":"assistant","content":[{"type":"text","text":"Search results..."}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":30,"server_tool_use":{"web_search_requests":3}}})
 
@@ -102,6 +104,8 @@ module Fixtures
       CONTENT_BLOCK_STOP = %(data: {"type":"content_block_stop","index":0})
 
       MESSAGE_DELTA = %(data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":15}})
+
+      MESSAGE_DELTA_REFUSAL = %(data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"This request would meaningfully facilitate cyber abuse."},"stop_sequence":null},"usage":{"output_tokens":15}})
 
       MESSAGE_STOP = %(data: {"type":"message_stop"})
 

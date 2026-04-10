@@ -26,7 +26,7 @@ module Anthropic
         betas << COMPUTER_USE_BETA unless betas.includes?(COMPUTER_USE_BETA)
       when CodeExecutionTool, CodeExecutionTool20260120
         betas << CODE_EXECUTION_BETA unless betas.includes?(CODE_EXECUTION_BETA)
-      when WebFetchTool, WebFetchTool20260209
+      when WebFetchTool, WebFetchTool20260209, WebFetchTool20260309
         betas << WEB_FETCH_BETA unless betas.includes?(WEB_FETCH_BETA)
       when MemoryTool
         betas << MEMORY_BETA unless betas.includes?(MEMORY_BETA)
@@ -604,6 +604,57 @@ module Anthropic
     end
   end
 
+  struct WebFetchTool20260309 < ServerTool
+    include JSON::Serializable
+
+    getter type : String = "web_fetch_20260309"
+    getter name : String = "web_fetch"
+
+    @[JSON::Field(key: "allowed_callers", emit_null: false)]
+    getter allowed_callers : Array(String)?
+
+    @[JSON::Field(key: "allowed_domains", emit_null: false)]
+    getter allowed_domains : Array(String)?
+
+    @[JSON::Field(key: "blocked_domains", emit_null: false)]
+    getter blocked_domains : Array(String)?
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    @[JSON::Field(emit_null: false)]
+    getter citations : CitationConfig?
+
+    @[JSON::Field(key: "defer_loading", emit_null: false)]
+    getter defer_loading : Bool?
+
+    @[JSON::Field(key: "max_content_tokens", emit_null: false)]
+    getter max_content_tokens : Int32?
+
+    @[JSON::Field(key: "max_uses", emit_null: false)]
+    getter max_uses : Int32?
+
+    @[JSON::Field(key: "strict", emit_null: false)]
+    getter strict : Bool?
+
+    @[JSON::Field(key: "use_cache", emit_null: false)]
+    getter use_cache : Bool?
+
+    def initialize(
+      @allowed_callers : Array(String)? = nil,
+      @allowed_domains : Array(String)? = nil,
+      @blocked_domains : Array(String)? = nil,
+      @cache_control : CacheControl? = nil,
+      @citations : CitationConfig? = nil,
+      @defer_loading : Bool? = nil,
+      @max_content_tokens : Int32? = nil,
+      @max_uses : Int32? = nil,
+      @strict : Bool? = nil,
+      @use_cache : Bool? = nil,
+    )
+    end
+  end
+
   # Memory tool - allows Claude to store and retrieve information across conversations
   #
   # A server-side tool for persistent memory management.
@@ -811,7 +862,7 @@ module Anthropic
   alias AnyServerTool = WebSearchTool | CodeExecutionTool | MCPTool |
                         WebSearchTool20260209 | CodeExecutionTool20260120 |
                         BashTool | TextEditorTool | ComputerUseTool |
-                        ComputerUseTool20251124 | WebFetchTool | WebFetchTool20260209 | MemoryTool |
+                        ComputerUseTool20251124 | WebFetchTool | WebFetchTool20260209 | WebFetchTool20260309 | MemoryTool |
                         ToolSearchBM25Tool | ToolSearchRegexTool |
                         MCPToolset |
                         BashToolLegacy | TextEditorToolLegacy | ComputerUseToolLegacy

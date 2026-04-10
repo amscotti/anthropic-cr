@@ -36,7 +36,7 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - Server-Sent Events (SSE) streaming
 - Message Batches API for batch processing
 - Models API for listing/retrieving models
-- Files API for file uploads/downloads
+- Beta Files API for file uploads/downloads
 - Web Search server-side tool
 - Agent tools (BashTool, TextEditorTool, ComputerUseTool)
 - Web Fetch server-side tool
@@ -48,17 +48,19 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - Effort control via output_config
 - Inference geo for data residency
 - Context management (beta) - auto-compaction, clear tool uses, clear thinking
-- Structured outputs via beta API
+- Structured outputs via `client.beta.messages` helper APIs
 - Document citations with streaming support
 - Prompt caching support
 - MCP servers parameter (beta) for server-side MCP server definitions
-- Container parameter (beta) for skills-based tool use
+- Container reuse on core messages API, with beta container configs for skill-based tool use
 - Tool search tools (BM25 and Regex) for deferred tool loading
 - Extended tool fields (beta): allowed_callers, defer_loading, input_examples, eager_input_streaming
 - Compaction streaming delta for context management
 - Usage enrichments: CacheCreation breakdown (ephemeral TTL tokens), inference_geo on Usage
 - Legacy tool versions (October 2024): BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
 - Skills API (beta): full CRUD for skills and skill versions via client.beta.skills
+- Rich Models API metadata: capabilities, max_input_tokens, max_tokens
+- Refusal stop details on messages and streaming deltas
 - Comprehensive error handling with automatic retries
 
 **Status**: Feature complete for core functionality.
@@ -152,7 +154,7 @@ src/anthropic-cr/
 
 **Resource Chaining**: APIs accessed via `client.messages.create(...)`, `client.models.list()`, `client.beta.messages.create(...)`
 
-**Block-based Streaming**: `stream(...) { |event| }` - yields events directly. Iterator-based streaming (returning a stream object) is not yet implemented.
+**Block-based Streaming**: `stream(...) { |event| }` yields events directly, and `open_stream(...) { |stream| }` provides block-scoped access to accumulated helpers like `collect_text` and `final_message`. Iterator-based streaming (returning a stream object) is not yet implemented.
 
 **Flexible Message Input**: NamedTuples for simple use `{role: "user", content: "Hi"}` or typed structs `MessageParam.new(...)` for complex content
 
@@ -161,7 +163,7 @@ src/anthropic-cr/
 - `Anthropic.tool(name:, input: MyStruct) { |input| }` - TypedTool with struct input
 - `client.beta.messages.tool_runner(...)` - Automatic tool execution loop
 
-**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array). Available server tools: WebSearchTool, BashTool, TextEditorTool, ComputerUseTool, WebFetchTool, MemoryTool, CodeExecutionTool, MCPTool, ToolSearchBM25Tool, ToolSearchRegexTool, BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
+**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array). Available server tools include WebSearchTool, BashTool, TextEditorTool, ComputerUseTool, ComputerUseTool20251124, WebFetchTool, WebFetchTool20260209, WebFetchTool20260309, MemoryTool, CodeExecutionTool, CodeExecutionTool20260120, MCPTool, MCPToolset, ToolSearchBM25Tool, ToolSearchRegexTool, BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
 
 ---
 
@@ -203,8 +205,9 @@ client = Anthropic::Client.new(
 # Core resources
 client.messages        # Messages API
 client.models          # Models API
-client.beta            # Beta namespace (files, messages with beta features)
+client.beta            # Beta namespace (messages, models, files, skills)
 client.beta.messages   # Beta Messages API
+client.beta.models     # Beta Models API
 client.beta.files      # Beta Files API
 client.beta.skills     # Beta Skills API
 ```
@@ -354,6 +357,7 @@ message.tool_use_blocks         # Array of tool use content blocks
 message.text_blocks             # Array of text content blocks
 message.thinking_blocks         # Array of thinking content blocks
 message.redacted_thinking_blocks  # Array of redacted thinking content blocks
+message.stop_details            # RefusalStopDetails? with structured refusal metadata
 
 # Usage information
 puts message.usage.input_tokens
@@ -735,9 +739,11 @@ end
 
 ### Beta Namespace
 
-Beta features are accessed via `client.beta.messages` and `client.beta.files`.
+Beta features are accessed via `client.beta.messages`, `client.beta.models`, `client.beta.files`, and `client.beta.skills`.
 
 ### Structured Outputs
+
+In the current Crystal SDK, the typed `output_schema` helper is exposed via `client.beta.messages`, even though structured outputs are available on core Messages APIs in the official SDKs.
 
 Get type-safe JSON responses with defined schemas:
 
@@ -861,7 +867,7 @@ search = Anthropic::WebSearchTool.new(
 
 ### Agent Tools
 
-Agent tools allow Claude to interact with a computer environment:
+Agent tools allow Claude to interact with a computer environment. Note that live support for specific computer-use tool versions depends on model/tool availability for your account.
 
 ```crystal
 # BashTool - execute shell commands
@@ -983,17 +989,31 @@ model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_6)
 puts model.id           # "claude-sonnet-4-6"
 puts model.display_name # "Claude Sonnet 4.6"
 puts model.type         # "model"
-puts model.version      # e.g., "20250929"
-puts model.description  # Model description
+puts model.created_at
+puts model.max_input_tokens
+puts model.max_tokens
+
+if capabilities = model.capabilities
+  puts capabilities.structured_outputs.supported?
+  puts capabilities.thinking.supported?
+  puts capabilities.thinking.types.adaptive.supported?
+end
 ```
 
 ### Model Constants
 
 ```crystal
+# Rolling aliases
+Anthropic::Model::CLAUDE_OPUS     # "claude-opus-4-6"
+Anthropic::Model::CLAUDE_SONNET   # "claude-sonnet-4-6"
+Anthropic::Model::CLAUDE_HAIKU    # "claude-haiku-4-5"
+
 # Latest model versions
 Anthropic::Model::CLAUDE_OPUS_4_6   # "claude-opus-4-6"
 Anthropic::Model::CLAUDE_OPUS_4_5
+Anthropic::Model::CLAUDE_OPUS_4_1
 Anthropic::Model::CLAUDE_SONNET_4_6
+Anthropic::Model::CLAUDE_SONNET_4_5
 Anthropic::Model::CLAUDE_HAIKU_4_5
 
 # Model shorthands
@@ -1847,12 +1867,12 @@ client.beta.messages.tool_runner(
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic-cr/models/message.cr` | Message, MessageParam |
+| `src/anthropic-cr/models/message.cr` | Message, MessageParam, RefusalStopDetails |
 | `src/anthropic-cr/models/content.cr` | Content blocks (Text, Image, Tool, etc.) |
 | `src/anthropic-cr/models/params.cr` | Request parameters |
 | `src/anthropic-cr/models/role.cr` | Role enum |
 | `src/anthropic-cr/models/usage.cr` | Usage struct |
-| `src/anthropic-cr/models/model_info.cr` | Model information |
+| `src/anthropic-cr/models/model_info.cr` | Model constants, ModelInfo, capability metadata |
 
 ### Resource Files
 
@@ -1872,7 +1892,7 @@ client.beta.messages.tool_runner(
 |------|---------|
 | `src/anthropic-cr/tools/tool.cr` | Tool, InlineTool, TypedTool |
 | `src/anthropic-cr/tools/tool_choice.cr` | ToolChoice types |
-| `src/anthropic-cr/tools/server_tools.cr` | WebSearchTool, BashTool, TextEditorTool, ComputerUseTool, WebFetchTool, MemoryTool, CodeExecutionTool, MCPTool, ToolSearchBM25Tool, ToolSearchRegexTool |
+| `src/anthropic-cr/tools/server_tools.cr` | Server tools including WebSearchTool, BashTool, TextEditorTool, ComputerUseTool, WebFetchTool, MemoryTool, CodeExecutionTool, MCPTool, MCPToolset, ToolSearchBM25Tool, ToolSearchRegexTool |
 | `src/anthropic-cr/tools/runner.cr` | ToolRunner |
 
 ### Streaming Files
@@ -1901,7 +1921,7 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.4.0
+- **Current Version**: 0.5.0
 - **API Version**: 2023-06-01
 - **Crystal Version**: 1.0+ recommended
 

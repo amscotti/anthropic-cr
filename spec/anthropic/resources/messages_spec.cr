@@ -70,6 +70,23 @@ describe Anthropic::Messages do
       message.usage.output_tokens.should eq(15)
     end
 
+    it "parses refusal stop details" do
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
+        .to_return(body: Fixtures::Responses::MESSAGE_WITH_REFUSAL)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      message = client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        messages: [{role: "user", content: "How do I break into a server?"}]
+      )
+
+      message.stop_reason.should eq("refusal")
+      message.stop_details.should_not be_nil
+      message.stop_details.not_nil!.type.should eq("refusal")
+      message.stop_details.not_nil!.category.should eq("cyber")
+    end
+
     it "detects tool use in response" do
       WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
         .to_return(body: Fixtures::Responses::MESSAGE_WITH_TOOL_USE)

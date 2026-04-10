@@ -2,7 +2,7 @@
 
 An unofficial Anthropic API client for Crystal. Access Claude AI models with idiomatic Crystal code.
 
-**Status:** Feature Complete - Full Messages API, Batches API, Models API, Files API, tool runner, web search, extended thinking, structured outputs, citations, prompt caching, Schema DSL, and beta Anthropic-hosted features such as skills, MCP servers, and containers. API design inspired by official Ruby SDK patterns.
+**Status:** Feature Complete - Full Messages API, Batches API, Models API, tool runner, web search, extended thinking, structured outputs, citations, prompt caching, Schema DSL, and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, and skill-loading containers. API design inspired by official Ruby SDK patterns.
 
 > **Note:** A large portion of this library was written with the assistance of AI (Claude), including code, tests, and documentation.
 
@@ -24,16 +24,18 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **Redacted Thinking** - Parse and preserve redacted thinking blocks in multi-turn
 - ✅ **Context Management** - Beta auto-compaction, clear tool uses, clear thinking, compaction streaming delta
 - ✅ **MCP Servers** - Beta `mcp_servers` parameter for server-side MCP server definitions
-- ✅ **Container/Skills** - Beta `container` parameter for skills-based tool use
+- ✅ **Containers** - Core container reuse plus beta container skill loading
 - ✅ **Tool Search** - BM25 and Regex tool search for deferred tool loading
 - ✅ **Legacy Tool Versions** - October 2024 tool versions (BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy)
 - ✅ **Skills API** - Full CRUD for skills and skill versions (beta)
 - ✅ **Extended Tool Fields** - Beta `allowed_callers`, `defer_loading`, `input_examples`, `eager_input_streaming`
 - ✅ **Effort Control** - Control output effort level via `output_config`
 - ✅ **Inference Geo** - Data residency control for inference requests
-- ✅ **Structured Outputs** - Type-safe JSON responses via beta API
+- ✅ **Structured Outputs** - Type-safe JSON responses and typed parsing helpers
 - ✅ **Citations** - Document citations with streaming support
 - ✅ **Beta Namespace** - `client.beta.messages` matching Ruby SDK
+- ✅ **Model Capabilities** - Richer Models API metadata (`capabilities`, `max_input_tokens`, `max_tokens`)
+- ✅ **Refusal Stop Details** - Structured refusal metadata on messages and streaming deltas
 - ✅ Vision (image understanding)
 - ✅ System prompts and temperature control
 - ✅ Message Batches API (create, list, retrieve, results, cancel, delete)
@@ -42,7 +44,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ Enhanced streaming helpers (text, tool_use_deltas, thinking, citations)
 - ✅ Comprehensive error handling with automatic retries
 - ✅ Type-safe API with full compile-time checking
-- ✅ Files API (upload, download, delete)
+- ✅ Beta Files API (upload, download, delete)
 - ✅ Token counting API
 - ✅ Prompt caching with TTL control
 - 🚧 AWS Bedrock & Google Vertex support (future)
@@ -58,6 +60,22 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
    ```
 
 2. Run `shards install`
+
+## Beta Status
+
+Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs.
+
+Still beta upstream:
+- Files API via `client.beta.files`
+- Skills API via `client.beta.skills`
+- Context management (`context_management`)
+- MCP server definitions (`mcp_servers`)
+- Skill-loading container configs (`container: Anthropic::ContainerConfig`)
+
+No longer beta upstream, but relevant in this SDK:
+- Structured outputs are available on core Messages APIs in the official SDKs; this Crystal SDK's `output_schema` helper currently lives under `client.beta.messages`
+- Basic container reuse (`container: String`) is available on core Messages APIs
+- Rich model capability metadata is available on the core Models API
 
 ## Quick Start
 
@@ -218,7 +236,7 @@ schema = Anthropic.output_schema(
   name: "sentiment_result"
 )
 
-# Use with beta API
+# Current Crystal helper lives under beta.messages
 message = client.beta.messages.create(
   betas: [Anthropic::STRUCTURED_OUTPUT_BETA],
   model: Anthropic::Model::CLAUDE_SONNET_4_6,
@@ -413,6 +431,12 @@ end
 # Retrieve specific model
 model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_6)
 puts model.display_name  # => "Claude Sonnet 4.6"
+
+if capabilities = model.capabilities
+  puts capabilities.structured_outputs.supported?
+  puts model.max_input_tokens
+  puts model.max_tokens
+end
 ```
 
 ### Tool Runner (Beta)
@@ -559,6 +583,8 @@ See the [examples/](./examples/) directory for complete working examples:
 - `29_beta_params.cr` - MCP servers, container/skills, tool search tools, beta parameters
 - `30_skills_api.cr` - Skills API (CRUD, versions, container integration)
 - `31_open_stream.cr` - Richer block-scoped streaming with `open_stream`
+- `32_model_capabilities.cr` - Inspect richer Models API metadata and capability support
+- `33_web_fetch_cache_control.cr` - Use `WebFetchTool20260309` with `use_cache: false`
 
 Run examples with:
 ```bash
