@@ -57,40 +57,76 @@ module Anthropic
   end
 
   # Citations delta - streaming citation
+  #
+  # The API returns a variety of citation location types (char, page,
+  # content_block, web_search_result, search_result). This struct keeps the
+  # legacy char-location fields accessible via convenience methods while
+  # retaining the full raw citation payload under `citation_data` for
+  # non-char-location variants.
   struct CitationsDelta
     include JSON::Serializable
 
     getter type : String = "citations_delta"
-    getter citation : CitationData
 
-    struct CitationData
-      include JSON::Serializable
+    @[JSON::Field(key: "citation")]
+    getter citation_data : JSON::Any
 
-      @[JSON::Field(key: "start_char_index")]
+    # Returns the citation location type (e.g., "char_location",
+    # "page_location", "content_block_location", "web_search_result_location",
+    # "search_result_location"). Defaults to "char_location" when absent for
+    # backwards compatibility.
+    def citation_type : String
+      citation_data["type"]?.try(&.as_s) || "char_location"
+    end
+
+    # Legacy struct-style accessor for char-location citations. Returns `nil`
+    # when this delta does not carry a char-location citation.
+    def citation : LegacyCitationData?
+      return nil if (start = citation_data["start_char_index"]?).nil?
+      return nil if (finish = citation_data["end_char_index"]?).nil?
+
+      LegacyCitationData.new(
+        start_char_index: start.as_i,
+        end_char_index: finish.as_i,
+        document_title: citation_data["document_title"]?.try(&.as_s?),
+        document_index: citation_data["document_index"]?.try(&.as_i?),
+        cited_text: citation_data["cited_text"]?.try(&.as_s?)
+      )
+    end
+
+    # Legacy citation payload type preserved for backwards compatibility.
+    struct LegacyCitationData
       getter start_char_index : Int32
-
-      @[JSON::Field(key: "end_char_index")]
       getter end_char_index : Int32
-
-      @[JSON::Field(key: "document_title", emit_null: false)]
       getter document_title : String?
-
-      @[JSON::Field(key: "document_index", emit_null: false)]
       getter document_index : Int32?
-
-      @[JSON::Field(key: "cited_text", emit_null: false)]
       getter cited_text : String?
+
+      def initialize(
+        @start_char_index : Int32,
+        @end_char_index : Int32,
+        @document_title : String? = nil,
+        @document_index : Int32? = nil,
+        @cited_text : String? = nil,
+      )
+      end
     end
   end
 
   # Compaction delta - streaming compaction content
+  #
+  # `encrypted_content` is populated when the API is configured to return
+  # encrypted (confidential) compaction output instead of plaintext `content`.
   struct CompactionDelta
     include JSON::Serializable
 
     getter type : String = "compaction_delta"
     getter content : String?
 
-    def initialize(@content : String? = nil)
+    @[JSON::Field(key: "encrypted_content", emit_null: false)]
+    getter encrypted_content : String?
+
+    def initialize(@content : String? = nil, @encrypted_content : String? = nil)
     end
   end
 
@@ -150,6 +186,9 @@ module Anthropic
       @[JSON::Field(key: "stop_reason")]
       getter stop_reason : String?
 
+      @[JSON::Field(key: "stop_details", converter: Anthropic::StopDetailsConverter, emit_null: false)]
+      getter stop_details : StopDetails?
+
       @[JSON::Field(key: "stop_sequence")]
       getter stop_sequence : String?
     end
@@ -206,10 +245,18 @@ module Anthropic
       delta.is_a?(CitationsDelta)
     end
 
-    # Get citation from delta (if this is a citation delta)
+    # Get a char-location citation from the delta (if present).
+    #
+    # Returns `nil` when this delta carries a non-char-location citation
+    # variant (page, content_block, web_search_result, search_result). Use
+    # `citation_data`/`citation_type` on the underlying `CitationsDelta` for
+    # those variants.
     def citation : Citation?
       if citations_delta = delta.as?(CitationsDelta)
+        return nil unless citations_delta.citation_type == "char_location"
         data = citations_delta.citation
+        return nil if data.nil?
+
         Citation.new(
           start_char: data.start_char_index,
           end_char: data.end_char_index,

@@ -45,25 +45,24 @@ puts "Response:"
 puts message.text
 puts
 
-# Example 2: ComputerUseTool (desktop automation setup)
+# Example 2: ComputerUseTool (desktop automation configuration)
 puts "Example 2: Computer use tool setup"
 puts "-" * 60
 
-message2 = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_6,
-  max_tokens: 4096,
-  server_tools: [
-    Anthropic::ComputerUseTool.new(display_width_px: 1920, display_height_px: 1080),
-    Anthropic::BashTool.new,
-    Anthropic::TextEditorTool.new,
-  ] of Anthropic::ServerTool,
-  messages: [
-    {role: "user", content: "What tools do you have available? Describe them briefly."},
-  ]
+computer_tool = Anthropic::ComputerUseTool20251124.new(
+  display_width_px: 1920,
+  display_height_px: 1080,
+  allowed_callers: ["direct"],
+  enable_zoom: true
 )
 
-puts "Response:"
-puts message2.text
+puts "Computer use tool is configured and ready to pass in server_tools:"
+puts "  type: #{computer_tool.type}"
+puts "  name: #{computer_tool.name}"
+puts "  display: #{computer_tool.display_width_px}x#{computer_tool.display_height_px}"
+puts "  enable_zoom: #{computer_tool.enable_zoom}"
+puts "  allowed_callers: #{computer_tool.allowed_callers.inspect}"
+puts "\nNote: live support for computer-use tool types depends on model/tool availability for your account."
 puts
 
 # Example 3: WebFetchTool

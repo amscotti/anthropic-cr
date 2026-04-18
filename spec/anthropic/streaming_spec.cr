@@ -72,6 +72,27 @@ describe "Streaming Events" do
       event.usage.not_nil!.output_tokens.should eq(15)
     end
 
+    it "parses message_delta refusal stop details" do
+      json = %({"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"This request would meaningfully facilitate cyber abuse."},"stop_sequence":null},"usage":{"output_tokens":15}})
+
+      event = Anthropic::MessageDeltaEvent.from_json(json)
+      event.delta.stop_reason.should eq("refusal")
+      event.delta.stop_details.should_not be_nil
+
+      refusal = event.delta.stop_details.as?(Anthropic::RefusalStopDetails).not_nil!
+      refusal.category.should eq("cyber")
+      refusal.explanation.should_not be_nil
+    end
+
+    it "falls back to GenericStopDetails for unknown stop_details types" do
+      json = %({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_details":{"type":"future_variant","some_field":"abc"},"stop_sequence":null},"usage":{"output_tokens":5}})
+
+      event = Anthropic::MessageDeltaEvent.from_json(json)
+      details = event.delta.stop_details.as?(Anthropic::GenericStopDetails).not_nil!
+      details.type.should eq("future_variant")
+      details.raw["some_field"].as_s.should eq("abc")
+    end
+
     it "parses message_stop event" do
       json = %({"type":"message_stop"})
 
@@ -196,6 +217,23 @@ describe Anthropic::MessageStream do
       message.text.should eq("Hello world")
       message.stop_reason.should eq("end_turn")
       message.usage.output_tokens.should eq(15)
+    end
+
+    it "reconstructs refusal stop details from message deltas" do
+      body = [
+        sse_event("message_start", %({"type":"message_start","message":{"id":"msg_stream_03b","type":"message","role":"assistant","content":[{"type":"text","text":"I can\u2019t help with that."}],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+        sse_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"This request would meaningfully facilitate cyber abuse."},"stop_sequence":null},"usage":{"output_tokens":15}})),
+        sse_event("message_stop", %({"type":"message_stop"})),
+      ].join("\n\n")
+
+      message = Anthropic::MessageStream.new(sse_response(body)).final_message
+
+      message.should_not be_nil
+      message = message.not_nil!
+      message.stop_reason.should eq("refusal")
+      message.stop_details.should_not be_nil
+      message.refusal?.should be_true
+      message.refusal_stop_details.not_nil!.category.should eq("cyber")
     end
   end
 

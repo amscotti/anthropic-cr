@@ -43,6 +43,10 @@ module Anthropic
           data["stop_reason"] = JSON::Any.new(stop_reason)
         end
 
+        if stop_details = event.delta.stop_details
+          data["stop_details"] = JSON.parse(stop_details.to_json)
+        end
+
         if stop_sequence = event.delta.stop_sequence
           data["stop_sequence"] = JSON::Any.new(stop_sequence)
         end
@@ -99,21 +103,16 @@ module Anthropic
       end
 
       private def append_citation(block : Hash(String, JSON::Any), delta : CitationsDelta)
-        citation = Citation.new(
-          start_char: delta.citation.start_char_index,
-          end_char: delta.citation.end_char_index,
-          document_title: delta.citation.document_title,
-          document_index: delta.citation.document_index,
-          cited_text: delta.citation.cited_text
-        )
-
+        # Persist the raw citation payload so that non-char-location variants
+        # (page, content_block, web_search_result, search_result) round-trip
+        # through the accumulated message without data loss.
         citations = block["citations"]?.try(&.as_a) || begin
           list = [] of JSON::Any
           block["citations"] = JSON::Any.new(list)
           list
         end
 
-        citations << JSON.parse(citation.to_json)
+        citations << delta.citation_data
       end
 
       private def append_string_field(block : Hash(String, JSON::Any), field : String, fragment : String)
@@ -139,8 +138,42 @@ module Anthropic
     # events. Subsequent calls replay from the buffer so that helpers
     # like `text`, `collect_text`, and `final_message` can be used in
     # any order and multiple times.
+    #
+    # When the stream contains an SSE `error` event, this raises an
+    # appropriately-typed `Anthropic::APIError` subclass immediately after
+    # yielding the preceding events, mirroring the Ruby SDK's behavior. The
+    # raw `ErrorEvent` is also yielded so callers can still observe it.
     def each(& : AnyStreamEvent -> _)
-      events.each { |event| yield event }
+      events.each do |event|
+        yield event
+        raise_stream_error(event) if event.is_a?(ErrorEvent)
+      end
+    end
+
+    # Translate an in-stream SSE error event into a typed `APIError` and
+    # raise it. The mapping mirrors the top-level HTTP status dispatch in
+    # `Client#handle_error` so callers can rescue the same exception types
+    # regardless of whether the failure occurs mid-stream or pre-stream.
+    private def raise_stream_error(event : ErrorEvent) : Nil
+      type = event.error.type
+      message = event.error.message
+
+      error =
+        case type
+        when "invalid_request_error" then Anthropic::BadRequestError.new(message, error_type: type)
+        when "authentication_error"  then Anthropic::AuthenticationError.new(message, error_type: type)
+        when "permission_error"      then Anthropic::PermissionDeniedError.new(message, error_type: type)
+        when "not_found_error"       then Anthropic::NotFoundError.new(message, error_type: type)
+        when "rate_limit_error"      then Anthropic::RateLimitError.new(message, error_type: type)
+        when "request_too_large"     then Anthropic::PayloadTooLargeError.new(message, error_type: type)
+        when "overloaded_error"      then Anthropic::OverloadedError.new(message, error_type: type)
+        when "timeout_error",
+             "gateway_timeout_error" then Anthropic::GatewayTimeoutError.new(message, error_type: type)
+        when "api_error" then Anthropic::InternalServerError.new(message, error_type: type)
+        else                  Anthropic::APIError.new(message, error_type: type)
+        end
+
+      raise error
     end
 
     # Convenience iterator for text only

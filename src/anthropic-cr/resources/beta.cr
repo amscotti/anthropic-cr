@@ -41,6 +41,16 @@ module Anthropic
     def skills : BetaSkills
       BetaSkills.new(@client)
     end
+
+    # Access beta user profiles API
+    #
+    # ```
+    # profile = client.beta.user_profiles.create(external_id: "user-123")
+    # url = client.beta.user_profiles.create_enrollment_url(profile.id)
+    # ```
+    def user_profiles : BetaUserProfiles
+      BetaUserProfiles.new(@client)
+    end
   end
 
   # Beta Messages API with explicit beta header support
@@ -150,6 +160,7 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      user_profile_id : String? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -184,10 +195,18 @@ module Anthropic
         inference_geo: inference_geo,
         context_management: context_management,
         container: container,
-        mcp_servers: mcp_servers
+        mcp_servers: mcp_servers,
+        user_profile_id: user_profile_id
       )
 
-      beta_headers = build_beta_headers(betas, server_tools, output_format, resolved_output_config, cache_control)
+      beta_headers = build_beta_headers(
+        betas,
+        server_tools,
+        output_format,
+        resolved_output_config,
+        cache_control,
+        include_user_profiles_beta: !user_profile_id.nil?
+      )
       response = @client.post("/v1/messages", params, beta_headers)
       Message.from_json(response.body)
     end
@@ -230,6 +249,7 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      user_profile_id : String? = nil,
       &
     )
       open_stream(
@@ -256,7 +276,8 @@ module Anthropic
         inference_geo: inference_geo,
         context_management: context_management,
         container: container,
-        mcp_servers: mcp_servers
+        mcp_servers: mcp_servers,
+        user_profile_id: user_profile_id
       ) do |stream|
         stream.each { |event| yield event }
       end
@@ -288,6 +309,7 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      user_profile_id : String? = nil,
       &
     )
       typed_messages = normalize_messages(messages)
@@ -317,10 +339,18 @@ module Anthropic
         inference_geo: inference_geo,
         context_management: context_management,
         container: container,
-        mcp_servers: mcp_servers
+        mcp_servers: mcp_servers,
+        user_profile_id: user_profile_id
       )
 
-      beta_headers = build_beta_headers(betas, server_tools, output_format, resolved_output_config, cache_control)
+      beta_headers = build_beta_headers(
+        betas,
+        server_tools,
+        output_format,
+        resolved_output_config,
+        cache_control,
+        include_user_profiles_beta: !user_profile_id.nil?
+      )
 
       @client.post_stream("/v1/messages", params, beta_headers) do |response|
         yield MessageStream.new(response)
@@ -535,7 +565,8 @@ module Anthropic
 
       OutputConfig.new(
         effort: output_config.try(&.effort) || effort,
-        format: output_config.try(&.format) || output_format
+        format: output_config.try(&.format) || output_format,
+        task_budget: output_config.try(&.task_budget)
       )
     end
 
@@ -546,11 +577,16 @@ module Anthropic
       output_config : OutputConfig?,
       cache_control : CacheControl?,
       include_token_counting_beta : Bool = false,
+      include_user_profiles_beta : Bool = false,
     ) : Hash(String, String)?
       merged_betas = betas.dup
 
       if include_token_counting_beta
         merged_betas << TOKEN_COUNTING_BETA unless merged_betas.includes?(TOKEN_COUNTING_BETA)
+      end
+
+      if include_user_profiles_beta
+        merged_betas << USER_PROFILES_BETA unless merged_betas.includes?(USER_PROFILES_BETA)
       end
 
       if requires_extended_cache_beta?(cache_control)

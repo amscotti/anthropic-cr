@@ -2,7 +2,7 @@
 
 An unofficial Anthropic API client for Crystal. Access Claude AI models with idiomatic Crystal code.
 
-**Status:** Feature Complete - Full Messages API, Batches API, Models API, Files API, tool runner, web search, extended thinking, structured outputs, citations, prompt caching, Schema DSL, and beta Anthropic-hosted features such as skills, MCP servers, and containers. API design inspired by official Ruby SDK patterns.
+**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Tracks the Opus 4.7 / April 2026 release of the official Python, Ruby, and TypeScript SDKs. API design inspired by official Ruby SDK patterns.
 
 > **Note:** A large portion of this library was written with the assistance of AI (Claude), including code, tests, and documentation.
 
@@ -10,42 +10,49 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 
 - ✅ Messages API (create and stream)
 - ✅ Streaming with Server-Sent Events (`stream` and `open_stream`)
+- ✅ **Typed Stream Errors** — SSE `error` events raise the appropriate `Anthropic::APIError` subclass mid-stream
 - ✅ Tool use / function calling
-- ✅ **Schema DSL** - Type-safe tool definitions (no more JSON::Any)
-- ✅ **Typed Tools** - Ruby BaseTool-like pattern with struct inputs
+- ✅ **Schema DSL** — Type-safe tool definitions (no more `JSON::Any`)
+- ✅ **Typed Tools** — Ruby BaseTool-like pattern with struct inputs
 - ✅ Tool runner (automatic tool execution loop)
-- ✅ **Web Search** - Built-in web search via server-side tool
-- ✅ **Agent Tools** - BashTool, TextEditorTool, ComputerUseTool for agentic workflows
-- ✅ **Web Fetch** - Built-in web page fetching via server-side tool
-- ✅ **Memory** - Persistent memory tool for cross-conversation context
-- ✅ **Code Execution** - Sandboxed code execution via server-side tool
-- ✅ **Strict Mode** - Enforce strict schema validation on tool definitions
-- ✅ **Extended Thinking** - Enable Claude's reasoning process (including adaptive thinking)
-- ✅ **Redacted Thinking** - Parse and preserve redacted thinking blocks in multi-turn
-- ✅ **Context Management** - Beta auto-compaction, clear tool uses, clear thinking, compaction streaming delta
-- ✅ **MCP Servers** - Beta `mcp_servers` parameter for server-side MCP server definitions
-- ✅ **Container/Skills** - Beta `container` parameter for skills-based tool use
-- ✅ **Tool Search** - BM25 and Regex tool search for deferred tool loading
-- ✅ **Legacy Tool Versions** - October 2024 tool versions (BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy)
-- ✅ **Skills API** - Full CRUD for skills and skill versions (beta)
-- ✅ **Extended Tool Fields** - Beta `allowed_callers`, `defer_loading`, `input_examples`, `eager_input_streaming`
-- ✅ **Effort Control** - Control output effort level via `output_config`
-- ✅ **Inference Geo** - Data residency control for inference requests
-- ✅ **Structured Outputs** - Type-safe JSON responses via beta API
-- ✅ **Citations** - Document citations with streaming support
-- ✅ **Beta Namespace** - `client.beta.messages` matching Ruby SDK
+- ✅ **Web Search** — Built-in web search via server-side tool
+- ✅ **Agent Tools** — BashTool, TextEditorTool, ComputerUseTool for agentic workflows
+- ✅ **Web Fetch** — Built-in web page fetching via server-side tool
+- ✅ **Memory** — Persistent memory tool for cross-conversation context
+- ✅ **Code Execution** — Sandboxed code execution via server-side tool (three versions: `20250522`, `20250825`, `20260120`)
+- ✅ **Advisor Tool** (`advisor_20260301`) — Delegate sub-questions to a secondary model at runtime
+- ✅ **Strict Mode** — Enforce strict schema validation on tool definitions
+- ✅ **Extended Thinking** — Claude's reasoning process (including adaptive thinking)
+- ✅ **Redacted Thinking** — Parse and preserve redacted thinking blocks in multi-turn
+- ✅ **Context Management** — Beta auto-compaction, clear tool uses, clear thinking, compaction streaming delta, encrypted compaction (`encrypted_content`)
+- ✅ **MCP Servers** — Beta `mcp_servers` parameter for server-side MCP server definitions
+- ✅ **Containers** — Core container reuse plus beta container skill loading
+- ✅ **Tool Search** — BM25 and Regex tool search for deferred tool loading
+- ✅ **Legacy Tool Versions** — October 2024 and intermediate versions (`BashToolLegacy`, `TextEditorToolLegacy`, `TextEditorTool20250124`, `TextEditorTool20250429`, `ComputerUseToolLegacy`)
+- ✅ **Skills API** — Full CRUD for skills and skill versions (beta)
+- ✅ **User Profiles API** — Create / retrieve / update / list profiles + enrollment URLs; `user_profile_id:` on beta messages (beta: `user-profiles-2026-03-24`)
+- ✅ **Token Task Budgets** — `BetaTokenTaskBudget` for session-wide token caps via `output_config.task_budget`
+- ✅ **Extended Tool Fields** — Beta `allowed_callers`, `defer_loading`, `input_examples`, `eager_input_streaming`
+- ✅ **Effort Control** — Control output effort level via `output_config` (`low` / `medium` / `high` / `xhigh` / `max`)
+- ✅ **Inference Geo** — Data residency control for inference requests
+- ✅ **Structured Outputs** — Type-safe JSON responses and typed parsing helpers
+- ✅ **Citations** — Document citations across all location variants (char, page, content block, web search result, search result) with streaming support
+- ✅ **Beta Namespace** — `client.beta.messages`, `client.beta.user_profiles`, etc. matching Ruby SDK
+- ✅ **Model Capabilities** — Richer Models API metadata (`capabilities` with `xhigh` effort, `max_input_tokens`, `max_tokens`)
+- ✅ **Stop Details Union** — Structured `refusal` stop details plus `GenericStopDetails` fallback for future variants
 - ✅ Vision (image understanding)
 - ✅ System prompts and temperature control
 - ✅ Message Batches API (create, list, retrieve, results, cancel, delete)
 - ✅ Models API (list and retrieve)
 - ✅ Auto-pagination helpers
-- ✅ Enhanced streaming helpers (text, tool_use_deltas, thinking, citations)
-- ✅ Comprehensive error handling with automatic retries
+- ✅ Enhanced streaming helpers (`text`, `tool_use_deltas`, `thinking`, `citations`)
+- ✅ **Comprehensive error handling** — Full HTTP status coverage (400, 401, 403, 404, 409, 413, 422, 429, 500, 504, 529), `error_type` field on every `APIError`, automatic retries on 408/409/429/5xx/529
 - ✅ Type-safe API with full compile-time checking
-- ✅ Files API (upload, download, delete)
+- ✅ Beta Files API (upload, download, delete)
 - ✅ Token counting API
 - ✅ Prompt caching with TTL control
-- 🚧 AWS Bedrock & Google Vertex support (future)
+- 🚧 Managed Agents (agents / environments / sessions / vaults) — planned
+- 🚧 AWS Bedrock & Google Vertex support — planned
 
 ## Installation
 
@@ -58,6 +65,27 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
    ```
 
 2. Run `shards install`
+
+## Beta Status
+
+Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (Opus 4.7 / April 2026 release).
+
+Still beta upstream:
+- Files API via `client.beta.files`
+- Skills API via `client.beta.skills`
+- **User Profiles API** via `client.beta.user_profiles` (`user-profiles-2026-03-24`)
+- **Advisor tool** (`advisor-tool-2026-03-01`) via `Anthropic::AdvisorTool`
+- **Token task budgets** via `output_config.task_budget`
+- Context management (`context_management`)
+- MCP server definitions (`mcp_servers`)
+- Skill-loading container configs (`container: Anthropic::ContainerConfig`)
+
+No longer beta upstream, but relevant in this SDK:
+- Structured outputs are available on core Messages APIs in the official SDKs; this Crystal SDK's `output_schema` helper currently lives under `client.beta.messages`
+- Basic container reuse (`container: String`) is available on core Messages APIs
+- Rich model capability metadata is available on the core Models API
+
+> **Note on progressive rollouts:** `task_budget`, the User Profiles API, and the Advisor tool are being enabled progressively on Anthropic accounts. The bundled examples (`34_opus_47.cr`, `35_advisor_tool.cr`, `36_user_profiles.cr`) handle the "not yet enabled" case gracefully.
 
 ## Quick Start
 
@@ -218,7 +246,7 @@ schema = Anthropic.output_schema(
   name: "sentiment_result"
 )
 
-# Use with beta API
+# Current Crystal helper lives under beta.messages
 message = client.beta.messages.create(
   betas: [Anthropic::STRUCTURED_OUTPUT_BETA],
   model: Anthropic::Model::CLAUDE_SONNET_4_6,
@@ -307,15 +335,30 @@ Control how much effort Claude puts into a response:
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_6,
+  model: Anthropic::Model::CLAUDE_OPUS_4_7,
   max_tokens: 16384,
   thinking: Anthropic::ThinkingConfig.adaptive,
-  output_config: Anthropic::OutputConfig.new(effort: "high"),
+  output_config: Anthropic::OutputConfig.new(effort: "xhigh"),
   messages: [{role: "user", content: "Write a detailed analysis..."}]
 )
 ```
 
-Effort levels: `"low"`, `"medium"`, `"high"`, `"max"`
+Effort levels: `"low"`, `"medium"`, `"high"`, `"xhigh"` (Opus 4.7+), `"max"`
+
+#### Token Task Budgets (Beta)
+
+Cap total token usage across contexts in a session via `output_config.task_budget`:
+
+```crystal
+budget = Anthropic::BetaTokenTaskBudget.new(total: 200_000)
+
+message = client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  max_tokens: 4096,
+  output_config: Anthropic::OutputConfig.new(effort: "xhigh", task_budget: budget),
+  messages: [{role: "user", content: "Summarize the attached docs..."}]
+)
+```
 
 #### Inference Geo
 
@@ -413,6 +456,12 @@ end
 # Retrieve specific model
 model = client.models.retrieve(Anthropic::Model::CLAUDE_SONNET_4_6)
 puts model.display_name  # => "Claude Sonnet 4.6"
+
+if capabilities = model.capabilities
+  puts capabilities.structured_outputs.supported?
+  puts model.max_input_tokens
+  puts model.max_tokens
+end
 ```
 
 ### Tool Runner (Beta)
@@ -504,16 +553,92 @@ description: A brief description of what this skill does.
 Detailed documentation about the skill...
 ```
 
+### Advisor Tool (Beta)
+
+The advisor tool delegates sub-questions to a secondary model at runtime, useful for routing specialized checks (security review, math, etc.) without switching the primary conversation. The SDK automatically adds the `advisor-tool-2026-03-01` beta header when `AdvisorTool` is passed in `server_tools:`:
+
+```crystal
+advisor = Anthropic::AdvisorTool.new(
+  model: Anthropic::Model::CLAUDE_OPUS_4_5,  # advisor model
+  max_uses: 3,
+  strict: true,
+)
+
+message = client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  max_tokens: 2048,
+  server_tools: [advisor] of Anthropic::ServerTool,
+  messages: [{role: "user", content: "Review this payload for abuse patterns: ..."}]
+)
+
+message.content.each do |block|
+  case block
+  when Anthropic::AdvisorToolResultContent
+    case inner = block.content
+    when Anthropic::AdvisorResultContent         then puts "Advisor: #{inner.text}"
+    when Anthropic::AdvisorRedactedResultContent then puts "Advisor (encrypted)"
+    when Anthropic::AdvisorToolResultErrorContent then puts "Advisor error: #{inner.error_code}"
+    end
+  end
+end
+```
+
+### User Profiles API (Beta)
+
+User profiles scope per-end-user state (memory, trust grants, etc.) to a specific end user of your application. Once you have a profile id, pass it as `user_profile_id:` on beta `messages.create` calls — the SDK adds the `user-profiles-2026-03-24` beta header automatically:
+
+```crystal
+# Create a profile for your end user
+profile = client.beta.user_profiles.create(
+  external_id: "user-123",
+  metadata: {"plan" => "pro"}
+)
+
+# Generate an enrollment URL to hand to that user
+enrollment = client.beta.user_profiles.create_enrollment_url(profile.id)
+puts enrollment.url
+
+# Scope a subsequent message to that profile
+message = client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  max_tokens: 512,
+  user_profile_id: profile.id,
+  messages: [{role: "user", content: "Welcome back!"}]
+)
+
+# List / retrieve / update
+client.beta.user_profiles.list(limit: 20)
+client.beta.user_profiles.retrieve(profile.id)
+client.beta.user_profiles.update(profile.id, metadata: {"plan" => "enterprise"})
+```
+
 ## Model Constants
 
 ```crystal
-Anthropic::Model::CLAUDE_OPUS_4_6      # Latest Opus (4.6)
-Anthropic::Model::CLAUDE_OPUS_4_5      # Opus 4.5
-Anthropic::Model::CLAUDE_SONNET_4_6    # Latest Sonnet
-Anthropic::Model::CLAUDE_HAIKU_4_5     # Latest Haiku
+# Rolling aliases — point at the current default precise models
+Anthropic::Model::CLAUDE_OPUS          # => "claude-opus-4-7"
+Anthropic::Model::CLAUDE_SONNET        # => "claude-sonnet-4-6"
+Anthropic::Model::CLAUDE_HAIKU         # => "claude-haiku-4-5"
+
+# Latest precise models
+Anthropic::Model::CLAUDE_OPUS_4_7          # Frontier intelligence (April 2026)
+Anthropic::Model::CLAUDE_MYTHOS_PREVIEW    # Coding & cybersecurity-focused preview
+Anthropic::Model::CLAUDE_OPUS_4_6          # Opus 4.6
+Anthropic::Model::CLAUDE_OPUS_4_5          # Opus 4.5
+Anthropic::Model::CLAUDE_SONNET_4_6        # Sonnet 4.6
+Anthropic::Model::CLAUDE_SONNET_4_5        # Sonnet 4.5
+Anthropic::Model::CLAUDE_HAIKU_4_5         # Haiku 4.5
+
+# Deprecated (EOL June 15, 2026)
+Anthropic::Model::CLAUDE_OPUS_4_1
+Anthropic::Model::CLAUDE_OPUS_4
+Anthropic::Model::CLAUDE_SONNET_4
 
 # Or use shorthands
-Anthropic.model_name(:opus)      # => "claude-opus-4-6"
+Anthropic.model_name(:opus)      # => "claude-opus-4-7"
+Anthropic.model_name(:opus_4_7)  # => "claude-opus-4-7"
+Anthropic.model_name(:mythos)    # => "claude-mythos-preview"
+Anthropic.model_name(:opus_4_6)  # => "claude-opus-4-6"
 Anthropic.model_name(:opus_4_5)  # => "claude-opus-4-5-20251101"
 Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-6"
 Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
@@ -559,6 +684,11 @@ See the [examples/](./examples/) directory for complete working examples:
 - `29_beta_params.cr` - MCP servers, container/skills, tool search tools, beta parameters
 - `30_skills_api.cr` - Skills API (CRUD, versions, container integration)
 - `31_open_stream.cr` - Richer block-scoped streaming with `open_stream`
+- `32_model_capabilities.cr` - Inspect richer Models API metadata and capability support
+- `33_web_fetch_cache_control.cr` - Use `WebFetchTool20260309` with `use_cache: false`
+- `34_opus_47.cr` - Claude Opus 4.7 with `xhigh` effort and `BetaTokenTaskBudget`
+- `35_advisor_tool.cr` - Advisor tool (`advisor_20260301`) with typed result-block handling
+- `36_user_profiles.cr` - User Profiles API create / list / enrollment and scoped messaging
 
 Run examples with:
 ```bash

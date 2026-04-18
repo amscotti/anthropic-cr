@@ -22,6 +22,8 @@ describe Anthropic::BetaModels do
       model = client.beta.models.retrieve("claude-sonnet-4-6", betas: ["custom-beta"])
 
       model.id.should eq("claude-sonnet-4-6")
+      model.capabilities.should_not be_nil
+      model.max_input_tokens.should eq(200_000)
       capture.headers.not_nil!["anthropic-beta"].should eq("custom-beta")
     end
   end
