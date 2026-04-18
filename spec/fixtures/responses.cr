@@ -89,6 +89,32 @@ module Fixtures
 
     ERROR_SERVER = %({"type":"error","error":{"type":"api_error","message":"Internal server error"}})
 
+    ERROR_PAYLOAD_TOO_LARGE = %({"type":"error","error":{"type":"request_too_large","message":"Request body exceeds the maximum allowed size"}})
+
+    ERROR_GATEWAY_TIMEOUT = %({"type":"error","error":{"type":"gateway_timeout_error","message":"Upstream gateway timed out"}})
+
+    ERROR_OVERLOADED = %({"type":"error","error":{"type":"overloaded_error","message":"The API is temporarily overloaded. Please retry."}})
+
+    # Advisor tool result content
+    MESSAGE_WITH_ADVISOR = %({"id":"msg_adv_01","type":"message","role":"assistant","content":[{"type":"server_tool_use","id":"stu_adv_01","name":"advisor","input":{"question":"Spot any security issues?"},"caller":"direct"},{"type":"advisor_tool_result","tool_use_id":"stu_adv_01","content":{"type":"advisor_result","text":"No critical issues spotted."}}],"model":"claude-opus-4-7","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":50}})
+
+    MESSAGE_WITH_ADVISOR_REDACTED = %({"id":"msg_adv_02","type":"message","role":"assistant","content":[{"type":"advisor_tool_result","tool_use_id":"stu_adv_02","content":{"type":"advisor_redacted_result","encrypted_content":"OPAQUE_BLOB_XYZ"}}],"model":"claude-opus-4-7","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":50}})
+
+    MESSAGE_WITH_ADVISOR_ERROR = %({"id":"msg_adv_03","type":"message","role":"assistant","content":[{"type":"advisor_tool_result","tool_use_id":"stu_adv_03","content":{"type":"advisor_tool_result_error","error_code":"max_uses_exceeded"}}],"model":"claude-opus-4-7","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":50}})
+
+    # User Profiles API responses
+    USER_PROFILE = %({"id":"uprof_01abc","type":"user_profile","created_at":"2026-04-16T00:00:00Z","updated_at":"2026-04-16T00:00:00Z","metadata":{"plan":"pro"},"trust_grants":{},"external_id":"ext-123"})
+
+    USER_PROFILE_LIST = %({"data":[{"id":"uprof_01abc","type":"user_profile","created_at":"2026-04-16T00:00:00Z","updated_at":"2026-04-16T00:00:00Z","metadata":{"plan":"pro"},"trust_grants":{"memory":{"status":"active"}},"external_id":"ext-123"}],"has_more":false,"first_id":"uprof_01abc","last_id":"uprof_01abc"})
+
+    USER_PROFILE_ENROLLMENT_URL = %({"type":"enrollment_url","url":"https://console.anthropic.com/enroll/uprof_01abc","expires_at":"2026-04-17T00:00:00Z"})
+
+    # Page-location citation response
+    MESSAGE_WITH_PAGE_CITATIONS = %({"id":"msg_pc_01","type":"message","role":"assistant","content":[{"type":"text","text":"per the 2023 report","citations":[{"type":"page_location","document_title":"Annual Report","document_index":0,"start_page_number":12,"end_page_number":13,"cited_text":"revenue grew 20%"}]}],"model":"claude-opus-4-7","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":50}})
+
+    # Encrypted compaction
+    MESSAGE_WITH_ENCRYPTED_COMPACTION = %({"id":"msg_ecomp_01","type":"message","role":"assistant","content":[{"type":"compaction","encrypted_content":"ENCRYPTED_SUMMARY_BLOB"}],"model":"claude-opus-4-7","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":10}})
+
     # Streaming event fixtures
     module Streaming
       MESSAGE_START = %(data: {"type":"message_start","message":{"id":"msg_stream_01","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})

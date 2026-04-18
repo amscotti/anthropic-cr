@@ -6,9 +6,15 @@ module Anthropic
     # These intentionally point at the current default API names and may duplicate
     # the latest precise constants when Anthropic's rolling alias already resolves
     # to a single concrete model name.
-    CLAUDE_OPUS   = "claude-opus-4-6"
+    CLAUDE_OPUS   = "claude-opus-4-7"
     CLAUDE_SONNET = "claude-sonnet-4-6"
     CLAUDE_HAIKU  = "claude-haiku-4-5"
+
+    # Claude 4.7 — Frontier intelligence for long-running agents and coding
+    CLAUDE_OPUS_4_7 = "claude-opus-4-7"
+
+    # Claude Mythos Preview — New class of intelligence, strongest in coding and cybersecurity
+    CLAUDE_MYTHOS_PREVIEW = "claude-mythos-preview"
 
     # Claude 4.6
     CLAUDE_OPUS_4_6   = "claude-opus-4-6"
@@ -20,27 +26,39 @@ module Anthropic
     CLAUDE_HAIKU_4_5  = "claude-haiku-4-5-20251001"
 
     # Claude 4 models
+    #
+    # DEPRECATED: Claude Sonnet 4 and Opus 4 reach end-of-life on June 15th, 2026.
+    # Please migrate to a newer model (Sonnet 4.5+ or Opus 4.5+).
+    # See https://docs.anthropic.com/en/docs/resources/model-deprecations
+
+    # @deprecated Will reach end-of-life on June 15th, 2026. Migrate to claude-sonnet-4-5 or newer.
     CLAUDE_SONNET_4 = "claude-sonnet-4-20250514"
+
+    # @deprecated Will reach end-of-life on June 15th, 2026. Migrate to claude-opus-4-5 or newer.
     CLAUDE_OPUS_4_1 = "claude-opus-4-1-20250805"
-    CLAUDE_OPUS_4   = "claude-opus-4-20250514"
+
+    # @deprecated Will reach end-of-life on June 15th, 2026. Migrate to claude-opus-4-5 or newer.
+    CLAUDE_OPUS_4 = "claude-opus-4-20250514"
   end
 
   # Shorthand helper for accessing model IDs via symbols
   #
   # ```
-  # Anthropic::Model::CLAUDE_OPUS   # => "claude-opus-4-6"
+  # Anthropic::Model::CLAUDE_OPUS   # => "claude-opus-4-7"
   # Anthropic::Model::CLAUDE_SONNET # => "claude-sonnet-4-6"
   # Anthropic::Model::CLAUDE_HAIKU  # => "claude-haiku-4-5"
   #
-  # Anthropic.model_name(:opus)       # => "claude-opus-4-6"
-  # Anthropic.model_name(:sonnet)     # => "claude-sonnet-4-6"
-  # Anthropic.model_name(:haiku)      # => "claude-haiku-4-5-20251001"
-  # Anthropic.model_name(:opus_4_5)   # => "claude-opus-4-5-20251101"
-  # Anthropic.model_name(:sonnet_4_5) # => "claude-sonnet-4-5-20250929"
+  # Anthropic.model_name(:opus)     # => "claude-opus-4-7"
+  # Anthropic.model_name(:sonnet)   # => "claude-sonnet-4-6"
+  # Anthropic.model_name(:haiku)    # => "claude-haiku-4-5-20251001"
+  # Anthropic.model_name(:opus_4_7) # => "claude-opus-4-7"
+  # Anthropic.model_name(:mythos)   # => "claude-mythos-preview"
   # ```
   def self.model_name(shorthand : Symbol) : String
     case shorthand
-    when :opus       then Model::CLAUDE_OPUS_4_6
+    when :opus       then Model::CLAUDE_OPUS_4_7
+    when :opus_4_7   then Model::CLAUDE_OPUS_4_7
+    when :mythos     then Model::CLAUDE_MYTHOS_PREVIEW
     when :sonnet     then Model::CLAUDE_SONNET_4_6
     when :haiku      then Model::CLAUDE_HAIKU_4_5
     when :opus_4_6   then Model::CLAUDE_OPUS_4_6
@@ -53,8 +71,8 @@ module Anthropic
     else
       raise ArgumentError.new(
         "Unknown model shorthand: #{shorthand}. " \
-        "Valid options: :opus, :sonnet, :haiku, :opus_4_6, :sonnet_4_6, :opus_4_5, :sonnet_4_5, " \
-        ":opus_4_1, :opus_4, :sonnet_4"
+        "Valid options: :opus, :opus_4_7, :mythos, :sonnet, :haiku, :opus_4_6, :sonnet_4_6, " \
+        ":opus_4_5, :sonnet_4_5, :opus_4_1, :opus_4, :sonnet_4"
       )
     end
   end
@@ -86,6 +104,11 @@ module Anthropic
     getter low : CapabilitySupport
     getter max : CapabilitySupport
     getter medium : CapabilitySupport
+
+    # Extra-high effort level (Claude Opus 4.7+).
+    @[JSON::Field(emit_null: false)]
+    getter xhigh : CapabilitySupport?
+
     getter? supported : Bool
   end
 

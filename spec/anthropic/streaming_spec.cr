@@ -78,7 +78,19 @@ describe "Streaming Events" do
       event = Anthropic::MessageDeltaEvent.from_json(json)
       event.delta.stop_reason.should eq("refusal")
       event.delta.stop_details.should_not be_nil
-      event.delta.stop_details.not_nil!.category.should eq("cyber")
+
+      refusal = event.delta.stop_details.as?(Anthropic::RefusalStopDetails).not_nil!
+      refusal.category.should eq("cyber")
+      refusal.explanation.should_not be_nil
+    end
+
+    it "falls back to GenericStopDetails for unknown stop_details types" do
+      json = %({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_details":{"type":"future_variant","some_field":"abc"},"stop_sequence":null},"usage":{"output_tokens":5}})
+
+      event = Anthropic::MessageDeltaEvent.from_json(json)
+      details = event.delta.stop_details.as?(Anthropic::GenericStopDetails).not_nil!
+      details.type.should eq("future_variant")
+      details.raw["some_field"].as_s.should eq("abc")
     end
 
     it "parses message_stop event" do
@@ -220,7 +232,8 @@ describe Anthropic::MessageStream do
       message = message.not_nil!
       message.stop_reason.should eq("refusal")
       message.stop_details.should_not be_nil
-      message.stop_details.not_nil!.category.should eq("cyber")
+      message.refusal?.should be_true
+      message.refusal_stop_details.not_nil!.category.should eq("cyber")
     end
   end
 

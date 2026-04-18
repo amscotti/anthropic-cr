@@ -287,28 +287,47 @@ module Anthropic
       body = response.body
       headers = response.headers
 
-      message = begin
-        json = JSON.parse(body)
-        json["error"]?.try(&.["message"]?.try(&.as_s)) || body
-      rescue
-        body
-      end
+      message, error_type = parse_error_payload(body)
 
       error = case status
-              when 400 then BadRequestError.new(message, status, body, headers)
-              when 401 then AuthenticationError.new(message, status, body, headers)
-              when 403 then PermissionDeniedError.new(message, status, body, headers)
-              when 404 then NotFoundError.new(message, status, body, headers)
-              when 409 then ConflictError.new(message, status, body, headers)
-              when 422 then UnprocessableEntityError.new(message, status, body, headers)
+              when 400 then BadRequestError.new(message, status, body, headers, error_type)
+              when 401 then AuthenticationError.new(message, status, body, headers, error_type)
+              when 403 then PermissionDeniedError.new(message, status, body, headers, error_type)
+              when 404 then NotFoundError.new(message, status, body, headers, error_type)
+              when 409 then ConflictError.new(message, status, body, headers, error_type)
+              when 413 then PayloadTooLargeError.new(message, status, body, headers, error_type)
+              when 422 then UnprocessableEntityError.new(message, status, body, headers, error_type)
               when 429
                 retry_after = headers["retry-after"]?.try(&.to_i)
-                RateLimitError.new(message, status, body, headers, retry_after)
+                RateLimitError.new(message, status, body, headers, error_type, retry_after)
+              when 504 then GatewayTimeoutError.new(message, status, body, headers, error_type)
+              when 529 then OverloadedError.new(message, status, body, headers, error_type)
               else
-                status >= 500 ? InternalServerError.new(message, status, body, headers) : APIError.new(message, status, body, headers)
+                status >= 500 ? InternalServerError.new(message, status, body, headers, error_type) : APIError.new(message, status, body, headers, error_type)
               end
 
       raise error
+    end
+
+    # Parse the error envelope from a response body, returning a tuple of
+    # `{message, error_type}`. Tolerates empty bodies, non-JSON bodies, and
+    # bodies that are valid JSON but don't follow the Anthropic envelope.
+    private def parse_error_payload(body : String) : {String, String?}
+      return {"", nil} if body.empty?
+
+      begin
+        json = JSON.parse(body)
+        error = json["error"]?
+        if error.nil?
+          {body, nil}
+        else
+          message = error["message"]?.try(&.as_s?) || body
+          error_type = error["type"]?.try(&.as_s?)
+          {message, error_type}
+        end
+      rescue JSON::ParseException
+        {body, nil}
+      end
     end
 
     # Check if a response indicates we should retry
@@ -323,7 +342,7 @@ module Anthropic
     end
 
     private def retryable?(status : Int32) : Bool
-      status == 408 || status == 409 || status == 429 || status >= 500
+      status == 408 || status == 409 || status == 429 || status == 529 || status >= 500
     end
 
     # Calculate retry delay, respecting server-provided hints

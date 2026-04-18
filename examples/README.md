@@ -72,3 +72,14 @@ crystal run examples/01_basic_message.cr
 | `28_advanced_features.cr` | Redacted thinking, cache_control, metadata, extended tool fields |
 | `29_beta_params.cr` | MCP servers, container/skills, tool search, CompactionDelta |
 | `30_skills_api.cr` | Skills API (CRUD, versions, container integration) |
+| `31_open_stream.cr` | Richer block-scoped streaming with `open_stream` |
+| `32_model_capabilities.cr` | Inspect Models API metadata and capability support |
+| `33_web_fetch_cache_control.cr` | `WebFetchTool20260309` with `use_cache: false` |
+
+### Opus 4.7 / April 2026
+
+| File | Description |
+|------|-------------|
+| `34_opus_47.cr` | Claude Opus 4.7 with `xhigh` effort and `BetaTokenTaskBudget` |
+| `35_advisor_tool.cr` | Advisor tool (`advisor_20260301`) with typed result-block handling |
+| `36_user_profiles.cr` | User Profiles API + `user_profile_id` scoped messaging |

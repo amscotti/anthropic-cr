@@ -82,9 +82,10 @@ describe Anthropic::Messages do
       )
 
       message.stop_reason.should eq("refusal")
+      message.refusal?.should be_true
       message.stop_details.should_not be_nil
       message.stop_details.not_nil!.type.should eq("refusal")
-      message.stop_details.not_nil!.category.should eq("cyber")
+      message.refusal_stop_details.not_nil!.category.should eq("cyber")
     end
 
     it "detects tool use in response" do

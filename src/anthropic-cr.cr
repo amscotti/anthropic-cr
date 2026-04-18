@@ -34,6 +34,7 @@ require "./anthropic-cr/resources/batches"
 require "./anthropic-cr/resources/models"
 require "./anthropic-cr/resources/files"
 require "./anthropic-cr/resources/skills"
+require "./anthropic-cr/resources/user_profiles"
 require "./anthropic-cr/resources/beta"
 
 # Client (must come after resources that define types used in Client methods)

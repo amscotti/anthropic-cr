@@ -415,6 +415,13 @@ module Anthropic
     @[JSON::Field(key: "mcp_servers", emit_null: false)]
     getter mcp_servers : Array(MCPServerDefinition)?
 
+    # User profile identifier (beta: user-profiles-2026-03-24).
+    #
+    # When supplied, the API scopes memory, trust grants, and other
+    # user-specific state to the referenced `BetaUserProfile`.
+    @[JSON::Field(key: "user_profile_id", emit_null: false)]
+    getter user_profile_id : String?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
@@ -438,6 +445,7 @@ module Anthropic
       @context_management : ContextManagementConfig? = nil,
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
+      @user_profile_id : String? = nil,
     )
     end
   end
@@ -549,7 +557,38 @@ module Anthropic
   # Type alias for system prompt - can be string or array of text content
   alias SystemPrompt = String | Array(TextContent)
 
-  # Output configuration for controlling effort and format
+  # User-configurable total token budget across contexts in a session.
+  #
+  # Passed via `output_config.task_budget` on beta message create calls.
+  # The server enforces the total budget and returns updated usage; use
+  # `remaining` to initialize the counter client-side or to cap total spend.
+  #
+  # ```
+  # budget = Anthropic::BetaTokenTaskBudget.new(total: 200_000)
+  # output_config = Anthropic::OutputConfig.new(task_budget: budget)
+  # ```
+  struct BetaTokenTaskBudget
+    include JSON::Serializable
+
+    # The budget type. Currently only `"tokens"` is supported.
+    getter type : String = "tokens"
+
+    # Total token budget across all contexts in the session.
+    getter total : Int32
+
+    # Remaining tokens in the budget. Defaults to `total` if not provided.
+    @[JSON::Field(emit_null: false)]
+    getter remaining : Int32?
+
+    def initialize(@total : Int32, @remaining : Int32? = nil, @type : String = "tokens")
+    end
+  end
+
+  # Output configuration for controlling effort, format, and task budget.
+  #
+  # Used on both top-level and beta `messages.create` / `messages.count_tokens`
+  # requests. The `task_budget` field is beta-only and should only be populated
+  # when calling through `client.beta.messages`.
   #
   # ```
   # # Set effort level
@@ -557,17 +596,30 @@ module Anthropic
   #
   # # Set effort + structured output format
   # output_config = Anthropic::OutputConfig.new(effort: "high", format: output_format)
+  #
+  # # Beta: set a session-wide token budget
+  # budget = Anthropic::BetaTokenTaskBudget.new(total: 200_000)
+  # output_config = Anthropic::OutputConfig.new(effort: "xhigh", task_budget: budget)
   # ```
   struct OutputConfig
     include JSON::Serializable
 
+    # Effort level. One of `"low"`, `"medium"`, `"high"`, `"xhigh"`, `"max"`.
     @[JSON::Field(emit_null: false)]
     getter effort : String?
 
     @[JSON::Field(emit_null: false)]
     getter format : OutputFormat?
 
-    def initialize(@effort : String? = nil, @format : OutputFormat? = nil)
+    # Beta-only: user-configurable total token budget across contexts.
+    @[JSON::Field(key: "task_budget", emit_null: false)]
+    getter task_budget : BetaTokenTaskBudget?
+
+    def initialize(
+      @effort : String? = nil,
+      @format : OutputFormat? = nil,
+      @task_budget : BetaTokenTaskBudget? = nil,
+    )
     end
   end
 

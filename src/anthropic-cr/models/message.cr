@@ -1,4 +1,8 @@
 module Anthropic
+  # Structured stop details returned on refusal stops.
+  #
+  # `category` is typically one of the known refusal categories such as
+  # "cyber" or "bio", though unknown categories may appear as the API evolves.
   struct RefusalStopDetails
     include JSON::Serializable
 
@@ -9,6 +13,60 @@ module Anthropic
 
     @[JSON::Field(emit_null: false)]
     getter explanation : String?
+
+    def initialize(@category : String? = nil, @explanation : String? = nil)
+      @type = "refusal"
+    end
+  end
+
+  # Catch-all structured stop_details for unknown future variants.
+  #
+  # The Anthropic API may introduce additional `stop_details.type` values over
+  # time (e.g., tool-use or other stop reasons). Unknown variants deserialize
+  # into this struct with the raw payload preserved in `raw`.
+  struct GenericStopDetails
+    getter type : String
+    getter raw : JSON::Any
+
+    def initialize(@type : String, @raw : JSON::Any)
+    end
+
+    # Serialize back to the original JSON payload.
+    def to_json(builder : JSON::Builder) : Nil
+      raw.to_json(builder)
+    end
+  end
+
+  # Union of structured stop_details returned by the API.
+  alias StopDetails = RefusalStopDetails | GenericStopDetails
+
+  # Discriminated-union converter for stop_details.
+  #
+  # Routes on the `type` field, returning `RefusalStopDetails` for the known
+  # `"refusal"` variant and a `GenericStopDetails` fallback for future
+  # variants so unknown shapes don't break response parsing.
+  module StopDetailsConverter
+    def self.from_json(pull : JSON::PullParser) : StopDetails
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s) || "unknown"
+      raw = json.to_json
+
+      case type
+      when "refusal"
+        RefusalStopDetails.from_json(raw)
+      else
+        GenericStopDetails.new(type: type, raw: json)
+      end
+    end
+
+    def self.to_json(value : StopDetails, builder : JSON::Builder)
+      case value
+      when RefusalStopDetails
+        value.to_json(builder)
+      when GenericStopDetails
+        value.raw.to_json(builder)
+      end
+    end
   end
 
   struct ContainerInfo
@@ -59,8 +117,8 @@ module Anthropic
     @[JSON::Field(key: "stop_reason")]
     getter stop_reason : String? # "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | "pause_turn" | "refusal"
 
-    @[JSON::Field(key: "stop_details", emit_null: false)]
-    getter stop_details : RefusalStopDetails?
+    @[JSON::Field(key: "stop_details", converter: Anthropic::StopDetailsConverter, emit_null: false)]
+    getter stop_details : StopDetails?
 
     @[JSON::Field(key: "stop_sequence")]
     getter stop_sequence : String?
@@ -105,6 +163,20 @@ module Anthropic
 
     def container_id : String?
       container.try(&.id)
+    end
+
+    # Returns the refusal stop details when the model refused the request.
+    #
+    # Equivalent to a typed downcast of `stop_details` when its variant is
+    # `RefusalStopDetails`. Returns `nil` for any other (or absent)
+    # `stop_details` variant.
+    def refusal_stop_details : RefusalStopDetails?
+      stop_details.as?(RefusalStopDetails)
+    end
+
+    # True when `stop_reason == "refusal"`.
+    def refusal? : Bool
+      stop_reason == "refusal"
     end
 
     # Get parsed output for structured outputs

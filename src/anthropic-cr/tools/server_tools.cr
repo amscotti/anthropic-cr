@@ -36,8 +36,12 @@ module Anthropic
         betas << MCP_CLIENT_BETA unless betas.includes?(MCP_CLIENT_BETA)
       when ToolSearchBM25Tool, ToolSearchRegexTool
         betas << ADVANCED_TOOL_USE_BETA unless betas.includes?(ADVANCED_TOOL_USE_BETA)
-      when BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
+      when BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy, TextEditorTool20250124, TextEditorTool20250429
         betas << COMPUTER_USE_LEGACY_BETA unless betas.includes?(COMPUTER_USE_LEGACY_BETA)
+      when CodeExecutionTool20250522
+        betas << CODE_EXECUTION_BETA unless betas.includes?(CODE_EXECUTION_BETA)
+      when AdvisorTool
+        betas << ADVISOR_TOOL_BETA unless betas.includes?(ADVISOR_TOOL_BETA)
       end
     end
 
@@ -61,6 +65,33 @@ module Anthropic
   MEMORY_BETA                 = "context-management-2025-06-27"
   SKILLS_BETA                 = "skills-2025-10-02"
   MCP_CLIENT_BETA             = "mcp-client-2025-11-20"
+  MCP_CLIENT_2025_04_04_BETA  = "mcp-client-2025-04-04"
+
+  # Advisor tool (secondary-model advisor) beta header.
+  ADVISOR_TOOL_BETA = "advisor-tool-2026-03-01"
+
+  # User profiles beta header.
+  USER_PROFILES_BETA = "user-profiles-2026-03-24"
+
+  # PDF document support beta header.
+  PDFS_BETA = "pdfs-2024-09-25"
+
+  # Output token cap betas.
+  OUTPUT_128K_BETA = "output-128k-2025-02-19"
+  OUTPUT_300K_BETA = "output-300k-2026-03-24"
+
+  # Extended / interleaved thinking betas.
+  DEV_FULL_THINKING_BETA    = "dev-full-thinking-2025-05-14"
+  INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14"
+
+  # 1M context window beta header.
+  CONTEXT_1M_BETA = "context-1m-2025-08-07"
+
+  # Surfaces `model_context_window_exceeded` as a recoverable stop_reason.
+  MODEL_CONTEXT_WINDOW_EXCEEDED_BETA = "model-context-window-exceeded-2025-08-26"
+
+  # Fast mode beta header.
+  FAST_MODE_BETA = "fast-mode-2026-02-01"
 
   # Web search tool - allows Claude to search the internet
   #
@@ -744,6 +775,115 @@ module Anthropic
     end
   end
 
+  # Advisor tool — delegates questions to a secondary model at runtime.
+  #
+  # A server-side "tool" that lets the primary model consult a specified
+  # advisor model on demand. Useful for routing specialized questions to a
+  # different model within the same conversation.
+  #
+  # Requires the beta header `advisor-tool-2026-03-01`.
+  #
+  # ```
+  # message = client.beta.messages.create(
+  #   betas: [Anthropic::ADVISOR_TOOL_BETA],
+  #   model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  #   max_tokens: 1024,
+  #   server_tools: [Anthropic::AdvisorTool.new(model: Anthropic::Model::CLAUDE_HAIKU_4_5)],
+  #   messages: [{role: "user", content: "Check this code for vulnerabilities."}]
+  # )
+  # ```
+  struct AdvisorTool < ServerTool
+    include JSON::Serializable
+
+    getter type : String = "advisor_20260301"
+    getter name : String = "advisor"
+
+    # The model that will answer advisor calls.
+    getter model : String
+
+    # Allowed callers for the advisor tool. Valid values include `"direct"`,
+    # `"code_execution_20250825"`, and `"code_execution_20260120"`.
+    @[JSON::Field(key: "allowed_callers", emit_null: false)]
+    getter allowed_callers : Array(String)?
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    # Caching configuration for the advisor's own prompt.
+    @[JSON::Field(emit_null: false)]
+    getter caching : CacheControl?
+
+    @[JSON::Field(key: "defer_loading", emit_null: false)]
+    getter defer_loading : Bool?
+
+    @[JSON::Field(key: "max_uses", emit_null: false)]
+    getter max_uses : Int32?
+
+    @[JSON::Field(key: "strict", emit_null: false)]
+    getter strict : Bool?
+
+    def initialize(
+      @model : String,
+      @allowed_callers : Array(String)? = nil,
+      @cache_control : CacheControl? = nil,
+      @caching : CacheControl? = nil,
+      @defer_loading : Bool? = nil,
+      @max_uses : Int32? = nil,
+      @strict : Bool? = nil,
+    )
+    end
+
+    def self.beta_header : String
+      ADVISOR_TOOL_BETA
+    end
+  end
+
+  # Original code execution tool (May 2025 variant, beta-only).
+  #
+  # Preserved for parity and for conversations that still reference the
+  # initial `code_execution_20250522` tool type. Most new code should use
+  # `CodeExecutionTool` (2025-08-25) or `CodeExecutionTool20260120`.
+  struct CodeExecutionTool20250522 < ServerTool
+    include JSON::Serializable
+
+    getter type : String = "code_execution_20250522"
+    getter name : String = "code_execution"
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(@cache_control : CacheControl? = nil)
+    end
+  end
+
+  # Text editor tool (January 2025 legacy variant, beta-only).
+  struct TextEditorTool20250124 < ServerTool
+    include JSON::Serializable
+
+    getter type : String = "text_editor_20250124"
+    getter name : String = "str_replace_editor"
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(@cache_control : CacheControl? = nil)
+    end
+  end
+
+  # Text editor tool (April 2025 intermediate variant, beta-only).
+  struct TextEditorTool20250429 < ServerTool
+    include JSON::Serializable
+
+    getter type : String = "text_editor_20250429"
+    getter name : String = "str_replace_based_edit_tool"
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(@cache_control : CacheControl? = nil)
+    end
+  end
+
   # Tool search (BM25) - allows Claude to search through available tools
   struct ToolSearchBM25Tool < ServerTool
     include JSON::Serializable
@@ -860,11 +1000,13 @@ module Anthropic
 
   # Union type for all server tools
   alias AnyServerTool = WebSearchTool | CodeExecutionTool | MCPTool |
-                        WebSearchTool20260209 | CodeExecutionTool20260120 |
-                        BashTool | TextEditorTool | ComputerUseTool |
+                        WebSearchTool20260209 | CodeExecutionTool20250522 | CodeExecutionTool20260120 |
+                        BashTool | TextEditorTool | TextEditorTool20250124 | TextEditorTool20250429 |
+                        ComputerUseTool |
                         ComputerUseTool20251124 | WebFetchTool | WebFetchTool20260209 | WebFetchTool20260309 | MemoryTool |
                         ToolSearchBM25Tool | ToolSearchRegexTool |
                         MCPToolset |
+                        AdvisorTool |
                         BashToolLegacy | TextEditorToolLegacy | ComputerUseToolLegacy
 
   # Individual web search result

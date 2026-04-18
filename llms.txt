@@ -1,6 +1,69 @@
-# Anthropic SDK for Crystal - Complete Documentation
+# Anthropic SDK for Crystal — Complete Documentation
 
-This document provides comprehensive information for working with the anthropic-cr Crystal library. It is designed to be used by AI coding assistants that need to understand how to use this library correctly.
+This document provides comprehensive information for working with the anthropic-cr Crystal library (the unofficial Anthropic API client for Crystal). It is designed to be used by AI coding assistants that need to understand how to use this library correctly.
+
+## Library Metadata
+
+- **Library name:** `anthropic-cr`
+- **Current version:** 0.6.0
+- **Anthropic API version:** `2023-06-01`
+- **Crystal requirement:** `>= 1.18.2`
+- **Repository:** https://github.com/amscotti/anthropic-cr
+- **License:** MIT
+- **Top-level module:** `Anthropic` (note: *not* `Anthropic::CR`)
+- **Entry point:** `src/anthropic-cr.cr`
+- **Tracks:** Opus 4.7 / April 2026 release of the official Python / Ruby / TypeScript SDKs
+
+### Terminology / Synonyms
+
+The following terms are used interchangeably in this document and in the SDK. Use either when searching:
+
+- "tool use" = "function calling" = "tools"
+- "server tools" = "server-side tools" = "built-in tools" (e.g., web search, code execution)
+- "inline tool" = "Schema DSL tool" = "user-defined tool"
+- "extended thinking" = "reasoning" = "thinking blocks"
+- "structured outputs" = "JSON schema outputs" = "typed outputs"
+- "messages API" = "chat completions" (Anthropic's equivalent of chat completions)
+- "SSE" = "Server-Sent Events" = "streaming"
+- "task budget" = "token task budget" = "session budget"
+
+## What's New in 0.6.0 (April 2026)
+
+Tracks the Opus 4.7 / April 2026 release of the official Python (0.96.0), Ruby (1.35.0), and TypeScript SDKs.
+
+### New models
+- `Anthropic::Model::CLAUDE_OPUS_4_7` — frontier intelligence for long-running agents and coding. `CLAUDE_OPUS` rolling alias now points here.
+- `Anthropic::Model::CLAUDE_MYTHOS_PREVIEW` — new class of intelligence strongest in coding and cybersecurity.
+- Deprecation notes added on `CLAUDE_SONNET_4`, `CLAUDE_OPUS_4`, `CLAUDE_OPUS_4_1` (EOL June 15, 2026).
+- `EffortCapability` now supports the `xhigh` level (Opus 4.7+).
+
+### New resources
+- **`client.beta.user_profiles`** — full CRUD + enrollment URLs (beta `user-profiles-2026-03-24`).
+- `user_profile_id:` parameter on beta `messages.create` / `stream` / `open_stream` / `count_tokens` auto-adds the beta header.
+
+### New tools and content blocks
+- **`Anthropic::AdvisorTool`** (`advisor_20260301`, beta `advisor-tool-2026-03-01`) — delegate sub-questions to a secondary model.
+- `AdvisorToolResultContent` with union content (`AdvisorResultContent` | `AdvisorRedactedResultContent` | `AdvisorToolResultErrorContent`).
+- Previously-missing tool versions: `CodeExecutionTool20250522`, `TextEditorTool20250124`, `TextEditorTool20250429`.
+
+### New data types
+- **`Anthropic::BetaTokenTaskBudget`** — session-wide token cap via `output_config.task_budget`.
+- **Citation location variants** — `Citation` (char_location), `CitationPageLocation`, `CitationContentBlockLocation`, `CitationWebSearchResultLocation`, `CitationSearchResultLocation`, unioned as `CitationRef`. Parsed via `CitationConverter`.
+- **`StopDetails` union** — `RefusalStopDetails | GenericStopDetails`. New `Message#refusal?` and `Message#refusal_stop_details` helpers.
+- **`encrypted_content`** added to `CompactionContent` and `CompactionDelta` for confidential summaries.
+
+### New error types
+- `PayloadTooLargeError` (413), `GatewayTimeoutError` (504), `OverloadedError` (529).
+- Every `APIError` now carries `error_type` parsed from the server's `error.type` envelope.
+- SSE `error` events raise the appropriate typed `APIError` subclass mid-stream.
+- Retry list expanded to include 529.
+
+### New beta header constants
+- `ADVISOR_TOOL_BETA`, `USER_PROFILES_BETA`, `PDFS_BETA`, `OUTPUT_128K_BETA`, `OUTPUT_300K_BETA`, `MCP_CLIENT_2025_04_04_BETA`, `DEV_FULL_THINKING_BETA`, `INTERLEAVED_THINKING_BETA`, `CONTEXT_1M_BETA`, `MODEL_CONTEXT_WINDOW_EXCEEDED_BETA`, `FAST_MODE_BETA`.
+
+### Backward compatibility
+- `Message#stop_details` is now typed as `StopDetails?` (previously `RefusalStopDetails?`). Use the new `message.refusal_stop_details` accessor or pattern-match on the union to migrate.
+- All other changes are purely additive.
 
 ## Table of Contents
 
@@ -17,53 +80,60 @@ This document provides comprehensive information for working with the anthropic-
 11. [Batches API](#batches-api)
 12. [Files API](#files-api)
 13. [Skills API](#skills-api)
-14. [Error Handling](#error-handling)
-15. [Configuration Reference](#configuration-reference)
-16. [Common Patterns](#common-patterns)
-17. [Best Practices](#best-practices)
-18. [Migration from Ruby SDK](#migration-from-ruby-sdk)
-19. [Known Limitations](#known-limitations)
+14. [User Profiles API](#user-profiles-api)
+15. [Advisor Tool](#advisor-tool)
+16. [Error Handling](#error-handling)
+17. [Configuration Reference](#configuration-reference)
+18. [Common Patterns](#common-patterns)
+19. [Best Practices](#best-practices)
+20. [Migration from Ruby SDK](#migration-from-ruby-sdk)
+21. [Known Limitations](#known-limitations)
 
 ---
 
 ## Overview
 
-The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. Key features include:
+The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the Opus 4.7 / April 2026 release of the official Python, Ruby, and TypeScript SDKs. Key features include:
 
 - Full Messages API coverage (create and stream)
 - Tool use / function calling with Schema DSL and typed tools
 - Automatic tool execution loop (Tool Runner)
-- Server-Sent Events (SSE) streaming
+- Server-Sent Events (SSE) streaming, with typed `APIError` raising on SSE `error` events
 - Message Batches API for batch processing
-- Models API for listing/retrieving models
+- Models API for listing/retrieving models (rich capabilities including `xhigh` effort)
 - Beta Files API for file uploads/downloads
-- Web Search server-side tool
-- Agent tools (BashTool, TextEditorTool, ComputerUseTool)
-- Web Fetch server-side tool
+- Beta Skills API (full CRUD for skills and skill versions via `client.beta.skills`)
+- **Beta User Profiles API** — create / retrieve / update / list + enrollment URLs via `client.beta.user_profiles`; `user_profile_id:` on beta messages
+- **Advisor tool** (`advisor_20260301`) — delegate sub-questions to a secondary model at runtime
+- Web Search server-side tool (`20250305` and `20260209`)
+- Agent tools (BashTool, TextEditorTool with legacy/2025-01/2025-04/2025-07 variants, ComputerUseTool with legacy and 2025-11-24 variants)
+- Web Fetch server-side tool (`20250910`, `20260209`, `20260309` with cache control)
 - Memory server-side tool
-- Code Execution server-side tool
+- Code Execution server-side tool (`20250522`, `20250825`, `20260120`)
+- MCP tools: `MCPTool` (mcp-connector) and `MCPToolset` (mcp-client)
+- Tool search tools (BM25 and Regex) for deferred tool loading
 - Strict mode on tool definitions
 - Extended thinking / reasoning support (including adaptive thinking)
 - Redacted thinking block support (multi-turn preservation)
-- Effort control via output_config
+- Effort control via `output_config` — levels `low`, `medium`, `high`, `xhigh`, `max`
+- **`BetaTokenTaskBudget`** — session-wide token cap via `output_config.task_budget`
 - Inference geo for data residency
-- Context management (beta) - auto-compaction, clear tool uses, clear thinking
+- Context management (beta) — auto-compaction, clear tool uses, clear thinking
+- **Encrypted compaction** — `encrypted_content` on compaction blocks + deltas for confidential summaries
 - Structured outputs via `client.beta.messages` helper APIs
-- Document citations with streaming support
-- Prompt caching support
+- **Citation location variants** — char, page, content block, web search result, and search result locations, parsed through a discriminated-union converter
+- Prompt caching support (with TTL control)
 - MCP servers parameter (beta) for server-side MCP server definitions
 - Container reuse on core messages API, with beta container configs for skill-based tool use
-- Tool search tools (BM25 and Regex) for deferred tool loading
-- Extended tool fields (beta): allowed_callers, defer_loading, input_examples, eager_input_streaming
+- Extended tool fields (beta): `allowed_callers`, `defer_loading`, `input_examples`, `eager_input_streaming`
 - Compaction streaming delta for context management
-- Usage enrichments: CacheCreation breakdown (ephemeral TTL tokens), inference_geo on Usage
-- Legacy tool versions (October 2024): BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
-- Skills API (beta): full CRUD for skills and skill versions via client.beta.skills
-- Rich Models API metadata: capabilities, max_input_tokens, max_tokens
-- Refusal stop details on messages and streaming deltas
-- Comprehensive error handling with automatic retries
+- Usage enrichments: CacheCreation breakdown (ephemeral TTL tokens), `inference_geo` on Usage
+- Legacy tool versions (October 2024): `BashToolLegacy`, `TextEditorToolLegacy`, `ComputerUseToolLegacy`
+- **Full error hierarchy** — `BadRequestError` (400), `AuthenticationError` (401), `PermissionDeniedError` (403), `NotFoundError` (404), `ConflictError` (409), `PayloadTooLargeError` (413), `UnprocessableEntityError` (422), `RateLimitError` (429), `InternalServerError` (5xx), `GatewayTimeoutError` (504), `OverloadedError` (529) — all carry `error_type` parsed from the `error.type` envelope
+- **Structured `stop_details`** — `RefusalStopDetails` plus `GenericStopDetails` fallback for future variants
+- Comprehensive error handling with automatic retries (408, 409, 429, 5xx, 529)
 
-**Status**: Feature complete for core functionality.
+**Status**: Feature complete for core functionality. Tracks Opus 4.7 / April 2026.
 
 ---
 
@@ -87,7 +157,7 @@ require "anthropic-cr"
 client = Anthropic::Client.new  # Uses ANTHROPIC_API_KEY env var
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_6,
+  model: Anthropic::Model::CLAUDE_OPUS_4_7,  # or :opus via Anthropic.model_name(:opus)
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello, Claude!"}]
 )
@@ -122,15 +192,15 @@ end
 ```
 src/anthropic-cr/
 ├── client.cr              # HTTP client with retry logic
-├── errors.cr              # Error hierarchy (APIError, RateLimitError, etc.)
+├── errors.cr              # Error hierarchy (APIError, RateLimitError, PayloadTooLargeError, OverloadedError, GatewayTimeoutError, etc.)
 ├── schema.cr              # Schema DSL for tool definitions
 ├── models/                # Type definitions
-│   ├── content.cr         # Content block types (Text, Image, Tool, etc.)
-│   ├── message.cr         # Message and MessageParam
-│   ├── params.cr          # Request parameter structs
+│   ├── content.cr         # Content block types (Text, Image, Tool, Citation variants, Advisor blocks, etc.)
+│   ├── message.cr         # Message, MessageParam, RefusalStopDetails, GenericStopDetails, StopDetails union
+│   ├── params.cr          # Request parameter structs (includes BetaTokenTaskBudget)
 │   ├── role.cr            # Role enum
 │   ├── usage.cr           # Usage struct
-│   └── model_info.cr      # Model information
+│   └── model_info.cr      # Model information (includes xhigh effort capability)
 ├── resources/             # API resources
 │   ├── file_upload.cr     # FileUpload struct for multipart uploads
 │   ├── messages.cr        # Messages API
@@ -138,14 +208,15 @@ src/anthropic-cr/
 │   ├── models.cr          # Models API
 │   ├── files.cr           # Files API (beta)
 │   ├── skills.cr          # Skills API (beta)
+│   ├── user_profiles.cr   # User Profiles API (beta)
 │   └── beta.cr            # Beta namespace for beta features
 ├── streaming/             # SSE streaming
-│   ├── events.cr          # Event types
-│   └── stream.cr          # MessageStream with iterators
+│   ├── events.cr          # Event types (includes encrypted_content on CompactionDelta)
+│   └── stream.cr          # MessageStream with iterators; raises typed APIError on SSE error events
 ├── tools/                 # Tool system
 │   ├── tool.cr            # Tool base class, InlineTool, TypedTool
 │   ├── tool_choice.cr     # ToolChoice types
-│   ├── server_tools.cr    # Server-side tools (WebSearch, etc.)
+│   ├── server_tools.cr    # Server-side tools (WebSearch, AdvisorTool, all code_execution / text_editor variants, etc.)
 │   └── runner.cr          # Automatic tool execution loop
 └── version.cr
 ```
@@ -163,7 +234,7 @@ src/anthropic-cr/
 - `Anthropic.tool(name:, input: MyStruct) { |input| }` - TypedTool with struct input
 - `client.beta.messages.tool_runner(...)` - Automatic tool execution loop
 
-**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array). Available server tools include WebSearchTool, BashTool, TextEditorTool, ComputerUseTool, ComputerUseTool20251124, WebFetchTool, WebFetchTool20260209, WebFetchTool20260309, MemoryTool, CodeExecutionTool, CodeExecutionTool20260120, MCPTool, MCPToolset, ToolSearchBM25Tool, ToolSearchRegexTool, BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy
+**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array). Available server tools include `WebSearchTool` (2025-03-05 + 2026-02-09), `BashTool`, `TextEditorTool` (2025-07-28 + intermediate 2025-01-24 / 2025-04-29 + 2024-10-22 legacy), `ComputerUseTool` (2025-01-24 + 2025-11-24 + 2024-10-22 legacy), `WebFetchTool` (2025-09-10 + 2026-02-09 + 2026-03-09), `MemoryTool`, `CodeExecutionTool` (2025-05-22 + 2025-08-25 + 2026-01-20), `AdvisorTool` (2026-03-01), `MCPTool`, `MCPToolset`, `ToolSearchBM25Tool`, `ToolSearchRegexTool`, `BashToolLegacy`.
 
 ---
 
@@ -203,13 +274,14 @@ client = Anthropic::Client.new(
 
 ```crystal
 # Core resources
-client.messages        # Messages API
-client.models          # Models API
-client.beta            # Beta namespace (messages, models, files, skills)
-client.beta.messages   # Beta Messages API
-client.beta.models     # Beta Models API
-client.beta.files      # Beta Files API
-client.beta.skills     # Beta Skills API
+client.messages             # Messages API
+client.models               # Models API
+client.beta                 # Beta namespace
+client.beta.messages        # Beta Messages API (tool_runner, user_profile_id, task_budget, etc.)
+client.beta.models          # Beta Models API
+client.beta.files           # Beta Files API
+client.beta.skills          # Beta Skills API
+client.beta.user_profiles   # Beta User Profiles API
 ```
 
 ### Custom Base URL (Alternative Providers)
@@ -353,11 +425,13 @@ end
 
 # Convenience methods
 message.tool_use?               # Boolean - did Claude request tool use?
+message.refusal?                # Boolean - stop_reason == "refusal"
 message.tool_use_blocks         # Array of tool use content blocks
 message.text_blocks             # Array of text content blocks
 message.thinking_blocks         # Array of thinking content blocks
 message.redacted_thinking_blocks  # Array of redacted thinking content blocks
-message.stop_details            # RefusalStopDetails? with structured refusal metadata
+message.stop_details            # StopDetails? — union of RefusalStopDetails | GenericStopDetails
+message.refusal_stop_details    # RefusalStopDetails? — typed downcast, nil for non-refusal variants
 
 # Usage information
 puts message.usage.input_tokens
@@ -739,7 +813,30 @@ end
 
 ### Beta Namespace
 
-Beta features are accessed via `client.beta.messages`, `client.beta.models`, `client.beta.files`, and `client.beta.skills`.
+Beta features are accessed via `client.beta.messages`, `client.beta.models`, `client.beta.files`, `client.beta.skills`, and `client.beta.user_profiles`.
+
+Beta-only params on `client.beta.messages.create` / `stream` / `open_stream` / `count_tokens`:
+
+```crystal
+client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  max_tokens: 1024,
+  messages: messages,
+
+  # Beta-only parameters
+  betas: [String]?,                             # Explicit beta headers (auto-merged with tool headers)
+  speed: String?,                               # "fast" (with FAST_MODE_BETA) or default
+  output_schema: BaseOutputSchema?,             # Structured outputs
+  output_format: OutputFormat?,                 # Direct JSON schema form
+  output_config: OutputConfig?,                 # effort + format + task_budget
+  context_management: ContextManagementConfig?, # Auto-compaction edits
+  container: String | ContainerConfig?,         # Container reuse or skill loading
+  mcp_servers: Array(MCPServerDefinition)?,     # Server-side MCP servers
+  user_profile_id: String?,                     # BETA: user-profiles-2026-03-24
+)
+```
+
+Note: passing `user_profile_id:` automatically adds the `user-profiles-2026-03-24` beta header; passing an `AdvisorTool` in `server_tools:` adds `advisor-tool-2026-03-01`; structured outputs auto-add `structured-outputs-2025-12-15`; etc.
 
 ### Structured Outputs
 
@@ -950,19 +1047,66 @@ definition = Anthropic::ToolDefinition.new(
 
 ### Citation Tracking
 
+Citations are enabled per-document via `CitationConfig` on the document source. The API returns citations across five location variants (char, page, content block, web search result, search result) parsed through the `CitationRef` union.
+
+Non-streaming usage:
+
 ```crystal
-stream = client.beta.messages.stream(
-  betas: ["citations-2025-02-19"],
-  model: Anthropic::Model::CLAUDE_SONNET_4_6,
-  max_tokens: 1024,
-  messages: [{role: "user", content: "What is Crystal programming language?"}]
+document = Anthropic::DocumentContent.text(
+  "Long document text here...",
+  title: "Source doc",
+  citations: true  # enables citations for this document
 )
 
-stream.citations.each do |citation|
-  puts "Citation: #{citation.citation}"
-  puts "Referenced from: #{citation.referenced_document}"
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
+  max_tokens: 1024,
+  messages: [
+    Anthropic::MessageParam.new(
+      role: Anthropic::Role::User,
+      content: [
+        document,
+        Anthropic::TextContent.new("What does this document say?"),
+      ] of Anthropic::ContentBlock
+    ),
+  ]
+)
+```
+
+Streaming usage — char-location citations surface via the convenience `event.citation` helper, while non-char variants are preserved in the raw `CitationsDelta#citation_data` payload:
+
+```crystal
+client.messages.open_stream(
+  model: Anthropic::Model::CLAUDE_SONNET_4_6,
+  max_tokens: 1024,
+  messages: [...]
+) do |stream|
+  stream.each do |event|
+    next unless event.is_a?(Anthropic::ContentBlockDeltaEvent)
+
+    # Convenience: returns a Citation for char_location variants only
+    if citation = event.citation
+      puts "[chars #{citation.start_char}-#{citation.end_char}] #{citation.cited_text}"
+    end
+
+    # Generic access to any citation variant via the underlying delta
+    if delta = event.delta.as?(Anthropic::CitationsDelta)
+      puts "Location type: #{delta.citation_type}"
+      puts "Raw: #{delta.citation_data.to_json}"
+    end
+  end
 end
 ```
+
+Typed citation structs available in the union `Anthropic::CitationRef`:
+
+| Type | Struct | Fields |
+|------|--------|--------|
+| `char_location` | `Citation` | `start_char`, `end_char`, `document_title`, `document_index`, `cited_text` |
+| `page_location` | `CitationPageLocation` | `start_page_number`, `end_page_number`, ... |
+| `content_block_location` | `CitationContentBlockLocation` | `start_block_index`, `end_block_index`, ... |
+| `web_search_result_location` | `CitationWebSearchResultLocation` | `url`, `title`, `encrypted_index`, `cited_text` |
+| `search_result_location` | `CitationSearchResultLocation` | `source`, `search_result_index`, `start_block_index`, ... |
 
 ---
 
@@ -1003,24 +1147,34 @@ end
 ### Model Constants
 
 ```crystal
-# Rolling aliases
-Anthropic::Model::CLAUDE_OPUS     # "claude-opus-4-6"
+# Rolling aliases — point at the current default precise models
+Anthropic::Model::CLAUDE_OPUS     # "claude-opus-4-7"
 Anthropic::Model::CLAUDE_SONNET   # "claude-sonnet-4-6"
 Anthropic::Model::CLAUDE_HAIKU    # "claude-haiku-4-5"
 
-# Latest model versions
-Anthropic::Model::CLAUDE_OPUS_4_6   # "claude-opus-4-6"
-Anthropic::Model::CLAUDE_OPUS_4_5
+# Latest precise models
+Anthropic::Model::CLAUDE_OPUS_4_7          # "claude-opus-4-7"
+Anthropic::Model::CLAUDE_MYTHOS_PREVIEW    # "claude-mythos-preview"
+Anthropic::Model::CLAUDE_OPUS_4_6          # "claude-opus-4-6"
+Anthropic::Model::CLAUDE_OPUS_4_5          # "claude-opus-4-5-20251101"
+Anthropic::Model::CLAUDE_SONNET_4_6        # "claude-sonnet-4-6"
+Anthropic::Model::CLAUDE_SONNET_4_5        # "claude-sonnet-4-5-20250929"
+Anthropic::Model::CLAUDE_HAIKU_4_5         # "claude-haiku-4-5-20251001"
+
+# Deprecated (EOL June 15, 2026) — migrate to 4.5+ / 4.6+ / 4.7
 Anthropic::Model::CLAUDE_OPUS_4_1
-Anthropic::Model::CLAUDE_SONNET_4_6
-Anthropic::Model::CLAUDE_SONNET_4_5
-Anthropic::Model::CLAUDE_HAIKU_4_5
+Anthropic::Model::CLAUDE_OPUS_4
+Anthropic::Model::CLAUDE_SONNET_4
 
 # Model shorthands
-Anthropic.model_name(:opus)      # => "claude-opus-4-6"
-Anthropic.model_name(:opus_4_5)  # => "claude-opus-4-5-20251101"
-Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-6"
-Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
+Anthropic.model_name(:opus)       # => "claude-opus-4-7"
+Anthropic.model_name(:opus_4_7)   # => "claude-opus-4-7"
+Anthropic.model_name(:mythos)     # => "claude-mythos-preview"
+Anthropic.model_name(:opus_4_6)   # => "claude-opus-4-6"
+Anthropic.model_name(:opus_4_5)   # => "claude-opus-4-5-20251101"
+Anthropic.model_name(:sonnet)     # => "claude-sonnet-4-6"
+Anthropic.model_name(:sonnet_4_5) # => "claude-sonnet-4-5-20250929"
+Anthropic.model_name(:haiku)      # => "claude-haiku-4-5-20251001"
 ```
 
 ---
@@ -1369,17 +1523,137 @@ message = client.beta.messages.create(
 
 ---
 
+## User Profiles API
+
+The User Profiles API (beta `user-profiles-2026-03-24`) scopes per-end-user state — memory, trust grants, etc. — to a specific end user of your application. Accessed via `client.beta.user_profiles`. The SDK adds the beta header automatically on all user-profiles calls.
+
+### Create a Profile
+
+```crystal
+profile = client.beta.user_profiles.create(
+  external_id: "user-123",       # Optional: your platform's id (not enforced unique)
+  metadata: {"plan" => "pro"}    # Optional: up to 16 key/value pairs
+)
+
+puts profile.id              # => "uprof_..."
+puts profile.external_id     # => "user-123"
+puts profile.metadata["plan"]
+```
+
+### Retrieve / Update / List
+
+```crystal
+# Retrieve
+profile = client.beta.user_profiles.retrieve("uprof_01abc")
+
+# Update (merges metadata; set a key to "" to remove it)
+profile = client.beta.user_profiles.update(
+  "uprof_01abc",
+  metadata: {"plan" => "enterprise"}
+)
+
+# List (returns BetaUserProfileListResponse with has_more / first_id / last_id)
+listing = client.beta.user_profiles.list(limit: 20, order: "desc")
+listing.data.each { |p| puts p.id }
+```
+
+### Enrollment URL
+
+Generate a URL to send to the end user to complete enrollment:
+
+```crystal
+enrollment = client.beta.user_profiles.create_enrollment_url(profile.id)
+puts enrollment.url         # URL valid until enrollment.expires_at
+puts enrollment.expires_at
+```
+
+### Scoping a Message to a Profile
+
+Pass `user_profile_id:` to a beta messages call to scope per-user state:
+
+```crystal
+message = client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  max_tokens: 512,
+  user_profile_id: profile.id,  # Auto-adds user-profiles-2026-03-24 beta header
+  messages: [{role: "user", content: "Welcome back!"}]
+)
+```
+
+Trust grants returned on a profile are keyed by grant name, each with a `status` of `"active"`, `"pending"`, or `"rejected"`:
+
+```crystal
+profile.trust_grants.each do |name, grant|
+  puts "#{name}: #{grant.status}"
+end
+```
+
+---
+
+## Advisor Tool
+
+The advisor tool (`advisor_20260301`, beta `advisor-tool-2026-03-01`) delegates sub-questions to a secondary model at runtime — useful for routing specialized reviews (security, math, etc.) without switching the primary conversation. The SDK auto-adds the beta header when `AdvisorTool` appears in `server_tools:`.
+
+### Defining and Using
+
+```crystal
+advisor = Anthropic::AdvisorTool.new(
+  model: Anthropic::Model::CLAUDE_OPUS_4_5,  # The advisor model
+  max_uses: 3,                               # Optional cap
+  strict: true,                              # Enforce schema on advisor calls
+  caching: Anthropic::CacheControl.ephemeral, # Optional: cache advisor prompt
+)
+
+message = client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  max_tokens: 2048,
+  server_tools: [advisor] of Anthropic::ServerTool,
+  messages: [{role: "user", content: "Review this payload for abuse patterns: ..."}]
+)
+```
+
+### Parsing Advisor Result Blocks
+
+Advisor responses come back as `AdvisorToolResultContent` blocks whose `content` is a discriminated union of three variants:
+
+```crystal
+message.content.each do |block|
+  case block
+  when Anthropic::AdvisorToolResultContent
+    case inner = block.content
+    when Anthropic::AdvisorResultContent
+      # Plain-text advisor answer
+      puts "Advisor said: #{inner.text}"
+    when Anthropic::AdvisorRedactedResultContent
+      # Encrypted payload — round-trip verbatim on subsequent requests
+      puts "Advisor (encrypted, #{inner.encrypted_content.bytesize} bytes)"
+    when Anthropic::AdvisorToolResultErrorContent
+      # Error codes: max_uses_exceeded, prompt_too_long, too_many_requests,
+      # overloaded, unavailable, execution_time_exceeded
+      puts "Advisor error: #{inner.error_code}"
+    end
+  end
+end
+```
+
+> **Note:** Not all models are valid advisor models. If the server rejects the configured advisor, it returns an `Anthropic::BadRequestError` with a descriptive message.
+
+---
+
 ## Error Handling
 
 ### Error Types
+
+Every API error inherits from `Anthropic::APIError` and carries `status`, `body`, `headers`, and `error_type` (parsed from the server's `error.type` envelope — e.g., `"invalid_request_error"`, `"overloaded_error"`):
 
 ```crystal
 begin
   message = client.messages.create(...)
 rescue Anthropic::APIError => e
   puts "Status: #{e.status}"
+  puts "Type: #{e.error_type}"   # e.g., "rate_limit_error", "overloaded_error"
   puts "Body: #{e.body}"
-  puts "Headers: #{e.headers}"  # HTTP::Headers object
+  puts "Headers: #{e.headers}"   # HTTP::Headers object
 end
 ```
 
@@ -1390,11 +1664,15 @@ end
 | `PermissionDeniedError` | 403 | Permission denied |
 | `NotFoundError` | 404 | Resource not found |
 | `ConflictError` | 409 | Conflict |
+| `PayloadTooLargeError` | 413 | Request body exceeds size limits |
 | `UnprocessableEntityError` | 422 | Unprocessable entity |
 | `RateLimitError` | 429 | Rate limited (see `retry_after` seconds) |
 | `InternalServerError` | 500+ | Server error |
+| `GatewayTimeoutError` | 504 | Upstream gateway timeout |
+| `OverloadedError` | 529 | API temporarily overloaded |
 | `APIConnectionError` | N/A | Network/connection error |
 | `APITimeoutError` | N/A | Request timed out |
+| `StructuredOutputParseError` | N/A | Structured output failed to parse |
 
 ### Rate Limit Errors
 
@@ -1408,6 +1686,24 @@ rescue Anthropic::RateLimitError => e
 end
 ```
 
+### Streaming Errors
+
+SSE `error` events received mid-stream raise the appropriate `Anthropic::APIError` subclass:
+
+```crystal
+begin
+  client.messages.stream(model: ..., max_tokens: ..., messages: ...) do |event|
+    # handle events
+  end
+rescue Anthropic::OverloadedError => e
+  puts "Overloaded mid-stream: #{e.error_type}"
+rescue Anthropic::APIError => e
+  puts "Stream failed: #{e.error_type} — #{e.message}"
+end
+```
+
+The server's `error.type` values map to classes as follows: `invalid_request_error` → `BadRequestError`, `authentication_error` → `AuthenticationError`, `permission_error` → `PermissionDeniedError`, `not_found_error` → `NotFoundError`, `rate_limit_error` → `RateLimitError`, `request_too_large` → `PayloadTooLargeError`, `overloaded_error` → `OverloadedError`, `timeout_error` / `gateway_timeout_error` → `GatewayTimeoutError`, `api_error` → `InternalServerError`.
+
 ### Retry Behavior
 
 The SDK automatically retries:
@@ -1416,8 +1712,9 @@ The SDK automatically retries:
 - 409 Conflict
 - 429 Rate Limit
 - 500+ Server errors
+- 529 Overloaded
 
-Default: 2 retries with exponential backoff (0.5s initial, max 8s).
+Default: 2 retries with exponential backoff (0.5s initial, max 8s). Respects `retry-after` and `retry-after-ms` response headers.
 
 ```crystal
 # Configure retries
@@ -1829,10 +2126,12 @@ client.beta.messages.tool_runner(
 
 ## Known Limitations
 
-### Out of Scope (Documented as Future)
+### Planned / Not Yet Implemented
 
-- **AWS Bedrock Support**: Not implemented, listed as future feature
-- **Google Vertex Support**: Not implemented, listed as future feature
+- **Managed Agents** (agents, environments, sessions, vaults) — Ruby 1.31.0+ and Python 0.92.0+. Planned as a follow-up release (~150 types, 5+ resources, new SSE event family).
+- **AWS Bedrock Support** — not implemented; Ruby SDK ships `BedrockMantleClient`.
+- **Google Vertex Support** — not implemented; Ruby SDK supports Vertex EU region.
+- **Filesystem memory-tool helper** — Python 0.86.0 added a client-side runner that backs `memory_20250818` tool commands with a local filesystem. Not yet in this SDK.
 
 ### Intentional Design Choices
 
@@ -1844,7 +2143,7 @@ client.beta.messages.tool_runner(
 
 ### Not Implemented (Post-1.0)
 
-- **Iterator-based streaming**: The `stream` method requires a block; returning a `MessageStream` object is not yet supported due to HTTP connection lifecycle limitations
+- **Iterator-based streaming**: The `stream` method requires a block; returning a `MessageStream` object is not yet supported due to HTTP connection lifecycle limitations. `open_stream` is the recommended pattern when you want a stream object with accumulated helpers.
 - Per-request options (timeout, retries)
 - Raw HTTP response access
 - Undocumented parameters support
@@ -1867,12 +2166,12 @@ client.beta.messages.tool_runner(
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic-cr/models/message.cr` | Message, MessageParam, RefusalStopDetails |
-| `src/anthropic-cr/models/content.cr` | Content blocks (Text, Image, Tool, etc.) |
-| `src/anthropic-cr/models/params.cr` | Request parameters |
+| `src/anthropic-cr/models/message.cr` | `Message`, `MessageParam`, `RefusalStopDetails`, `GenericStopDetails`, `StopDetails` union + converter |
+| `src/anthropic-cr/models/content.cr` | Content blocks (Text, Image, Tool, Citation variants, Advisor result blocks, Compaction with `encrypted_content`) |
+| `src/anthropic-cr/models/params.cr` | Request parameters including `OutputConfig`, `BetaTokenTaskBudget`, `BetaMessageCreateParams#user_profile_id` |
 | `src/anthropic-cr/models/role.cr` | Role enum |
 | `src/anthropic-cr/models/usage.cr` | Usage struct |
-| `src/anthropic-cr/models/model_info.cr` | Model constants, ModelInfo, capability metadata |
+| `src/anthropic-cr/models/model_info.cr` | Model constants (`CLAUDE_OPUS_4_7`, `CLAUDE_MYTHOS_PREVIEW`), `ModelInfo`, `EffortCapability` (with `xhigh`) |
 
 ### Resource Files
 
@@ -1884,23 +2183,24 @@ client.beta.messages.tool_runner(
 | `src/anthropic-cr/resources/models.cr` | Models API |
 | `src/anthropic-cr/resources/files.cr` | Files API |
 | `src/anthropic-cr/resources/skills.cr` | Skills API (beta) |
+| `src/anthropic-cr/resources/user_profiles.cr` | User Profiles API (beta) |
 | `src/anthropic-cr/resources/beta.cr` | Beta namespace |
 
 ### Tool Files
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic-cr/tools/tool.cr` | Tool, InlineTool, TypedTool |
-| `src/anthropic-cr/tools/tool_choice.cr` | ToolChoice types |
-| `src/anthropic-cr/tools/server_tools.cr` | Server tools including WebSearchTool, BashTool, TextEditorTool, ComputerUseTool, WebFetchTool, MemoryTool, CodeExecutionTool, MCPTool, MCPToolset, ToolSearchBM25Tool, ToolSearchRegexTool |
-| `src/anthropic-cr/tools/runner.cr` | ToolRunner |
+| `src/anthropic-cr/tools/tool.cr` | `Tool`, `InlineTool`, `TypedTool` |
+| `src/anthropic-cr/tools/tool_choice.cr` | `ToolChoice` types |
+| `src/anthropic-cr/tools/server_tools.cr` | Server tools: `WebSearchTool`, `WebSearchTool20260209`, `BashTool`, `TextEditorTool` (+ 20250124, 20250429, legacy 20241022), `ComputerUseTool` (+ 20251124, legacy), `WebFetchTool` (+ 20260209, 20260309), `MemoryTool`, `CodeExecutionTool` (+ 20250522, 20260120), `AdvisorTool`, `MCPTool`, `MCPToolset`, `ToolSearchBM25Tool`, `ToolSearchRegexTool`, and all beta header constants |
+| `src/anthropic-cr/tools/runner.cr` | `ToolRunner` |
 
 ### Streaming Files
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic-cr/streaming/events.cr` | Stream event types |
-| `src/anthropic-cr/streaming/stream.cr` | MessageStream, iterators |
+| `src/anthropic-cr/streaming/events.cr` | Stream event types (includes `CompactionDelta.encrypted_content`, typed `stop_details` union, `CitationsDelta` with location-variant support) |
+| `src/anthropic-cr/streaming/stream.cr` | `MessageStream`, iterators, typed `APIError` raising on SSE `error` events |
 
 ---
 
@@ -1921,8 +2221,17 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.5.0
+- **Current Version**: 0.6.0 (April 2026)
 - **API Version**: 2023-06-01
-- **Crystal Version**: 1.0+ recommended
+- **Crystal Version**: >= 1.18.2
+- **Tracks**: Opus 4.7 / April 2026 release of the official Python (0.96.0), Ruby (1.35.0), and TypeScript SDKs
+- **Previous version**: 0.5.0 (Opus 4.6 / February 2026)
+
+### Version History Highlights
+
+| Version | Release | Notable additions |
+|---------|---------|-------------------|
+| 0.6.0 | April 2026 | Opus 4.7 + Mythos Preview models, User Profiles API, Advisor tool, `BetaTokenTaskBudget`, citation location union, encrypted compaction, `error_type` on `APIError`, 413/504/529 errors, typed stream errors |
+| 0.5.0 | February 2026 | Opus 4.6, adaptive thinking, Skills API, `open_stream`, structured outputs |
 
 This documentation should provide all the information needed for an AI assistant to effectively work with the anthropic-cr Crystal SDK.

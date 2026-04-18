@@ -642,16 +642,111 @@ module Anthropic
     end
   end
 
+  # Plain text result from the advisor tool.
+  struct AdvisorResultContent
+    include JSON::Serializable
+
+    getter type : String = "advisor_result"
+    getter text : String
+
+    def initialize(@text : String)
+    end
+  end
+
+  # Encrypted result from the advisor tool.
+  #
+  # Round-trip `encrypted_content` verbatim on follow-up requests; do not
+  # inspect or modify the blob.
+  struct AdvisorRedactedResultContent
+    include JSON::Serializable
+
+    getter type : String = "advisor_redacted_result"
+
+    @[JSON::Field(key: "encrypted_content")]
+    getter encrypted_content : String
+
+    def initialize(@encrypted_content : String)
+    end
+  end
+
+  # Advisor tool error result.
+  struct AdvisorToolResultErrorContent
+    include JSON::Serializable
+
+    getter type : String = "advisor_tool_result_error"
+
+    # One of `max_uses_exceeded`, `prompt_too_long`, `too_many_requests`,
+    # `overloaded`, `unavailable`, `execution_time_exceeded`.
+    @[JSON::Field(key: "error_code")]
+    getter error_code : String
+
+    def initialize(@error_code : String)
+    end
+  end
+
+  # Union of advisor result payloads (success variants plus error variant).
+  alias AdvisorToolResultValue = AdvisorResultContent | AdvisorRedactedResultContent | AdvisorToolResultErrorContent
+
+  module AdvisorToolResultValueConverter
+    def self.from_json(pull : JSON::PullParser) : AdvisorToolResultValue
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s)
+      raw = json.to_json
+
+      case type
+      when "advisor_result"            then AdvisorResultContent.from_json(raw)
+      when "advisor_redacted_result"   then AdvisorRedactedResultContent.from_json(raw)
+      when "advisor_tool_result_error" then AdvisorToolResultErrorContent.from_json(raw)
+      else
+        object = json.as_h
+        if object.has_key?("encrypted_content")
+          AdvisorRedactedResultContent.from_json(raw)
+        elsif object.has_key?("error_code")
+          AdvisorToolResultErrorContent.from_json(raw)
+        else
+          AdvisorResultContent.from_json(raw)
+        end
+      end
+    end
+
+    def self.to_json(value : AdvisorToolResultValue, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  # Advisor tool result content block (response from the advisor tool call).
+  struct AdvisorToolResultContent
+    include JSON::Serializable
+
+    getter type : String = "advisor_tool_result"
+
+    @[JSON::Field(key: "tool_use_id")]
+    getter tool_use_id : String
+
+    @[JSON::Field(converter: Anthropic::AdvisorToolResultValueConverter)]
+    getter content : AdvisorToolResultValue
+
+    def initialize(@tool_use_id : String, @content : AdvisorToolResultValue)
+    end
+  end
+
   # Compaction content block
   #
   # Returned during auto-compaction of conversation history.
+  #
+  # For conversations using confidential compaction, `encrypted_content` is
+  # returned instead of `content`. The encrypted blob must be passed back
+  # verbatim on subsequent requests; do not inspect or modify it.
   struct CompactionContent
     include JSON::Serializable
 
     getter type : String = "compaction"
     getter content : String?
 
-    def initialize(@content : String? = nil)
+    @[JSON::Field(key: "encrypted_content", emit_null: false)]
+    getter encrypted_content : String?
+
+    def initialize(@content : String? = nil, @encrypted_content : String? = nil)
     end
   end
 
@@ -669,9 +764,16 @@ module Anthropic
     end
   end
 
-  # Citation reference in a response
+  # Citation for a character range within a cited document.
+  #
+  # This is the legacy char-location citation struct. It remains the canonical
+  # representation for `start_char`/`end_char` citations. For other location
+  # types (page, content block, web search result, search result), see the
+  # dedicated citation structs and the `CitationRef` union.
   struct Citation
     include JSON::Serializable
+
+    getter type : String = "char_location"
 
     @[JSON::Field(key: "document_title")]
     getter document_title : String?
@@ -695,6 +797,145 @@ module Anthropic
       @document_index : Int32? = nil,
       @cited_text : String? = nil,
     )
+      @type = "char_location"
+    end
+  end
+
+  # Citation for a page range within a cited document.
+  struct CitationPageLocation
+    include JSON::Serializable
+
+    getter type : String = "page_location"
+
+    @[JSON::Field(key: "document_title")]
+    getter document_title : String?
+
+    @[JSON::Field(key: "document_index")]
+    getter document_index : Int32?
+
+    @[JSON::Field(key: "start_page_number")]
+    getter start_page_number : Int32
+
+    @[JSON::Field(key: "end_page_number")]
+    getter end_page_number : Int32
+
+    @[JSON::Field(key: "cited_text")]
+    getter cited_text : String?
+  end
+
+  # Citation for a content-block range within a cited document.
+  struct CitationContentBlockLocation
+    include JSON::Serializable
+
+    getter type : String = "content_block_location"
+
+    @[JSON::Field(key: "document_title")]
+    getter document_title : String?
+
+    @[JSON::Field(key: "document_index")]
+    getter document_index : Int32?
+
+    @[JSON::Field(key: "start_block_index")]
+    getter start_block_index : Int32
+
+    @[JSON::Field(key: "end_block_index")]
+    getter end_block_index : Int32
+
+    @[JSON::Field(key: "cited_text")]
+    getter cited_text : String?
+  end
+
+  # Citation sourced from a web search result (server-side web_search).
+  struct CitationWebSearchResultLocation
+    include JSON::Serializable
+
+    getter type : String = "web_search_result_location"
+
+    @[JSON::Field(key: "cited_text")]
+    getter cited_text : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter title : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter url : String?
+
+    @[JSON::Field(key: "encrypted_index", emit_null: false)]
+    getter encrypted_index : String?
+  end
+
+  # Citation sourced from a `search_result` content block.
+  struct CitationSearchResultLocation
+    include JSON::Serializable
+
+    getter type : String = "search_result_location"
+
+    @[JSON::Field(key: "cited_text")]
+    getter cited_text : String?
+
+    @[JSON::Field(key: "search_result_index", emit_null: false)]
+    getter search_result_index : Int32?
+
+    @[JSON::Field(key: "source", emit_null: false)]
+    getter source : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter title : String?
+
+    @[JSON::Field(key: "start_block_index", emit_null: false)]
+    getter start_block_index : Int32?
+
+    @[JSON::Field(key: "end_block_index", emit_null: false)]
+    getter end_block_index : Int32?
+  end
+
+  # Union of all citation location types.
+  alias CitationRef = Citation | CitationPageLocation | CitationContentBlockLocation |
+                      CitationWebSearchResultLocation | CitationSearchResultLocation
+
+  # Discriminated-union converter for citation objects.
+  #
+  # Dispatches based on the `type` field. For backwards compatibility, objects
+  # without an explicit `type` but with `start_char`/`end_char` are treated as
+  # `char_location`.
+  module CitationConverter
+    def self.from_json(pull : JSON::PullParser) : CitationRef
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s)
+      raw = json.to_json
+
+      case type
+      when "char_location"              then Citation.from_json(raw)
+      when "page_location"              then CitationPageLocation.from_json(raw)
+      when "content_block_location"     then CitationContentBlockLocation.from_json(raw)
+      when "web_search_result_location" then CitationWebSearchResultLocation.from_json(raw)
+      when "search_result_location"     then CitationSearchResultLocation.from_json(raw)
+      else
+        # Backwards compatibility: untagged objects with start_char/end_char
+        # are parsed as the legacy char-location Citation.
+        Citation.from_json(raw)
+      end
+    end
+
+    def self.to_json(value : CitationRef, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  # Array converter for citations using the discriminated union converter.
+  module CitationArrayConverter
+    def self.from_json(pull : JSON::PullParser) : Array(CitationRef)
+      result = [] of CitationRef
+      pull.read_array do
+        result << CitationConverter.from_json(pull)
+      end
+      result
+    end
+
+    def self.to_json(value : Array(CitationRef), builder : JSON::Builder)
+      builder.array do
+        value.each(&.to_json(builder))
+      end
     end
   end
 
@@ -704,9 +945,11 @@ module Anthropic
 
     getter type : String = "text"
     getter text : String
-    getter citations : Array(Citation)?
 
-    def initialize(@text : String, @citations : Array(Citation)? = nil)
+    @[JSON::Field(converter: Anthropic::CitationArrayConverter, emit_null: false)]
+    getter citations : Array(CitationRef)?
+
+    def initialize(@text : String, @citations : Array(CitationRef)? = nil)
     end
   end
 
@@ -758,7 +1001,8 @@ module Anthropic
                        CodeExecutionToolResultContent | WebFetchToolResultContent |
                        ToolSearchToolResultContent | BashCodeExecutionToolResultContent |
                        TextEditorCodeExecutionToolResultContent |
-                       MCPToolUseContent | MCPToolResultContent
+                       MCPToolUseContent | MCPToolResultContent |
+                       AdvisorToolResultContent
 
   # JSON converter for discriminated union parsing of content blocks
   #
@@ -801,6 +1045,7 @@ module Anthropic
       when "tool_search_tool_result"                then ToolSearchToolResultContent.from_json(raw)
       when "mcp_tool_use"                           then MCPToolUseContent.from_json(raw)
       when "mcp_tool_result"                        then MCPToolResultContent.from_json(raw)
+      when "advisor_tool_result"                    then AdvisorToolResultContent.from_json(raw)
       end
     end
 
