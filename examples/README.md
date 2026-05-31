@@ -76,10 +76,10 @@ crystal run examples/01_basic_message.cr
 | `32_model_capabilities.cr` | Inspect Models API metadata and capability support |
 | `33_web_fetch_cache_control.cr` | `WebFetchTool20260309` with `use_cache: false` |
 
-### Opus 4.7 / April 2026
+### Opus 4.8 / May 2026
 
 | File | Description |
 |------|-------------|
-| `34_opus_47.cr` | Claude Opus 4.7 with `xhigh` effort and `BetaTokenTaskBudget` |
+| `34_opus_48.cr` | Claude Opus 4.8 with `xhigh` effort and `BetaTokenTaskBudget` |
 | `35_advisor_tool.cr` | Advisor tool (`advisor_20260301`) with typed result-block handling |
 | `36_user_profiles.cr` | User Profiles API + `user_profile_id` scoped messaging |

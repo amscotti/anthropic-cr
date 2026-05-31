@@ -54,6 +54,8 @@ module Fixtures
 
     MESSAGE_WITH_CODE_EXECUTION = %({"id":"msg_ce_01","type":"message","role":"assistant","content":[{"type":"server_tool_use","id":"stu_ce_01","name":"code_execution","input":{"code":"print(1+1)"},"caller":"code_execution_20250825"},{"type":"code_execution_tool_result","tool_use_id":"stu_ce_01","content":{"type":"code_execution_result","stdout":"2\\n","stderr":"","return_code":0,"content":[{"type":"code_execution_output","file_id":"file_123"}]}}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":40}})
 
+    MESSAGE_WITH_DIAGNOSTICS = %({"id":"msg_diag_01","type":"message","role":"assistant","content":[{"type":"text","text":"Hello!"}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"diagnostics":{"cache_miss_reason":{"type":"tools_changed","cache_missed_input_tokens":150}},"usage":{"input_tokens":10,"output_tokens":15}})
+
     MESSAGE_WITH_MCP = %({"id":"msg_mcp_01","type":"message","role":"assistant","content":[{"type":"mcp_tool_use","id":"mcp_tu_01","name":"get_data","server_name":"my_server","input":{"query":"test"}},{"type":"mcp_tool_result","tool_use_id":"mcp_tu_01","content":{"result":"data"},"is_error":false}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":40}})
 
     MESSAGE_WITH_COMPACTION = %({"id":"msg_compact_01","type":"message","role":"assistant","content":[{"type":"compaction","content":"Compacted conversation summary."}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":500,"output_tokens":100}})

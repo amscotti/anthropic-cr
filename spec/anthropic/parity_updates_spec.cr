@@ -12,12 +12,13 @@ describe "Opus 4.7 parity updates" do
       Anthropic::Model::CLAUDE_MYTHOS_PREVIEW.should eq("claude-mythos-preview")
     end
 
-    it "points CLAUDE_OPUS rolling alias at 4.7" do
-      Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_4_7)
+    it "points CLAUDE_OPUS rolling alias at 4.8" do
+      Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_4_8)
     end
 
-    it "resolves :opus and :opus_4_7 via model_name" do
-      Anthropic.model_name(:opus).should eq("claude-opus-4-7")
+    it "resolves :opus, :opus_4_8, and :opus_4_7 via model_name" do
+      Anthropic.model_name(:opus).should eq("claude-opus-4-8")
+      Anthropic.model_name(:opus_4_8).should eq("claude-opus-4-8")
       Anthropic.model_name(:opus_4_7).should eq("claude-opus-4-7")
     end
 
@@ -467,6 +468,36 @@ describe "Opus 4.7 parity updates" do
       rescue ex : Anthropic::BadRequestError
         ex.error_type.should eq("invalid_request_error")
       end
+    end
+  end
+
+  describe "OutputTokensDetails and mid-conversation system blocks" do
+    it "parses OutputTokensDetails in Usage and DeltaUsage" do
+      usage_json = %({"input_tokens":10,"output_tokens":20,"output_tokens_details":{"thinking_tokens":5}})
+      usage = Anthropic::Usage.from_json(usage_json)
+      usage.output_tokens_details.should_not be_nil
+      usage.output_tokens_details.not_nil!.thinking_tokens.should eq(5)
+
+      delta_json = %({"output_tokens":15,"output_tokens_details":{"thinking_tokens":3}})
+      delta = Anthropic::DeltaUsage.from_json(delta_json)
+      delta.output_tokens_details.should_not be_nil
+      delta.output_tokens_details.not_nil!.thinking_tokens.should eq(3)
+    end
+
+    it "parses and serializes MidConversationSystemContent block" do
+      json = %({"type":"mid_conv_system","content":[{"type":"text","text":"System rule updated."}],"cache_control":{"type":"ephemeral"}})
+      block = Anthropic::ContentBlockConverter.from_json(JSON::PullParser.new(json))
+      sys = block.as(Anthropic::MidConversationSystemContent)
+      sys.type.should eq("mid_conv_system")
+      sys.content.first.text.should eq("System rule updated.")
+      sys.cache_control.not_nil!.type.should eq("ephemeral")
+
+      # Test round-trip
+      serialized = sys.to_json
+      parsed = Anthropic::MidConversationSystemContent.from_json(serialized)
+      parsed.type.should eq("mid_conv_system")
+      parsed.content.first.text.should eq("System rule updated.")
+      parsed.cache_control.not_nil!.type.should eq("ephemeral")
     end
   end
 end

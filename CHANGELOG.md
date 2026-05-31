@@ -3,6 +3,20 @@
 All notable changes to `anthropic-cr` are documented here. The project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-05-31
+
+Tracks the Opus 4.8 / May 2026 release of the official Python (0.105.0), Ruby (1.44.0), and TypeScript SDKs.
+
+### Added — Models
+
+- `Anthropic::Model::CLAUDE_OPUS_4_8` — frontier intelligence model. `CLAUDE_OPUS` rolling alias now resolves here.
+- `:opus_4_8` shorthand on `Anthropic.model_name`; `:opus` now resolves to `claude-opus-4-8`.
+
+### Added — Content Blocks & Data Types
+
+- `Anthropic::MidConversationSystemContent` (`mid_conv_system`) — dynamic system instructions that appear mid-conversation.
+- `Anthropic::OutputTokensDetails` (`output_tokens_details`) — breakdown of output tokens generated as internal reasoning (`thinking_tokens`). Integrated into `Usage` and `DeltaUsage` structures.
+
 ## [0.6.0] — 2026-04-18
 
 Tracks the Opus 4.7 / April 2026 release of the official Python (0.96.0),

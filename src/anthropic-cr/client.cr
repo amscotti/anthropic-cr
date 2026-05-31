@@ -56,10 +56,12 @@ module Anthropic
     end
 
     # HTTP methods
-    def get(path : String, params : Hash(String, String)? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
+    alias QueryParams = Hash(String, String) | Hash(String, String | Array(String))
+
+    def get(path : String, params : QueryParams? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
       full_path = if params && !params.empty?
                     separator = path.includes?('?') ? '&' : '?'
-                    "#{path}#{separator}#{URI::Params.encode(params)}"
+                    "#{path}#{separator}#{encode_query_params(params)}"
                   else
                     path
                   end
@@ -83,9 +85,15 @@ module Anthropic
         client.connect_timeout = @timeout
         client.read_timeout = @timeout
 
-        client.post(path, headers: headers(extra_headers), body: body.to_json) do |response|
-          handle_error(response) unless response.success?
-          yield response
+        begin
+          client.post(path, headers: headers(extra_headers, method: "POST"), body: body.to_json) do |response|
+            handle_error(response) unless response.success?
+            yield response
+          end
+        rescue ex : IO::TimeoutError
+          raise APITimeoutError.new("Stream read timed out", cause: ex)
+        rescue ex : IO::Error | Socket::Error
+          raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
         end
       end
     end
@@ -97,9 +105,15 @@ module Anthropic
         client.connect_timeout = @timeout
         client.read_timeout = @timeout
 
-        client.get(path, headers: headers(extra_headers)) do |response|
-          handle_error(response) unless response.success?
-          yield response
+        begin
+          client.get(path, headers: headers(extra_headers, method: "GET")) do |response|
+            handle_error(response) unless response.success?
+            yield response
+          end
+        rescue ex : IO::TimeoutError
+          raise APITimeoutError.new("Stream read timed out", cause: ex)
+        rescue ex : IO::Error | Socket::Error
+          raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
         end
       end
     end
@@ -114,13 +128,7 @@ module Anthropic
         client.read_timeout = @timeout
 
         # Don't set content-type for downloads
-        hdrs = HTTP::Headers{
-          "x-api-key"         => @api_key,
-          "anthropic-version" => API_VERSION,
-          "user-agent"        => "anthropic-crystal/#{VERSION}",
-        }
-        @default_headers.each { |key, value| hdrs[key] = value }
-        extra_headers.try &.each { |key, value| hdrs[key] = value }
+        hdrs = headers(extra_headers, content_type: nil, method: "GET")
 
         response = client.get(path, headers: hdrs)
         handle_error(response) unless response.success?
@@ -145,31 +153,19 @@ module Anthropic
         client.connect_timeout = @timeout
         client.read_timeout = @timeout
 
-        # Build multipart body
-        io = IO::Memory.new
-        boundary = "----AnthropicCrystalSDK#{Random.new.hex(16)}"
+        # Build multipart body using Crystal's standard FormData builder
+        body_io = IO::Memory.new
+        builder = HTTP::FormData::Builder.new(body_io)
 
-        # File part
-        io << "--#{boundary}\r\n"
-        io << "Content-Disposition: form-data; name=\"file\"; filename=\"#{filename}\"\r\n"
-        io << "Content-Type: #{content_type}\r\n"
-        io << "\r\n"
-        IO.copy(file, io)
-        io << "\r\n"
-        io << "--#{boundary}--\r\n"
+        metadata = HTTP::FormData::FileMetadata.new(filename: filename)
+        file_headers = HTTP::Headers{"Content-Type" => content_type}
+        builder.file("file", file, metadata, headers: file_headers)
+        builder.finish
 
-        # Headers for multipart
-        hdrs = HTTP::Headers{
-          "x-api-key"         => @api_key,
-          "anthropic-version" => API_VERSION,
-          "content-type"      => "multipart/form-data; boundary=#{boundary}",
-          "user-agent"        => "anthropic-crystal/#{VERSION}",
-        }
-        @default_headers.each { |key, value| hdrs[key] = value }
-        extra_headers.try &.each { |key, value| hdrs[key] = value }
+        body_io.rewind
+        hdrs = headers(extra_headers, content_type: builder.content_type, method: "POST")
 
-        io.rewind
-        response = client.post(path, headers: hdrs, body: io)
+        response = client.post(path, headers: hdrs, body: body_io)
         handle_error(response) unless response.success?
         return response
       end
@@ -208,15 +204,8 @@ module Anthropic
 
         builder.finish
 
-        # Headers for multipart
-        hdrs = HTTP::Headers{
-          "x-api-key"         => @api_key,
-          "anthropic-version" => API_VERSION,
-          "content-type"      => builder.content_type,
-          "user-agent"        => "anthropic-crystal/#{VERSION}",
-        }
-        @default_headers.each { |key, value| hdrs[key] = value }
-        extra_headers.try &.each { |key, value| hdrs[key] = value }
+        # Headers for multipart using unified helper
+        hdrs = headers(extra_headers, content_type: builder.content_type, method: "POST")
 
         body_io.rewind
         response = client.post(path, headers: hdrs, body: body_io)
@@ -230,7 +219,7 @@ module Anthropic
     private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
       uri = URI.parse(@base_url)
       response = nil
-      req_headers = headers(extra_headers)
+      req_headers = headers(extra_headers, method: method)
 
       (@max_retries + 1).times do |attempt|
         begin
@@ -270,15 +259,35 @@ module Anthropic
       raise APIError.new("Request failed after #{@max_retries} retries")
     end
 
-    private def headers(extra_headers : Hash(String, String)? = nil) : HTTP::Headers
+    private def encode_query_params(params : QueryParams) : String
+      query = URI::Params.new
+
+      params.each do |key, value|
+        case value
+        when Array
+          value.each { |item| query.add(key, item) }
+        else
+          query.add(key, value)
+        end
+      end
+
+      query.to_s
+    end
+
+    private def headers(extra_headers : Hash(String, String)? = nil, content_type : String? = "application/json", method : String? = nil) : HTTP::Headers
       HTTP::Headers{
         "x-api-key"         => @api_key,
         "anthropic-version" => API_VERSION,
-        "content-type"      => "application/json",
         "user-agent"        => "anthropic-crystal/#{VERSION}",
-      }.tap do |headers|
-        @default_headers.each { |key, value| headers[key] = value }
-        extra_headers.try &.each { |key, value| headers[key] = value }
+      }.tap do |hdrs|
+        hdrs["content-type"] = content_type if content_type
+        @default_headers.each { |key, value| hdrs[key] = value }
+        extra_headers.try &.each { |key, value| hdrs[key] = value }
+
+        # Inject idempotency key automatically for mutating methods if not already set
+        if method && {"POST", "PUT", "DELETE", "PATCH"}.includes?(method) && !hdrs.has_key?("idempotency-key") && !hdrs.has_key?("Idempotency-Key")
+          hdrs["idempotency-key"] = UUID.random.to_s
+        end
       end
     end
 

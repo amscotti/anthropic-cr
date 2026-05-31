@@ -5,14 +5,14 @@ This document provides comprehensive information for working with the anthropic-
 ## Library Metadata
 
 - **Library name:** `anthropic-cr`
-- **Current version:** 0.6.0
+- **Current version:** 0.7.0
 - **Anthropic API version:** `2023-06-01`
 - **Crystal requirement:** `>= 1.18.2`
 - **Repository:** https://github.com/amscotti/anthropic-cr
 - **License:** MIT
 - **Top-level module:** `Anthropic` (note: *not* `Anthropic::CR`)
 - **Entry point:** `src/anthropic-cr.cr`
-- **Tracks:** Opus 4.7 / April 2026 release of the official Python / Ruby / TypeScript SDKs
+- **Tracks:** Opus 4.8 / May 2026 release of the official Python / Ruby / TypeScript SDKs
 
 ### Terminology / Synonyms
 
@@ -157,7 +157,7 @@ require "anthropic-cr"
 client = Anthropic::Client.new  # Uses ANTHROPIC_API_KEY env var
 
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_7,  # or :opus via Anthropic.model_name(:opus)
+  model: Anthropic::Model::CLAUDE_OPUS_4_8,  # or :opus via Anthropic.model_name(:opus)
   max_tokens: 1024,
   messages: [{role: "user", content: "Hello, Claude!"}]
 )
@@ -819,7 +819,7 @@ Beta-only params on `client.beta.messages.create` / `stream` / `open_stream` / `
 
 ```crystal
 client.beta.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  model: Anthropic::Model::CLAUDE_OPUS_4_8,
   max_tokens: 1024,
   messages: messages,
 
@@ -1148,11 +1148,12 @@ end
 
 ```crystal
 # Rolling aliases — point at the current default precise models
-Anthropic::Model::CLAUDE_OPUS     # "claude-opus-4-7"
+Anthropic::Model::CLAUDE_OPUS     # "claude-opus-4-8"
 Anthropic::Model::CLAUDE_SONNET   # "claude-sonnet-4-6"
 Anthropic::Model::CLAUDE_HAIKU    # "claude-haiku-4-5"
 
 # Latest precise models
+Anthropic::Model::CLAUDE_OPUS_4_8          # "claude-opus-4-8"
 Anthropic::Model::CLAUDE_OPUS_4_7          # "claude-opus-4-7"
 Anthropic::Model::CLAUDE_MYTHOS_PREVIEW    # "claude-mythos-preview"
 Anthropic::Model::CLAUDE_OPUS_4_6          # "claude-opus-4-6"
@@ -1161,13 +1162,13 @@ Anthropic::Model::CLAUDE_SONNET_4_6        # "claude-sonnet-4-6"
 Anthropic::Model::CLAUDE_SONNET_4_5        # "claude-sonnet-4-5-20250929"
 Anthropic::Model::CLAUDE_HAIKU_4_5         # "claude-haiku-4-5-20251001"
 
-# Deprecated (EOL June 15, 2026) — migrate to 4.5+ / 4.6+ / 4.7
+# Deprecated (EOL June 15, 2026) — migrate to 4.5+ / 4.6+ / 4.8
 Anthropic::Model::CLAUDE_OPUS_4_1
 Anthropic::Model::CLAUDE_OPUS_4
 Anthropic::Model::CLAUDE_SONNET_4
 
 # Model shorthands
-Anthropic.model_name(:opus)       # => "claude-opus-4-7"
+Anthropic.model_name(:opus)       # => "claude-opus-4-8"
 Anthropic.model_name(:opus_4_7)   # => "claude-opus-4-7"
 Anthropic.model_name(:mythos)     # => "claude-mythos-preview"
 Anthropic.model_name(:opus_4_6)   # => "claude-opus-4-6"
@@ -1573,7 +1574,7 @@ Pass `user_profile_id:` to a beta messages call to scope per-user state:
 
 ```crystal
 message = client.beta.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  model: Anthropic::Model::CLAUDE_OPUS_4_8,
   max_tokens: 512,
   user_profile_id: profile.id,  # Auto-adds user-profiles-2026-03-24 beta header
   messages: [{role: "user", content: "Welcome back!"}]
@@ -1605,7 +1606,7 @@ advisor = Anthropic::AdvisorTool.new(
 )
 
 message = client.beta.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  model: Anthropic::Model::CLAUDE_OPUS_4_8,
   max_tokens: 2048,
   server_tools: [advisor] of Anthropic::ServerTool,
   messages: [{role: "user", content: "Review this payload for abuse patterns: ..."}]
@@ -2171,7 +2172,7 @@ client.beta.messages.tool_runner(
 | `src/anthropic-cr/models/params.cr` | Request parameters including `OutputConfig`, `BetaTokenTaskBudget`, `BetaMessageCreateParams#user_profile_id` |
 | `src/anthropic-cr/models/role.cr` | Role enum |
 | `src/anthropic-cr/models/usage.cr` | Usage struct |
-| `src/anthropic-cr/models/model_info.cr` | Model constants (`CLAUDE_OPUS_4_7`, `CLAUDE_MYTHOS_PREVIEW`), `ModelInfo`, `EffortCapability` (with `xhigh`) |
+| `src/anthropic-cr/models/model_info.cr` | Model constants (`CLAUDE_OPUS_4_8`, `CLAUDE_OPUS_4_7`, `CLAUDE_MYTHOS_PREVIEW`), `ModelInfo`, `EffortCapability` (with `xhigh`) |
 
 ### Resource Files
 
@@ -2221,16 +2222,17 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.6.0 (April 2026)
+- **Current Version**: 0.7.0 (May 2026)
 - **API Version**: 2023-06-01
 - **Crystal Version**: >= 1.18.2
-- **Tracks**: Opus 4.7 / April 2026 release of the official Python (0.96.0), Ruby (1.35.0), and TypeScript SDKs
-- **Previous version**: 0.5.0 (Opus 4.6 / February 2026)
+- **Tracks**: Opus 4.8 / May 2026 release of the official Python (0.105.0), Ruby (1.44.0), and TypeScript SDKs
+- **Previous version**: 0.6.0 (Opus 4.7 / April 2026)
 
 ### Version History Highlights
 
 | Version | Release | Notable additions |
 |---------|---------|-------------------|
+| 0.7.0 | May 2026 | Opus 4.8 support, OutputTokensDetails (`thinking_tokens`), MidConversationSystemContent (`mid_conv_system`) blocks. |
 | 0.6.0 | April 2026 | Opus 4.7 + Mythos Preview models, User Profiles API, Advisor tool, `BetaTokenTaskBudget`, citation location union, encrypted compaction, `error_type` on `APIError`, 413/504/529 errors, typed stream errors |
 | 0.5.0 | February 2026 | Opus 4.6, adaptive thinking, Skills API, `open_stream`, structured outputs |
 

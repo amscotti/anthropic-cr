@@ -162,10 +162,7 @@ module Anthropic
       params["page"] = page if page
       params["source"] = source if source
 
-      path = "/v1/skills?beta=true"
-      params.each { |k, v| path += "&#{k}=#{URI.encode_path_segment(v)}" }
-
-      response = @client.get(path, nil, beta_headers)
+      response = @client.get("/v1/skills?beta=true", params, beta_headers)
       SkillListResponse.from_json(response.body)
     end
 
@@ -233,11 +230,10 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
     ) : SkillVersionListResponse
-      path = "/v1/skills/#{skill_id}/versions?beta=true"
-      path += "&limit=#{limit}"
-      path += "&page=#{URI.encode_path_segment(page)}" if page
+      params = {"limit" => limit.to_s}
+      params["page"] = page if page
 
-      response = @client.get(path, nil, beta_headers)
+      response = @client.get("/v1/skills/#{skill_id}/versions?beta=true", params, beta_headers)
       SkillVersionListResponse.from_json(response.body)
     end
 

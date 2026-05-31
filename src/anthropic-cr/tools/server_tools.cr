@@ -48,7 +48,52 @@ module Anthropic
     betas
   end
 
+  # Resolve and compile the complete "anthropic-beta" headers mapping
+  def self.resolve_beta_headers(
+    betas : Array(String) = [] of String,
+    server_tools : Enumerable(ServerTool | ToolDefinition)? = nil,
+    cache_control : CacheControl? = nil,
+    diagnostics : DiagnosticsParam? = nil,
+    output_format : OutputFormat? = nil,
+    output_config : OutputConfig? = nil,
+    include_token_counting : Bool = false,
+    include_user_profiles : Bool = false,
+  ) : Hash(String, String)?
+    merged = betas.dup
+
+    if include_token_counting
+      merged << TOKEN_COUNTING_BETA unless merged.includes?(TOKEN_COUNTING_BETA)
+    end
+
+    if include_user_profiles
+      merged << USER_PROFILES_BETA unless merged.includes?(USER_PROFILES_BETA)
+    end
+
+    if cache_control.try { |cache| (cache.ttl || 0) > 0 }
+      merged << EXTENDED_CACHE_TTL_BETA unless merged.includes?(EXTENDED_CACHE_TTL_BETA)
+    end
+
+    if diagnostics
+      merged << CACHE_DIAGNOSTICS_BETA unless merged.includes?(CACHE_DIAGNOSTICS_BETA)
+    end
+
+    if output_format || output_config.try(&.format)
+      merged << STRUCTURED_OUTPUT_BETA unless merged.includes?(STRUCTURED_OUTPUT_BETA)
+    end
+
+    if server_tools
+      beta_headers_for_tools(server_tools).each do |beta|
+        merged << beta unless merged.includes?(beta)
+      end
+    end
+
+    return nil if merged.empty?
+    {"anthropic-beta" => merged.join(",")}
+  end
+
   # Beta header constants
+  CACHE_DIAGNOSTICS_BETA      = "cache-diagnosis-2026-04-07"
+  MANAGED_AGENTS_BETA         = "managed-agents-2026-04-01"
   WEB_SEARCH_BETA             = "web-search-2025-03-05"
   STRUCTURED_OUTPUT_BETA      = "structured-outputs-2025-12-15"
   FILES_API_BETA              = "files-api-2025-04-14"

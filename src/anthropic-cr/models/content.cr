@@ -341,6 +341,24 @@ module Anthropic
     end
   end
 
+  # Mid-conversation system instructions content block.
+  #
+  # Use this block to provide or update system-level instructions at a specific
+  # point in the conversation, rather than only via the top-level `system` parameter.
+  struct MidConversationSystemContent
+    include JSON::Serializable
+
+    getter type : String = "mid_conv_system"
+    getter content : Array(TextContent)
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(@content : Array(TextContent), @cache_control : CacheControl? = nil)
+      @type = "mid_conv_system"
+    end
+  end
+
   # Document content block
   struct DocumentContent
     include JSON::Serializable
@@ -997,12 +1015,11 @@ module Anthropic
   alias ContentBlock = TextContent | ImageContent | ToolUseContent | ToolResultContent |
                        ThinkingContent | RedactedThinkingContent | DocumentContent |
                        SearchResultContent | ContainerUploadContent | CompactionContent |
-                       ServerToolUseContent | WebSearchToolResultContent |
-                       CodeExecutionToolResultContent | WebFetchToolResultContent |
-                       ToolSearchToolResultContent | BashCodeExecutionToolResultContent |
-                       TextEditorCodeExecutionToolResultContent |
-                       MCPToolUseContent | MCPToolResultContent |
-                       AdvisorToolResultContent
+                       MidConversationSystemContent | ServerToolUseContent |
+                       WebSearchToolResultContent | CodeExecutionToolResultContent |
+                       WebFetchToolResultContent | ToolSearchToolResultContent |
+                       BashCodeExecutionToolResultContent | TextEditorCodeExecutionToolResultContent |
+                       MCPToolUseContent | MCPToolResultContent | AdvisorToolResultContent
 
   # JSON converter for discriminated union parsing of content blocks
   #
@@ -1031,6 +1048,7 @@ module Anthropic
       when "search_result"     then SearchResultContent.from_json(raw)
       when "container_upload"  then ContainerUploadContent.from_json(raw)
       when "compaction"        then CompactionContent.from_json(raw)
+      when "mid_conv_system"   then MidConversationSystemContent.from_json(raw)
       end
     end
 

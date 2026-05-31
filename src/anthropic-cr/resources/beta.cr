@@ -51,6 +51,26 @@ module Anthropic
     def user_profiles : BetaUserProfiles
       BetaUserProfiles.new(@client)
     end
+
+    # Access beta environments API
+    def environments : BetaEnvironments
+      BetaEnvironments.new(@client)
+    end
+
+    # Access beta memory stores API
+    def memory_stores : BetaMemoryStores
+      BetaMemoryStores.new(@client)
+    end
+
+    # Access beta sessions API
+    def sessions : BetaSessions
+      BetaSessions.new(@client)
+    end
+
+    # Access beta webhooks verification utility
+    def webhooks : BetaWebhooks
+      BetaWebhooks.new(@client)
+    end
   end
 
   # Beta Messages API with explicit beta header support
@@ -161,6 +181,7 @@ module Anthropic
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
       user_profile_id : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -196,7 +217,8 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
-        user_profile_id: user_profile_id
+        user_profile_id: user_profile_id,
+        diagnostics: diagnostics
       )
 
       beta_headers = build_beta_headers(
@@ -205,6 +227,7 @@ module Anthropic
         output_format,
         resolved_output_config,
         cache_control,
+        diagnostics: diagnostics,
         include_user_profiles_beta: !user_profile_id.nil?
       )
       response = @client.post("/v1/messages", params, beta_headers)
@@ -250,6 +273,7 @@ module Anthropic
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
       user_profile_id : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
       &
     )
       open_stream(
@@ -277,7 +301,8 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
-        user_profile_id: user_profile_id
+        user_profile_id: user_profile_id,
+        diagnostics: diagnostics
       ) do |stream|
         stream.each { |event| yield event }
       end
@@ -310,6 +335,7 @@ module Anthropic
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
       user_profile_id : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
       &
     )
       typed_messages = normalize_messages(messages)
@@ -340,7 +366,8 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
-        user_profile_id: user_profile_id
+        user_profile_id: user_profile_id,
+        diagnostics: diagnostics
       )
 
       beta_headers = build_beta_headers(
@@ -349,6 +376,7 @@ module Anthropic
         output_format,
         resolved_output_config,
         cache_control,
+        diagnostics: diagnostics,
         include_user_profiles_beta: !user_profile_id.nil?
       )
 
@@ -376,6 +404,7 @@ module Anthropic
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
       speed : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
     ) : TokenCountResponse
       typed_messages = normalize_messages(messages)
       tool_definitions = build_tool_definitions(tools, server_tools)
@@ -396,7 +425,8 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
-        speed: speed
+        speed: speed,
+        diagnostics: diagnostics
       )
 
       beta_headers = build_beta_headers(
@@ -405,6 +435,7 @@ module Anthropic
         output_format,
         resolved_output_config,
         cache_control,
+        diagnostics: diagnostics,
         include_token_counting_beta: true
       )
 
@@ -437,6 +468,8 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      user_profile_id : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
     ) : ParsedMessage(T) forall T
       message = create(
         model: model,
@@ -462,7 +495,9 @@ module Anthropic
         inference_geo: inference_geo,
         context_management: context_management,
         container: container,
-        mcp_servers: mcp_servers
+        mcp_servers: mcp_servers,
+        user_profile_id: user_profile_id,
+        diagnostics: diagnostics
       )
 
       ParsedMessage(T).new(message, message.parsed_output_as!(T))
@@ -493,6 +528,8 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      user_profile_id : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
     ) : ParsedMessage(JSON::Any)
       message = create(
         model: model,
@@ -518,7 +555,9 @@ module Anthropic
         inference_geo: inference_geo,
         context_management: context_management,
         container: container,
-        mcp_servers: mcp_servers
+        mcp_servers: mcp_servers,
+        user_profile_id: user_profile_id,
+        diagnostics: diagnostics
       )
 
       ParsedMessage(JSON::Any).new(message, message.parsed_output_as!(JSON::Any))
@@ -576,34 +615,20 @@ module Anthropic
       output_format : OutputFormat?,
       output_config : OutputConfig?,
       cache_control : CacheControl?,
+      diagnostics : DiagnosticsParam? = nil,
       include_token_counting_beta : Bool = false,
       include_user_profiles_beta : Bool = false,
     ) : Hash(String, String)?
-      merged_betas = betas.dup
-
-      if include_token_counting_beta
-        merged_betas << TOKEN_COUNTING_BETA unless merged_betas.includes?(TOKEN_COUNTING_BETA)
-      end
-
-      if include_user_profiles_beta
-        merged_betas << USER_PROFILES_BETA unless merged_betas.includes?(USER_PROFILES_BETA)
-      end
-
-      if requires_extended_cache_beta?(cache_control)
-        merged_betas << EXTENDED_CACHE_TTL_BETA unless merged_betas.includes?(EXTENDED_CACHE_TTL_BETA)
-      end
-
-      if output_format || output_config.try(&.format)
-        merged_betas << STRUCTURED_OUTPUT_BETA unless merged_betas.includes?(STRUCTURED_OUTPUT_BETA)
-      end
-
-      Anthropic.beta_headers_for_tools(server_tools).each do |beta|
-        merged_betas << beta unless merged_betas.includes?(beta)
-      end
-
-      return nil if merged_betas.empty?
-
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.resolve_beta_headers(
+        betas: betas,
+        server_tools: server_tools,
+        cache_control: cache_control,
+        diagnostics: diagnostics,
+        output_format: output_format,
+        output_config: output_config,
+        include_token_counting: include_token_counting_beta,
+        include_user_profiles: include_user_profiles_beta
+      )
     end
 
     private def requires_extended_cache_beta?(cache_control : CacheControl?) : Bool

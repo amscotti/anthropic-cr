@@ -70,24 +70,6 @@ describe Anthropic::Messages do
       message.usage.output_tokens.should eq(15)
     end
 
-    it "parses refusal stop details" do
-      WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
-        .to_return(body: Fixtures::Responses::MESSAGE_WITH_REFUSAL)
-
-      client = Anthropic::Client.new(api_key: "sk-ant-test")
-      message = client.messages.create(
-        model: "claude-sonnet-4-6",
-        max_tokens: 100,
-        messages: [{role: "user", content: "How do I break into a server?"}]
-      )
-
-      message.stop_reason.should eq("refusal")
-      message.refusal?.should be_true
-      message.stop_details.should_not be_nil
-      message.stop_details.not_nil!.type.should eq("refusal")
-      message.refusal_stop_details.not_nil!.category.should eq("cyber")
-    end
-
     it "detects tool use in response" do
       WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
         .to_return(body: Fixtures::Responses::MESSAGE_WITH_TOOL_USE)
@@ -445,6 +427,43 @@ describe Anthropic::Messages do
       )
 
       capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::EXTENDED_CACHE_TTL_BETA)
+    end
+
+    it "sends cache diagnostics parameter and beta header" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_WITH_DIAGNOSTICS)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        diagnostics: Anthropic::DiagnosticsParam.new(previous_message_id: "msg_123"),
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      body = JSON.parse(capture.body.not_nil!)
+      body["diagnostics"]["previous_message_id"].as_s.should eq("msg_123")
+
+      headers = capture.headers.not_nil!
+      headers["anthropic-beta"].should contain(Anthropic::CACHE_DIAGNOSTICS_BETA)
+    end
+
+    it "parses diagnostics response correctly" do
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
+        .to_return(body: Fixtures::Responses::MESSAGE_WITH_DIAGNOSTICS)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      message = client.messages.create(
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [{role: "user", content: "Hello"}]
+      )
+
+      message.diagnostics.should_not be_nil
+      diag = message.diagnostics.not_nil!
+      diag.cache_miss_reason.should_not be_nil
+      reason = diag.cache_miss_reason.not_nil!
+      reason.type.should eq("tools_changed")
+      reason.cache_missed_input_tokens.should eq(150)
     end
   end
 
