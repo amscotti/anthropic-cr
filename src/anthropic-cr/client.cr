@@ -70,7 +70,8 @@ module Anthropic
 
     # POST with any JSON::Serializable body
     def post(path : String, body, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
-      request("POST", path, body.to_json, extra_headers)
+      body_str = body.nil? ? "{}" : body.to_json
+      request("POST", path, body_str, extra_headers)
     end
 
     def delete(path : String, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
@@ -86,7 +87,8 @@ module Anthropic
         client.read_timeout = @timeout
 
         begin
-          client.post(path, headers: headers(extra_headers, method: "POST"), body: body.to_json) do |response|
+          body_str = body.nil? ? "{}" : body.to_json
+          client.post(path, headers: headers(extra_headers, method: "POST"), body: body_str) do |response|
             handle_error(response) unless response.success?
             yield response
           end

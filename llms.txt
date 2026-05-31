@@ -5,7 +5,7 @@ This document provides comprehensive information for working with the anthropic-
 ## Library Metadata
 
 - **Library name:** `anthropic-cr`
-- **Current version:** 0.7.0
+- **Current version:** 0.7.1
 - **Anthropic API version:** `2023-06-01`
 - **Crystal requirement:** `>= 1.18.2`
 - **Repository:** https://github.com/amscotti/anthropic-cr
@@ -93,7 +93,7 @@ Tracks the Opus 4.7 / April 2026 release of the official Python (0.96.0), Ruby (
 
 ## Overview
 
-The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the Opus 4.7 / April 2026 release of the official Python, Ruby, and TypeScript SDKs. Key features include:
+The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the Opus 4.8 / May 2026 release of the official Python, Ruby, and TypeScript SDKs. Key features include:
 
 - Full Messages API coverage (create and stream)
 - Tool use / function calling with Schema DSL and typed tools
@@ -104,6 +104,7 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - Beta Files API for file uploads/downloads
 - Beta Skills API (full CRUD for skills and skill versions via `client.beta.skills`)
 - **Beta User Profiles API** — create / retrieve / update / list + enrollment URLs via `client.beta.user_profiles`; `user_profile_id:` on beta messages
+- **Managed Agents API** — full environments, memory stores, agents, vaults/credentials, stateful sessions, threads, events, and secure webhook verification via `client.beta`
 - **Advisor tool** (`advisor_20260301`) — delegate sub-questions to a secondary model at runtime
 - Web Search server-side tool (`20250305` and `20260209`)
 - Agent tools (BashTool, TextEditorTool with legacy/2025-01/2025-04/2025-07 variants, ComputerUseTool with legacy and 2025-11-24 variants)
@@ -133,7 +134,7 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - **Structured `stop_details`** — `RefusalStopDetails` plus `GenericStopDetails` fallback for future variants
 - Comprehensive error handling with automatic retries (408, 409, 429, 5xx, 529)
 
-**Status**: Feature complete for core functionality. Tracks Opus 4.7 / April 2026.
+**Status**: Feature complete for core functionality. Tracks Opus 4.8 / May 2026.
 
 ---
 
@@ -2222,16 +2223,17 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.7.0 (May 2026)
+- **Current Version**: 0.7.1 (May 2026)
 - **API Version**: 2023-06-01
 - **Crystal Version**: >= 1.18.2
 - **Tracks**: Opus 4.8 / May 2026 release of the official Python (0.105.0), Ruby (1.44.0), and TypeScript SDKs
-- **Previous version**: 0.6.0 (Opus 4.7 / April 2026)
+- **Previous version**: 0.7.0 (Opus 4.8 / May 2026)
 
 ### Version History Highlights
 
 | Version | Release | Notable additions |
 |---------|---------|-------------------|
+| 0.7.1 | May 2026 | Managed Agents API: Agents (`/v1/agents`) and Vaults (`/v1/vaults`) resources and models with automated `managed-agents-2026-04-01` header injection. |
 | 0.7.0 | May 2026 | Opus 4.8 support, OutputTokensDetails (`thinking_tokens`), MidConversationSystemContent (`mid_conv_system`) blocks. |
 | 0.6.0 | April 2026 | Opus 4.7 + Mythos Preview models, User Profiles API, Advisor tool, `BetaTokenTaskBudget`, citation location union, encrypted compaction, `error_type` on `APIError`, 413/504/529 errors, typed stream errors |
 | 0.5.0 | February 2026 | Opus 4.6, adaptive thinking, Skills API, `open_stream`, structured outputs |
