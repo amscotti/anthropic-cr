@@ -123,6 +123,9 @@ module Anthropic
     @[JSON::Field(key: "stop_sequence")]
     getter stop_sequence : String?
 
+    @[JSON::Field(emit_null: false)]
+    getter diagnostics : Diagnostics?
+
     getter usage : Usage
 
     # Check if tool use is requested

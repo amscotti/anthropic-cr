@@ -186,6 +186,9 @@ module Anthropic
     @[JSON::Field(key: "inference_geo", emit_null: false)]
     getter inference_geo : String?
 
+    @[JSON::Field(emit_null: false)]
+    getter diagnostics : DiagnosticsParam?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
@@ -205,6 +208,7 @@ module Anthropic
       @container : String? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
+      @diagnostics : DiagnosticsParam? = nil,
     )
     end
   end
@@ -422,6 +426,9 @@ module Anthropic
     @[JSON::Field(key: "user_profile_id", emit_null: false)]
     getter user_profile_id : String?
 
+    @[JSON::Field(emit_null: false)]
+    getter diagnostics : DiagnosticsParam?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
@@ -446,6 +453,7 @@ module Anthropic
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
       @user_profile_id : String? = nil,
+      @diagnostics : DiagnosticsParam? = nil,
     )
     end
   end
@@ -493,6 +501,9 @@ module Anthropic
     @[JSON::Field(key: "mcp_servers", emit_null: false)]
     getter mcp_servers : Array(MCPServerDefinition)?
 
+    @[JSON::Field(emit_null: false)]
+    getter diagnostics : DiagnosticsParam?
+
     def initialize(
       @model : String,
       @messages : Array(MessageParam),
@@ -508,6 +519,7 @@ module Anthropic
       @context_management : ContextManagementConfig? = nil,
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
+      @diagnostics : DiagnosticsParam? = nil,
     )
     end
   end
@@ -540,6 +552,9 @@ module Anthropic
     @[JSON::Field(key: "inference_geo", emit_null: false)]
     getter inference_geo : String?
 
+    @[JSON::Field(emit_null: false)]
+    getter diagnostics : DiagnosticsParam?
+
     def initialize(
       @model : String,
       @messages : Array(MessageParam),
@@ -550,6 +565,7 @@ module Anthropic
       @cache_control : CacheControl? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
+      @diagnostics : DiagnosticsParam? = nil,
     )
     end
   end

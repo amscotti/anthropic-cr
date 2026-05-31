@@ -58,6 +58,16 @@ message.content.each do |block|
 end
 
 puts
+puts "📊 TOKEN USAGE:"
+puts "-" * 40
+puts "Input tokens:  #{message.usage.input_tokens}"
+puts "Output tokens: #{message.usage.output_tokens}"
+if details = message.usage.output_tokens_details
+  puts "  - Thinking tokens: #{details.thinking_tokens}"
+  puts "  - Standard tokens: #{message.usage.output_tokens - details.thinking_tokens}"
+end
+
+puts
 puts "=" * 60
 
 # Another example with streaming
@@ -93,6 +103,18 @@ client.messages.stream(
         thinking_shown = true
       end
       print text
+    end
+  when Anthropic::MessageDeltaEvent
+    if usage = event.usage
+      puts
+      puts
+      puts "📊 STREAMING USAGE:"
+      puts "-" * 40
+      puts "Output tokens: #{usage.output_tokens}"
+      if details = usage.output_tokens_details
+        puts "  - Thinking tokens: #{details.thinking_tokens}"
+        puts "  - Standard tokens: #{usage.output_tokens - details.thinking_tokens}"
+      end
     end
   end
 end

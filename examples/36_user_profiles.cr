@@ -34,7 +34,7 @@ begin
 
   profile = client.beta.user_profiles.create(
     external_id: "user-#{Random.new.hex(4)}",
-    metadata: {"plan" => "pro", "beta_cohort" => "opus-4-7"}
+    metadata: {"plan" => "pro", "beta_cohort" => "opus-4-8"}
   )
 
   puts "Created: #{profile.id}"
@@ -59,7 +59,7 @@ begin
   puts
 
   message = client.beta.messages.create(
-    model: Anthropic::Model::CLAUDE_OPUS_4_7,
+    model: Anthropic::Model::CLAUDE_OPUS_4_8,
     max_tokens: 512,
     user_profile_id: profile.id,
     messages: [

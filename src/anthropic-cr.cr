@@ -1,6 +1,7 @@
 require "json"
 require "http/client"
 require "json-schema"
+require "uuid"
 
 # Core modules
 require "./anthropic-cr/version"
@@ -13,6 +14,11 @@ require "./anthropic-cr/models/content"
 require "./anthropic-cr/models/usage"
 require "./anthropic-cr/models/message"
 require "./anthropic-cr/models/model_info"
+require "./anthropic-cr/models/diagnostics"
+require "./anthropic-cr/models/environments"
+require "./anthropic-cr/models/memory_stores"
+require "./anthropic-cr/models/sessions"
+require "./anthropic-cr/models/webhooks"
 
 # Streaming
 require "./anthropic-cr/streaming/events"
@@ -35,6 +41,10 @@ require "./anthropic-cr/resources/models"
 require "./anthropic-cr/resources/files"
 require "./anthropic-cr/resources/skills"
 require "./anthropic-cr/resources/user_profiles"
+require "./anthropic-cr/resources/environments"
+require "./anthropic-cr/resources/memory_stores"
+require "./anthropic-cr/resources/sessions"
+require "./anthropic-cr/resources/webhooks"
 require "./anthropic-cr/resources/beta"
 
 # Client (must come after resources that define types used in Client methods)

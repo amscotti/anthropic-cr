@@ -6,9 +6,12 @@ module Anthropic
     # These intentionally point at the current default API names and may duplicate
     # the latest precise constants when Anthropic's rolling alias already resolves
     # to a single concrete model name.
-    CLAUDE_OPUS   = "claude-opus-4-7"
+    CLAUDE_OPUS   = "claude-opus-4-8"
     CLAUDE_SONNET = "claude-sonnet-4-6"
     CLAUDE_HAIKU  = "claude-haiku-4-5"
+
+    # Claude 4.8
+    CLAUDE_OPUS_4_8 = "claude-opus-4-8"
 
     # Claude 4.7 — Frontier intelligence for long-running agents and coding
     CLAUDE_OPUS_4_7 = "claude-opus-4-7"
@@ -56,7 +59,8 @@ module Anthropic
   # ```
   def self.model_name(shorthand : Symbol) : String
     case shorthand
-    when :opus       then Model::CLAUDE_OPUS_4_7
+    when :opus       then Model::CLAUDE_OPUS_4_8
+    when :opus_4_8   then Model::CLAUDE_OPUS_4_8
     when :opus_4_7   then Model::CLAUDE_OPUS_4_7
     when :mythos     then Model::CLAUDE_MYTHOS_PREVIEW
     when :sonnet     then Model::CLAUDE_SONNET_4_6
@@ -71,7 +75,7 @@ module Anthropic
     else
       raise ArgumentError.new(
         "Unknown model shorthand: #{shorthand}. " \
-        "Valid options: :opus, :opus_4_7, :mythos, :sonnet, :haiku, :opus_4_6, :sonnet_4_6, " \
+        "Valid options: :opus, :opus_4_8, :opus_4_7, :mythos, :sonnet, :haiku, :opus_4_6, :sonnet_4_6, " \
         ":opus_4_5, :sonnet_4_5, :opus_4_1, :opus_4, :sonnet_4"
       )
     end

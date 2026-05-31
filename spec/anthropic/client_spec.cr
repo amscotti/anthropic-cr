@@ -352,4 +352,73 @@ describe Anthropic::Client do
       runner.should be_a(Anthropic::ToolRunner)
     end
   end
+
+  describe "centralized beta headers resolution" do
+    it "combines caching, diagnostics, and tools headers correctly" do
+      # Test cache beta
+      cache = Anthropic::CacheControl.one_hour
+      headers = Anthropic.resolve_beta_headers(cache_control: cache)
+      headers.should_not be_nil
+      headers.not_nil!["anthropic-beta"].should contain(Anthropic::EXTENDED_CACHE_TTL_BETA)
+
+      # Test diagnostics beta
+      diag = Anthropic::DiagnosticsParam.new("msg_123")
+      headers = Anthropic.resolve_beta_headers(diagnostics: diag)
+      headers.should_not be_nil
+      headers.not_nil!["anthropic-beta"].should contain(Anthropic::CACHE_DIAGNOSTICS_BETA)
+
+      # Test tools beta
+      tools = [Anthropic::WebSearchTool.new]
+      headers = Anthropic.resolve_beta_headers(server_tools: tools)
+      headers.should_not be_nil
+      headers.not_nil!["anthropic-beta"].should contain(Anthropic::WEB_SEARCH_BETA)
+
+      # Test combination
+      headers = Anthropic.resolve_beta_headers(
+        betas: ["custom-beta"],
+        server_tools: tools,
+        cache_control: cache,
+        diagnostics: diag
+      )
+      headers.should_not be_nil
+      val = headers.not_nil!["anthropic-beta"]
+      val.should contain("custom-beta")
+      val.should contain(Anthropic::EXTENDED_CACHE_TTL_BETA)
+      val.should contain(Anthropic::CACHE_DIAGNOSTICS_BETA)
+      val.should contain(Anthropic::WEB_SEARCH_BETA)
+    end
+  end
+
+  describe "automated idempotency keys" do
+    it "automatically generates a UUID idempotency key on POST requests" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.post("/v1/messages", {test: "body"})
+
+      headers = capture.headers.not_nil!
+      headers.has_key?("idempotency-key").should be_true
+      headers["idempotency-key"].should match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+    end
+
+    it "respects manually supplied idempotency keys and does not overwrite them" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.post("/v1/messages", {test: "body"}, {"idempotency-key" => "user-custom-key-123"})
+
+      headers = capture.headers.not_nil!
+      headers["idempotency-key"].should eq("user-custom-key-123")
+    end
+
+    it "does not generate an idempotency key on GET requests" do
+      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/models/claude-sonnet-4-6", Fixtures::Responses::MODEL_INFO)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.get("/v1/models/claude-sonnet-4-6")
+
+      headers = capture.headers.not_nil!
+      headers.has_key?("idempotency-key").should be_false
+    end
+  end
 end

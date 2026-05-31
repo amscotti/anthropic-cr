@@ -30,6 +30,18 @@ module Anthropic
     end
   end
 
+  # Breakdown of output tokens by type (e.g. thinking tokens)
+  struct OutputTokensDetails
+    include JSON::Serializable
+
+    # Number of output tokens generated as internal reasoning
+    @[JSON::Field(key: "thinking_tokens")]
+    getter thinking_tokens : Int32
+
+    def initialize(@thinking_tokens : Int32)
+    end
+  end
+
   # Token usage statistics for API requests
   #
   # Tracks input and output tokens, as well as prompt caching statistics
@@ -68,6 +80,10 @@ module Anthropic
     # Geographic region where inference was performed
     @[JSON::Field(key: "inference_geo")]
     getter inference_geo : String?
+
+    # Breakdown of output tokens by type (e.g. thinking)
+    @[JSON::Field(key: "output_tokens_details")]
+    getter output_tokens_details : OutputTokensDetails?
   end
 
   # Response from the token counting API
@@ -119,5 +135,9 @@ module Anthropic
     # Number of output tokens generated
     @[JSON::Field(key: "output_tokens")]
     getter output_tokens : Int32
+
+    # Breakdown of output tokens by type (e.g. thinking)
+    @[JSON::Field(key: "output_tokens_details")]
+    getter output_tokens_details : OutputTokensDetails?
   end
 end

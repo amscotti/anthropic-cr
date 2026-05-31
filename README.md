@@ -335,7 +335,7 @@ Control how much effort Claude puts into a response:
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  model: Anthropic::Model::CLAUDE_OPUS_4_8,
   max_tokens: 16384,
   thinking: Anthropic::ThinkingConfig.adaptive,
   output_config: Anthropic::OutputConfig.new(effort: "xhigh"),
@@ -353,7 +353,7 @@ Cap total token usage across contexts in a session via `output_config.task_budge
 budget = Anthropic::BetaTokenTaskBudget.new(total: 200_000)
 
 message = client.beta.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  model: Anthropic::Model::CLAUDE_OPUS_4_8,
   max_tokens: 4096,
   output_config: Anthropic::OutputConfig.new(effort: "xhigh", task_budget: budget),
   messages: [{role: "user", content: "Summarize the attached docs..."}]
@@ -565,7 +565,7 @@ advisor = Anthropic::AdvisorTool.new(
 )
 
 message = client.beta.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  model: Anthropic::Model::CLAUDE_OPUS_4_8,
   max_tokens: 2048,
   server_tools: [advisor] of Anthropic::ServerTool,
   messages: [{role: "user", content: "Review this payload for abuse patterns: ..."}]
@@ -600,7 +600,7 @@ puts enrollment.url
 
 # Scope a subsequent message to that profile
 message = client.beta.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_7,
+  model: Anthropic::Model::CLAUDE_OPUS_4_8,
   max_tokens: 512,
   user_profile_id: profile.id,
   messages: [{role: "user", content: "Welcome back!"}]
@@ -616,11 +616,12 @@ client.beta.user_profiles.update(profile.id, metadata: {"plan" => "enterprise"})
 
 ```crystal
 # Rolling aliases — point at the current default precise models
-Anthropic::Model::CLAUDE_OPUS          # => "claude-opus-4-7"
+Anthropic::Model::CLAUDE_OPUS          # => "claude-opus-4-8"
 Anthropic::Model::CLAUDE_SONNET        # => "claude-sonnet-4-6"
 Anthropic::Model::CLAUDE_HAIKU         # => "claude-haiku-4-5"
 
 # Latest precise models
+Anthropic::Model::CLAUDE_OPUS_4_8          # Frontier intelligence (May 2026)
 Anthropic::Model::CLAUDE_OPUS_4_7          # Frontier intelligence (April 2026)
 Anthropic::Model::CLAUDE_MYTHOS_PREVIEW    # Coding & cybersecurity-focused preview
 Anthropic::Model::CLAUDE_OPUS_4_6          # Opus 4.6

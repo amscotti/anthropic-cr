@@ -74,12 +74,13 @@ end
 
 describe Anthropic::Model do
   it "has rolling alias constants for current default models" do
-    Anthropic::Model::CLAUDE_OPUS.should eq("claude-opus-4-7")
+    Anthropic::Model::CLAUDE_OPUS.should eq("claude-opus-4-8")
     Anthropic::Model::CLAUDE_SONNET.should eq("claude-sonnet-4-6")
     Anthropic::Model::CLAUDE_HAIKU.should eq("claude-haiku-4-5")
   end
 
   it "has precise versioned model constants" do
+    Anthropic::Model::CLAUDE_OPUS_4_8.should eq("claude-opus-4-8")
     Anthropic::Model::CLAUDE_OPUS_4_7.should eq("claude-opus-4-7")
     Anthropic::Model::CLAUDE_MYTHOS_PREVIEW.should eq("claude-mythos-preview")
     Anthropic::Model::CLAUDE_OPUS_4_6.should eq("claude-opus-4-6")
@@ -93,12 +94,16 @@ describe Anthropic::Model do
   end
 
   it "maps rolling aliases to the current precise defaults where applicable" do
-    Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_4_7)
+    Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_4_8)
     Anthropic::Model::CLAUDE_SONNET.should eq(Anthropic::Model::CLAUDE_SONNET_4_6)
   end
 
-  it "maps :opus shorthand to Opus 4.7" do
-    Anthropic.model_name(:opus).should eq("claude-opus-4-7")
+  it "maps :opus shorthand to Opus 4.8" do
+    Anthropic.model_name(:opus).should eq("claude-opus-4-8")
+  end
+
+  it "maps :opus_4_8 shorthand to the precise 4.8 model id" do
+    Anthropic.model_name(:opus_4_8).should eq("claude-opus-4-8")
   end
 
   it "maps :opus_4_7 shorthand to the precise 4.7 model id" do

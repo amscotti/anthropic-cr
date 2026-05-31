@@ -31,7 +31,7 @@ advisor = Anthropic::AdvisorTool.new(
 
 begin
   message = client.beta.messages.create(
-    model: Anthropic::Model::CLAUDE_OPUS_4_7,
+    model: Anthropic::Model::CLAUDE_OPUS_4_8,
     max_tokens: 2048,
     server_tools: [advisor] of Anthropic::ServerTool,
     messages: [

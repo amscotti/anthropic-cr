@@ -58,6 +58,7 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -83,10 +84,11 @@ module Anthropic
         cache_control: cache_control,
         container: container,
         output_config: output_config,
-        inference_geo: inference_geo
+        inference_geo: inference_geo,
+        diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics)
 
       response = @client.post("/v1/messages", params, beta_headers)
       Message.from_json(response.body)
@@ -125,6 +127,7 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
       &
     )
       open_stream(
@@ -145,7 +148,8 @@ module Anthropic
         cache_control: cache_control,
         container: container,
         output_config: output_config,
-        inference_geo: inference_geo
+        inference_geo: inference_geo,
+        diagnostics: diagnostics
       ) do |stream|
         stream.each { |event| yield event }
       end
@@ -171,6 +175,7 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
       &
     )
       typed_messages = normalize_messages(messages)
@@ -194,10 +199,11 @@ module Anthropic
         cache_control: cache_control,
         container: container,
         output_config: output_config,
-        inference_geo: inference_geo
+        inference_geo: inference_geo,
+        diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics)
 
       @client.post_stream("/v1/messages", params, beta_headers) do |response|
         yield MessageStream.new(response)
@@ -232,6 +238,7 @@ module Anthropic
       cache_control : CacheControl? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
+      diagnostics : DiagnosticsParam? = nil,
     ) : TokenCountResponse
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -248,10 +255,11 @@ module Anthropic
         thinking: thinking,
         cache_control: cache_control,
         output_config: output_config,
-        inference_geo: inference_geo
+        inference_geo: inference_geo,
+        diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics)
 
       response = @client.post("/v1/messages/count_tokens", params, beta_headers)
       TokenCountResponse.from_json(response.body)
@@ -290,18 +298,12 @@ module Anthropic
     end
 
     # Build beta headers based on server tools used
-    private def build_beta_headers(server_tools : Array(ServerTool)?, cache_control : CacheControl?) : Hash(String, String)?
-      betas = [] of String
-
-      if requires_extended_cache_beta?(cache_control)
-        betas << EXTENDED_CACHE_TTL_BETA
-      end
-
-      betas.concat(Anthropic.beta_headers_for_tools(server_tools))
-
-      return nil if betas.empty?
-
-      {"anthropic-beta" => betas.join(",")}
+    private def build_beta_headers(server_tools : Array(ServerTool)?, cache_control : CacheControl?, diagnostics : DiagnosticsParam? = nil) : Hash(String, String)?
+      Anthropic.resolve_beta_headers(
+        server_tools: server_tools,
+        cache_control: cache_control,
+        diagnostics: diagnostics
+      )
     end
 
     private def requires_extended_cache_beta?(cache_control : CacheControl?) : Bool
