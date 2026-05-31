@@ -80,6 +80,7 @@ crystal run examples/01_basic_message.cr
 
 | File | Description |
 |------|-------------|
+| `34_managed_agents.cr` | Stateful Managed Agents API (environments, memory stores, agents, vaults, webhooks) |
 | `34_opus_48.cr` | Claude Opus 4.8 with `xhigh` effort and `BetaTokenTaskBudget` |
 | `35_advisor_tool.cr` | Advisor tool (`advisor_20260301`) with typed result-block handling |
 | `36_user_profiles.cr` | User Profiles API + `user_profile_id` scoped messaging |

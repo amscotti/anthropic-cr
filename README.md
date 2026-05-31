@@ -2,7 +2,7 @@
 
 An unofficial Anthropic API client for Crystal. Access Claude AI models with idiomatic Crystal code.
 
-**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Tracks the Opus 4.7 / April 2026 release of the official Python, Ruby, and TypeScript SDKs. API design inspired by official Ruby SDK patterns.
+**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, Managed Agents API (agents, environments, sessions, memory stores, vaults), tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Tracks the Opus 4.8 / May 2026 release of the official Python, Ruby, and TypeScript SDKs. API design inspired by official Ruby SDK patterns.
 
 > **Note:** A large portion of this library was written with the assistance of AI (Claude), including code, tests, and documentation.
 
@@ -51,7 +51,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ Beta Files API (upload, download, delete)
 - ✅ Token counting API
 - ✅ Prompt caching with TTL control
-- 🚧 Managed Agents (agents / environments / sessions / vaults) — planned
+- ✅ Managed Agents (agents / environments / sessions / vaults / secure webhooks)
 - 🚧 AWS Bedrock & Google Vertex support — planned
 
 ## Installation
@@ -68,7 +68,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 
 ## Beta Status
 
-Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (Opus 4.7 / April 2026 release).
+Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (Opus 4.8 / May 2026 release).
 
 Still beta upstream:
 - Files API via `client.beta.files`
@@ -76,6 +76,7 @@ Still beta upstream:
 - **User Profiles API** via `client.beta.user_profiles` (`user-profiles-2026-03-24`)
 - **Advisor tool** (`advisor-tool-2026-03-01`) via `Anthropic::AdvisorTool`
 - **Token task budgets** via `output_config.task_budget`
+- **Managed Agents API** via `client.beta.agents`, `client.beta.vaults`, `client.beta.sessions`, `client.beta.environments`, `client.beta.memory_stores`, and secure webhook verification (`managed-agents-2026-04-01`)
 - Context management (`context_management`)
 - MCP server definitions (`mcp_servers`)
 - Skill-loading container configs (`container: Anthropic::ContainerConfig`)
@@ -85,7 +86,7 @@ No longer beta upstream, but relevant in this SDK:
 - Basic container reuse (`container: String`) is available on core Messages APIs
 - Rich model capability metadata is available on the core Models API
 
-> **Note on progressive rollouts:** `task_budget`, the User Profiles API, and the Advisor tool are being enabled progressively on Anthropic accounts. The bundled examples (`34_opus_47.cr`, `35_advisor_tool.cr`, `36_user_profiles.cr`) handle the "not yet enabled" case gracefully.
+> **Note on progressive rollouts:** `task_budget`, the User Profiles API, the Advisor tool, and Managed Agents are being enabled progressively on Anthropic accounts. The bundled examples (`34_opus_48.cr`, `34_managed_agents.cr`, `35_advisor_tool.cr`, `36_user_profiles.cr`) handle the "not yet enabled" case gracefully.
 
 ## Quick Start
 
@@ -687,7 +688,8 @@ See the [examples/](./examples/) directory for complete working examples:
 - `31_open_stream.cr` - Richer block-scoped streaming with `open_stream`
 - `32_model_capabilities.cr` - Inspect richer Models API metadata and capability support
 - `33_web_fetch_cache_control.cr` - Use `WebFetchTool20260309` with `use_cache: false`
-- `34_opus_47.cr` - Claude Opus 4.7 with `xhigh` effort and `BetaTokenTaskBudget`
+- `34_opus_48.cr` - Claude Opus 4.8 with `xhigh` effort and `BetaTokenTaskBudget`
+- `34_managed_agents.cr` - Stateful Managed Agents API (environments, memory stores, agents, vaults, webhooks)
 - `35_advisor_tool.cr` - Advisor tool (`advisor_20260301`) with typed result-block handling
 - `36_user_profiles.cr` - User Profiles API create / list / enrollment and scoped messaging
 

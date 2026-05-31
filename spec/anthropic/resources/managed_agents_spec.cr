@@ -202,4 +202,135 @@ describe "Stateful Managed Agents APIs" do
       end
     end
   end
+
+  describe Anthropic::BetaAgents do
+    it "creates, retrieves, updates, lists, and archives an agent" do
+      agent_json = %({
+        "id": "agent_123",
+        "name": "My Agent",
+        "type": "agent",
+        "version": 1,
+        "description": "My test agent",
+        "metadata": {"key": "val"},
+        "model": {"id": "claude-sonnet-4-6", "type": "model_config"},
+        "system": "Pirate speak",
+        "created_at": "2026-05-24T12:00:00Z",
+        "updated_at": "2026-05-24T12:00:00Z",
+        "archived_at": null
+      })
+
+      list_json = %({
+        "data": [
+          {
+            "id": "agent_123",
+            "name": "My Agent",
+            "type": "agent",
+            "version": 1,
+            "metadata": {},
+            "model": {"id": "claude-sonnet-4-6", "type": "model_config"},
+            "created_at": "",
+            "updated_at": "",
+            "archived_at": null
+          }
+        ],
+        "has_more": false
+      })
+
+      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents?beta=true", agent_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/agents/agent_123?beta=true", agent_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123?beta=true", agent_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/agents?beta=true&limit=20", list_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123/archive?beta=true", agent_json)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+      # Create
+      agent = client.beta.agents.create(
+        model: :sonnet,
+        name: "My Agent",
+        description: "My test agent",
+        metadata: {"key" => "val"},
+        system: "Pirate speak"
+      )
+      agent.id.should eq("agent_123")
+      agent.name.should eq("My Agent")
+      agent.description.should eq("My test agent")
+      agent.metadata.not_nil!["key"].should eq("val")
+      agent.system_.should eq("Pirate speak")
+      agent.version.should eq(1)
+
+      create_body = JSON.parse(create_capture.body.not_nil!)
+      create_body["model"].as_s.should eq("claude-sonnet-4-6")
+      create_body["name"].as_s.should eq("My Agent")
+      create_body["system"].as_s.should eq("Pirate speak")
+      create_capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::MANAGED_AGENTS_BETA)
+
+      # Retrieve
+      retrieved = client.beta.agents.retrieve("agent_123")
+      retrieved.id.should eq("agent_123")
+
+      # Update
+      updated = client.beta.agents.update("agent_123", version: 1, name: "New Name")
+      updated.id.should eq("agent_123")
+
+      # List
+      list = client.beta.agents.list
+      list.data.size.should eq(1)
+      list.data.first.id.should eq("agent_123")
+      list.has_more?.should be_false
+
+      # Archive
+      archived = client.beta.agents.archive("agent_123")
+      archived.id.should eq("agent_123")
+    end
+  end
+
+  describe Anthropic::BetaVaults do
+    it "manages vaults, credentials, and validation" do
+      vault_json = %({"id":"vault_123","display_name":"test-vault","type":"vault","metadata":{"k":"v"},"created_at":"","updated_at":"","archived_at":null})
+      del_vault_json = %({"id":"vault_123","type":"vault_deleted"})
+      cred_json = %({"id":"cred_123","vault_id":"vault_123","display_name":"my-cred","type":"credential","auth":{"type":"static_bearer"},"metadata":{},"created_at":"","updated_at":"","archived_at":null})
+      del_cred_json = %({"id":"cred_123","type":"credential_deleted"})
+      val_json = %({"status":"valid"})
+
+      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults?beta=true", vault_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/vaults/vault_123?beta=true", vault_json)
+      stub_and_capture(:delete, "https://api.anthropic.com/v1/vaults/vault_123?beta=true", del_vault_json)
+
+      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults/vault_123/credentials?beta=true", cred_json)
+      stub_and_capture(:delete, "https://api.anthropic.com/v1/vaults/vault_123/credentials/cred_123?beta=true", del_cred_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults/vault_123/credentials/cred_123/mcp_oauth_validate?beta=true", val_json)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+      # Vaults
+      vault = client.beta.vaults.create(display_name: "test-vault", metadata: {"k" => "v"})
+      vault.id.should eq("vault_123")
+      vault.display_name.should eq("test-vault")
+      vault.metadata.not_nil!["k"].should eq("v")
+
+      retrieved_vault = client.beta.vaults.retrieve("vault_123")
+      retrieved_vault.id.should eq("vault_123")
+
+      deleted_vault = client.beta.vaults.delete("vault_123")
+      deleted_vault.id.should eq("vault_123")
+      deleted_vault.type.should eq("vault_deleted")
+
+      # Credentials
+      cred = client.beta.vaults.credentials.create(
+        vault_id: "vault_123",
+        auth: JSON.parse(%({"type":"static_bearer","token":"secret"})),
+        display_name: "my-cred"
+      )
+      cred.id.should eq("cred_123")
+      cred.vault_id.should eq("vault_123")
+
+      deleted_cred = client.beta.vaults.credentials.delete(vault_id: "vault_123", credential_id: "cred_123")
+      deleted_cred.id.should eq("cred_123")
+      deleted_cred.type.should eq("credential_deleted")
+
+      val = client.beta.vaults.credentials.mcp_oauth_validate(vault_id: "vault_123", credential_id: "cred_123")
+      val.status.should eq("valid")
+    end
+  end
 end

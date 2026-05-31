@@ -71,6 +71,16 @@ module Anthropic
     def webhooks : BetaWebhooks
       BetaWebhooks.new(@client)
     end
+
+    # Access beta agents API
+    def agents : BetaAgents
+      BetaAgents.new(@client)
+    end
+
+    # Access beta vaults API
+    def vaults : BetaVaults
+      BetaVaults.new(@client)
+    end
   end
 
   # Beta Messages API with explicit beta header support

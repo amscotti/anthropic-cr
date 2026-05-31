@@ -19,6 +19,8 @@ require "./anthropic-cr/models/environments"
 require "./anthropic-cr/models/memory_stores"
 require "./anthropic-cr/models/sessions"
 require "./anthropic-cr/models/webhooks"
+require "./anthropic-cr/models/agents"
+require "./anthropic-cr/models/vaults"
 
 # Streaming
 require "./anthropic-cr/streaming/events"
@@ -45,6 +47,8 @@ require "./anthropic-cr/resources/environments"
 require "./anthropic-cr/resources/memory_stores"
 require "./anthropic-cr/resources/sessions"
 require "./anthropic-cr/resources/webhooks"
+require "./anthropic-cr/resources/agents"
+require "./anthropic-cr/resources/vaults"
 require "./anthropic-cr/resources/beta"
 
 # Client (must come after resources that define types used in Client methods)

@@ -3,6 +3,23 @@
 All notable changes to `anthropic-cr` are documented here. The project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-05-31
+
+Adds support for the Managed Agents beta API, providing agent definition management and secure credential storage (Vaults).
+
+### Added — Resources
+
+- `client.beta.agents` — CRUD operations for Managed Agents. Provides `create`, `retrieve`, `update`, `list`, and `archive` endpoints.
+- `client.beta.vaults` — CRUD operations for Vaults. Provides `create`, `retrieve`, `update`, `list`, `delete`, and `archive` endpoints.
+- `client.beta.vaults.credentials` — Vault credentials API. Provides `create`, `retrieve`, `update`, `list`, `delete`, `archive`, and `mcp_oauth_validate` endpoints.
+- Automatic injection of the `managed-agents-2026-04-01` beta header (`MANAGED_AGENTS_BETA`) when using the agents and vaults resources.
+
+### Added — Models
+
+- `BetaAgent` and `BetaAgentListResponse` under `Anthropic::BetaAgent`.
+- `BetaVault`, `BetaVaultDeleteResponse`, and `BetaVaultListResponse` under `Anthropic::BetaVault`.
+- `BetaCredential`, `BetaCredentialDeleteResponse`, `BetaCredentialListResponse`, and `BetaCredentialValidation` under `Anthropic::BetaCredential`.
+
 ## [0.7.0] — 2026-05-31
 
 Tracks the Opus 4.8 / May 2026 release of the official Python (0.105.0), Ruby (1.44.0), and TypeScript SDKs.
