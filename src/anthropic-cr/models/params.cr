@@ -186,6 +186,13 @@ module Anthropic
     @[JSON::Field(key: "inference_geo", emit_null: false)]
     getter inference_geo : String?
 
+    # Server-side fallback chain. Requires the `server-side-fallback-2026-06-01` beta.
+    @[JSON::Field(emit_null: false)]
+    getter fallbacks : Array(FallbackParam)?
+
+    @[JSON::Field(key: "fallback_credit_token", emit_null: false)]
+    getter fallback_credit_token : String?
+
     @[JSON::Field(emit_null: false)]
     getter diagnostics : DiagnosticsParam?
 
@@ -208,6 +215,8 @@ module Anthropic
       @container : String? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
+      @fallbacks : Array(FallbackParam)? = nil,
+      @fallback_credit_token : String? = nil,
       @diagnostics : DiagnosticsParam? = nil,
     )
     end
@@ -419,12 +428,14 @@ module Anthropic
     @[JSON::Field(key: "mcp_servers", emit_null: false)]
     getter mcp_servers : Array(MCPServerDefinition)?
 
-    # User profile identifier (beta: user-profiles-2026-03-24).
-    #
-    # When supplied, the API scopes memory, trust grants, and other
-    # user-specific state to the referenced `BetaUserProfile`.
-    @[JSON::Field(key: "user_profile_id", emit_null: false)]
-    getter user_profile_id : String?
+    # Server-side fallback chain. Each entry names a model to try if the primary
+    # model refuses. Requires the `server-side-fallback-2026-06-01` beta.
+    @[JSON::Field(emit_null: false)]
+    getter fallbacks : Array(FallbackParam)?
+
+    # Opaque credit token redeemable on a server-side fallback retry.
+    @[JSON::Field(key: "fallback_credit_token", emit_null: false)]
+    getter fallback_credit_token : String?
 
     @[JSON::Field(emit_null: false)]
     getter diagnostics : DiagnosticsParam?
@@ -452,7 +463,8 @@ module Anthropic
       @context_management : ContextManagementConfig? = nil,
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
-      @user_profile_id : String? = nil,
+      @fallbacks : Array(FallbackParam)? = nil,
+      @fallback_credit_token : String? = nil,
       @diagnostics : DiagnosticsParam? = nil,
     )
     end

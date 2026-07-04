@@ -1019,7 +1019,8 @@ module Anthropic
                        WebSearchToolResultContent | CodeExecutionToolResultContent |
                        WebFetchToolResultContent | ToolSearchToolResultContent |
                        BashCodeExecutionToolResultContent | TextEditorCodeExecutionToolResultContent |
-                       MCPToolUseContent | MCPToolResultContent | AdvisorToolResultContent
+                       MCPToolUseContent | MCPToolResultContent | AdvisorToolResultContent |
+                       FallbackContent
 
   # JSON converter for discriminated union parsing of content blocks
   #
@@ -1049,6 +1050,7 @@ module Anthropic
       when "container_upload"  then ContainerUploadContent.from_json(raw)
       when "compaction"        then CompactionContent.from_json(raw)
       when "mid_conv_system"   then MidConversationSystemContent.from_json(raw)
+      when "fallback"          then FallbackContent.from_json(raw)
       end
     end
 

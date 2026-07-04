@@ -25,3 +25,6 @@
 
 # VCR cassettes may contain sensitive data
 # spec/fixtures/cassettes/
+
+# Local agent/tooling scratch
+/.antigravitycli/

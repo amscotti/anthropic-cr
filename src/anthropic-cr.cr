@@ -7,6 +7,9 @@ require "uuid"
 require "./anthropic-cr/version"
 require "./anthropic-cr/errors"
 require "./anthropic-cr/schema"
+require "./anthropic-cr/stainless_helper"
+require "./anthropic-cr/middleware"
+require "./anthropic-cr/refusal_fallback_middleware"
 
 # Models
 require "./anthropic-cr/models/role"
@@ -21,10 +24,16 @@ require "./anthropic-cr/models/sessions"
 require "./anthropic-cr/models/webhooks"
 require "./anthropic-cr/models/agents"
 require "./anthropic-cr/models/vaults"
+require "./anthropic-cr/models/fallbacks"
+require "./anthropic-cr/models/deployments"
 
 # Streaming
 require "./anthropic-cr/streaming/events"
 require "./anthropic-cr/streaming/stream"
+require "./anthropic-cr/streaming/session_event_stream"
+
+# Sessions accumulate helper + managed-agents delta types
+require "./anthropic-cr/sessions"
 
 # Tools
 require "./anthropic-cr/tools/tool_choice"
@@ -49,6 +58,7 @@ require "./anthropic-cr/resources/sessions"
 require "./anthropic-cr/resources/webhooks"
 require "./anthropic-cr/resources/agents"
 require "./anthropic-cr/resources/vaults"
+require "./anthropic-cr/resources/deployments"
 require "./anthropic-cr/resources/beta"
 
 # Client (must come after resources that define types used in Client methods)

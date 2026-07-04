@@ -1,4 +1,46 @@
 module Anthropic
+  # Scopes where in the outbound request a stored secret may be substituted.
+  #
+  # Used on vault credential create/update via `injection_location:`.
+  struct InjectionLocation
+    include JSON::Serializable
+
+    @[JSON::Field(emit_null: false)]
+    getter body : Bool?
+
+    @[JSON::Field(emit_null: false)]
+    getter header : Bool?
+
+    def initialize(@body : Bool? = nil, @header : Bool? = nil)
+    end
+  end
+
+  # Restricts outbound host access for an environment-variable credential.
+  #
+  # `unrestricted` (the default) allows any host; `limited` restricts to a set
+  # of `allowed_hosts` (bare hostnames, IPv4 addresses, or `*.`-wildcards).
+  struct CredentialNetworking
+    include JSON::Serializable
+
+    getter type : String
+
+    @[JSON::Field(key: "allowed_hosts", emit_null: false)]
+    getter allowed_hosts : Array(String)?
+
+    def initialize(type : String = "unrestricted", allowed_hosts : Array(String)? = nil)
+      @type = type
+      @allowed_hosts = allowed_hosts
+    end
+
+    def self.unrestricted : self
+      new(type: "unrestricted")
+    end
+
+    def self.limited(allowed_hosts : Array(String)) : self
+      new(type: "limited", allowed_hosts: allowed_hosts)
+    end
+  end
+
   # Stateful Vaults API resource for storing secrets securely (beta)
   class BetaVaults
     # Credentials sub-resource accessor
@@ -97,18 +139,26 @@ module Anthropic
       {"anthropic-beta" => merged_betas.join(",")}
     end
 
-    # Create a Credential inside a Vault
+    # Create a Credential inside a Vault.
+    #
+    # `injection_location` scopes where in the outbound request a stored secret
+    # may be substituted (body and/or header). `networking` restricts outbound
+    # host access for environment-variable credentials.
     def create(
       vault_id : String,
       auth : JSON::Any | Hash(String, JSON::Any),
       display_name : String? = nil,
       metadata : Hash(String, String)? = nil,
+      injection_location : InjectionLocation? = nil,
+      networking : CredentialNetworking? = nil,
       betas : Array(String) = [] of String,
     ) : BetaCredential
       params = {} of String => JSON::Any
       params["auth"] = JSON.parse(auth.to_json)
       params["display_name"] = JSON::Any.new(display_name) if display_name
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
+      params["injection_location"] = JSON.parse(injection_location.to_json) if injection_location
+      params["networking"] = JSON.parse(networking.to_json) if networking
 
       response = @client.post("/v1/vaults/#{vault_id}/credentials?beta=true", params, beta_headers(betas))
       BetaCredential.from_json(response.body)
@@ -124,19 +174,23 @@ module Anthropic
       BetaCredential.from_json(response.body)
     end
 
-    # Update a Credential
+    # Update a Credential.
     def update(
       vault_id : String,
       credential_id : String,
       auth : JSON::Any | Hash(String, JSON::Any)? = nil,
       display_name : String? = nil,
       metadata : Hash(String, String)? = nil,
+      injection_location : InjectionLocation? = nil,
+      networking : CredentialNetworking? = nil,
       betas : Array(String) = [] of String,
     ) : BetaCredential
       params = {} of String => JSON::Any
       params["auth"] = JSON.parse(auth.to_json) if auth
       params["display_name"] = JSON::Any.new(display_name) if display_name
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
+      params["injection_location"] = JSON.parse(injection_location.to_json) if injection_location
+      params["networking"] = JSON.parse(networking.to_json) if networking
 
       response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", params, beta_headers(betas))
       BetaCredential.from_json(response.body)

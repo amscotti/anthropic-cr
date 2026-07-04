@@ -6,18 +6,25 @@ module Anthropic
     # These intentionally point at the current default API names and may duplicate
     # the latest precise constants when Anthropic's rolling alias already resolves
     # to a single concrete model name.
+    CLAUDE_SONNET = "claude-sonnet-5"
+    CLAUDE_FABLE  = "claude-fable-5"
     CLAUDE_OPUS   = "claude-opus-4-8"
-    CLAUDE_SONNET = "claude-sonnet-4-6"
     CLAUDE_HAIKU  = "claude-haiku-4-5"
+
+    # Claude Sonnet 5 — High-performance model for coding and agents.
+    CLAUDE_SONNET_5 = "claude-sonnet-5"
+
+    # Claude Fable 5 — Next generation of intelligence for the hardest knowledge work and coding.
+    CLAUDE_FABLE_5 = "claude-fable-5"
+
+    # Claude Mythos 5 — Most capable model for cybersecurity and biology research.
+    CLAUDE_MYTHOS_5 = "claude-mythos-5"
 
     # Claude 4.8
     CLAUDE_OPUS_4_8 = "claude-opus-4-8"
 
     # Claude 4.7 — Frontier intelligence for long-running agents and coding
     CLAUDE_OPUS_4_7 = "claude-opus-4-7"
-
-    # Claude Mythos Preview — New class of intelligence, strongest in coding and cybersecurity
-    CLAUDE_MYTHOS_PREVIEW = "claude-mythos-preview"
 
     # Claude 4.6
     CLAUDE_OPUS_4_6   = "claude-opus-4-6"
@@ -37,48 +44,48 @@ module Anthropic
     # @deprecated Will reach end-of-life on June 15th, 2026. Migrate to claude-sonnet-4-5 or newer.
     CLAUDE_SONNET_4 = "claude-sonnet-4-20250514"
 
-    # @deprecated Will reach end-of-life on June 15th, 2026. Migrate to claude-opus-4-5 or newer.
+    # @deprecated Will reach end-of-life on August 5th, 2026. Migrate to claude-opus-4-5 or newer.
     CLAUDE_OPUS_4_1 = "claude-opus-4-1-20250805"
-
-    # @deprecated Will reach end-of-life on June 15th, 2026. Migrate to claude-opus-4-5 or newer.
-    CLAUDE_OPUS_4 = "claude-opus-4-20250514"
   end
 
   # Shorthand helper for accessing model IDs via symbols
   #
   # ```
-  # Anthropic::Model::CLAUDE_OPUS   # => "claude-opus-4-7"
-  # Anthropic::Model::CLAUDE_SONNET # => "claude-sonnet-4-6"
+  # Anthropic::Model::CLAUDE_SONNET # => "claude-sonnet-5"
+  # Anthropic::Model::CLAUDE_FABLE  # => "claude-fable-5"
+  # Anthropic::Model::CLAUDE_OPUS   # => "claude-opus-4-8"
   # Anthropic::Model::CLAUDE_HAIKU  # => "claude-haiku-4-5"
   #
-  # Anthropic.model_name(:opus)     # => "claude-opus-4-7"
-  # Anthropic.model_name(:sonnet)   # => "claude-sonnet-4-6"
-  # Anthropic.model_name(:haiku)    # => "claude-haiku-4-5-20251001"
-  # Anthropic.model_name(:opus_4_7) # => "claude-opus-4-7"
-  # Anthropic.model_name(:mythos)   # => "claude-mythos-preview"
+  # Anthropic.model_name(:sonnet) # => "claude-sonnet-5"
+  # Anthropic.model_name(:fable)  # => "claude-fable-5"
+  # Anthropic.model_name(:mythos) # => "claude-mythos-5"
+  # Anthropic.model_name(:opus)   # => "claude-opus-4-8"
+  # Anthropic.model_name(:haiku)  # => "claude-haiku-4-5-20251001"
   # ```
+  MODEL_SHORTHANDS = {
+    :sonnet     => Model::CLAUDE_SONNET_5,
+    :sonnet_5   => Model::CLAUDE_SONNET_5,
+    :fable      => Model::CLAUDE_FABLE_5,
+    :fable_5    => Model::CLAUDE_FABLE_5,
+    :mythos     => Model::CLAUDE_MYTHOS_5,
+    :mythos_5   => Model::CLAUDE_MYTHOS_5,
+    :opus       => Model::CLAUDE_OPUS_4_8,
+    :opus_4_8   => Model::CLAUDE_OPUS_4_8,
+    :opus_4_7   => Model::CLAUDE_OPUS_4_7,
+    :haiku      => Model::CLAUDE_HAIKU_4_5,
+    :opus_4_6   => Model::CLAUDE_OPUS_4_6,
+    :sonnet_4_6 => Model::CLAUDE_SONNET_4_6,
+    :opus_4_5   => Model::CLAUDE_OPUS_4_5,
+    :sonnet_4_5 => Model::CLAUDE_SONNET_4_5,
+    :opus_4_1   => Model::CLAUDE_OPUS_4_1,
+    :sonnet_4   => Model::CLAUDE_SONNET_4,
+  } of Symbol => String
+
   def self.model_name(shorthand : Symbol) : String
-    case shorthand
-    when :opus       then Model::CLAUDE_OPUS_4_8
-    when :opus_4_8   then Model::CLAUDE_OPUS_4_8
-    when :opus_4_7   then Model::CLAUDE_OPUS_4_7
-    when :mythos     then Model::CLAUDE_MYTHOS_PREVIEW
-    when :sonnet     then Model::CLAUDE_SONNET_4_6
-    when :haiku      then Model::CLAUDE_HAIKU_4_5
-    when :opus_4_6   then Model::CLAUDE_OPUS_4_6
-    when :sonnet_4_6 then Model::CLAUDE_SONNET_4_6
-    when :opus_4_5   then Model::CLAUDE_OPUS_4_5
-    when :sonnet_4_5 then Model::CLAUDE_SONNET_4_5
-    when :opus_4_1   then Model::CLAUDE_OPUS_4_1
-    when :opus_4     then Model::CLAUDE_OPUS_4
-    when :sonnet_4   then Model::CLAUDE_SONNET_4
-    else
-      raise ArgumentError.new(
-        "Unknown model shorthand: #{shorthand}. " \
-        "Valid options: :opus, :opus_4_8, :opus_4_7, :mythos, :sonnet, :haiku, :opus_4_6, :sonnet_4_6, " \
-        ":opus_4_5, :sonnet_4_5, :opus_4_1, :opus_4, :sonnet_4"
-      )
-    end
+    MODEL_SHORTHANDS[shorthand]? || raise ArgumentError.new(
+      "Unknown model shorthand: #{shorthand}. " \
+      "Valid options: #{MODEL_SHORTHANDS.keys.map(&.to_s).join(", ")}"
+    )
   end
 
   struct CapabilitySupport

@@ -7,6 +7,7 @@ module Anthropic
     private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
+      merged_betas << AGENT_MEMORY_BETA unless merged_betas.includes?(AGENT_MEMORY_BETA)
       {"anthropic-beta" => merged_betas.join(",")}
     end
 
@@ -93,6 +94,7 @@ module Anthropic
     private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
+      merged_betas << AGENT_MEMORY_BETA unless merged_betas.includes?(AGENT_MEMORY_BETA)
       {"anthropic-beta" => merged_betas.join(",")}
     end
 
@@ -168,6 +170,7 @@ module Anthropic
     private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
+      merged_betas << AGENT_MEMORY_BETA unless merged_betas.includes?(AGENT_MEMORY_BETA)
       {"anthropic-beta" => merged_betas.join(",")}
     end
 

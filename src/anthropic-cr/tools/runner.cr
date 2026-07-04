@@ -587,7 +587,8 @@ module Anthropic
           thinking: thinking,
           output_config: output_config,
           inference_geo: inference_geo,
-          container: container
+          container: container,
+          extra_headers: Anthropic::StainlessHelper.header(Anthropic::StainlessHelper::BETA_TOOL_RUNNER)
         )
       else
         @client.messages.create(
@@ -599,7 +600,8 @@ module Anthropic
           thinking: thinking,
           output_config: output_config,
           inference_geo: inference_geo,
-          container: non_beta_container_id(container)
+          container: non_beta_container_id(container),
+          extra_headers: Anthropic::StainlessHelper.header(Anthropic::StainlessHelper::BETA_TOOL_RUNNER)
         )
       end
     end
@@ -628,7 +630,8 @@ module Anthropic
           thinking: thinking,
           output_config: output_config,
           inference_geo: inference_geo,
-          container: container
+          container: container,
+          extra_headers: Anthropic::StainlessHelper.header(Anthropic::StainlessHelper::BETA_TOOL_RUNNER)
         ) do |event|
           block.call(event)
         end
@@ -642,7 +645,8 @@ module Anthropic
           thinking: thinking,
           output_config: output_config,
           inference_geo: inference_geo,
-          container: non_beta_container_id(container)
+          container: non_beta_container_id(container),
+          extra_headers: Anthropic::StainlessHelper.header(Anthropic::StainlessHelper::BETA_TOOL_RUNNER)
         ) do |event|
           block.call(event)
         end

@@ -25,12 +25,18 @@ module Anthropic
           apply_content_block_start(event)
         when ContentBlockDeltaEvent
           apply_content_block_delta(event)
+        when ContentBlockStopEvent
+          finalize_tool_input(event.index)
         end
       end
 
       def message : Message?
         data = @message_data
         return nil unless data
+
+        # Parse any tool-input buffers that never saw a content_block_stop
+        # (e.g. a truncated stream) so the snapshot is as complete as possible.
+        @tool_input_buffers.keys.each { |index| finalize_tool_input(index) }
 
         Message.from_json(JSON::Any.new(data).to_json)
       end
@@ -83,14 +89,13 @@ module Anthropic
         when TextDelta
           append_string_field(block, "text", delta.text)
         when InputJsonDelta
+          # Lazily accumulate the partial-JSON buffer without re-parsing on
+          # every delta (avoids O(n²) re-parsing for large tool inputs). The
+          # buffer is parsed once when the content block closes (see
+          # `finalize_tool_input`) or when the snapshot message is built.
           buffer = @tool_input_buffers[event.index]? || ""
           buffer += delta.partial_json
           @tool_input_buffers[event.index] = buffer
-
-          begin
-            block["input"] = JSON.parse(buffer)
-          rescue JSON::ParseException
-          end
         when ThinkingDelta
           append_string_field(block, "thinking", delta.thinking)
         when SignatureDelta
@@ -126,6 +131,22 @@ module Anthropic
 
       private def content_block(index : Int32) : Hash(String, JSON::Any)?
         content_blocks.try(&.[index]?).try(&.as_h)
+      end
+
+      # Finalize a tool-use block by parsing its accumulated partial-JSON buffer
+      # once the block closes. This is the lazy counterpart to the per-delta
+      # accumulation: parsing happens a single time per block instead of on
+      # every `input_json_delta`.
+      private def finalize_tool_input(index : Int32) : Nil
+        buffer = @tool_input_buffers.delete(index)
+        return unless buffer
+        return unless block = content_block(index)
+
+        begin
+          block["input"] = JSON.parse(buffer)
+        rescue JSON::ParseException
+          # Leave whatever best-effort value was already set.
+        end
       end
     end
 

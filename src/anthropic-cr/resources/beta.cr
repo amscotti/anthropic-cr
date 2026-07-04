@@ -81,6 +81,26 @@ module Anthropic
     def vaults : BetaVaults
       BetaVaults.new(@client)
     end
+
+    # Access beta deployments API
+    #
+    # ```
+    # deployment = client.beta.deployments.create(
+    #   agent: "agent_123",
+    #   environment_id: "env_123",
+    #   name: "Nightly summary",
+    #   initial_events: [{"type" => "user.message", "content" => [{"type" => "text", "text" => "Summarize the day."}]}]
+    # )
+    # client.beta.deployments.run(deployment.id)
+    # ```
+    def deployments : BetaDeployments
+      BetaDeployments.new(@client)
+    end
+
+    # Access beta deployment runs API
+    def deployment_runs : BetaDeploymentRuns
+      BetaDeploymentRuns.new(@client)
+    end
   end
 
   # Beta Messages API with explicit beta header support
@@ -190,7 +210,10 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
       user_profile_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
@@ -227,7 +250,8 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
-        user_profile_id: user_profile_id,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
         diagnostics: diagnostics
       )
 
@@ -238,9 +262,13 @@ module Anthropic
         resolved_output_config,
         cache_control,
         diagnostics: diagnostics,
-        include_user_profiles_beta: !user_profile_id.nil?
+        include_user_profiles_beta: !user_profile_id.nil?,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token
       )
-      response = @client.post("/v1/messages", params, beta_headers)
+      merged = merge_user_profile_header(beta_headers, user_profile_id)
+      merged = merge_extra_headers(merged, extra_headers)
+      response = @client.post("/v1/messages", params, merged)
       Message.from_json(response.body)
     end
 
@@ -282,7 +310,10 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
       user_profile_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       &
     )
@@ -311,7 +342,10 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
         user_profile_id: user_profile_id,
+        extra_headers: extra_headers,
         diagnostics: diagnostics
       ) do |stream|
         stream.each { |event| yield event }
@@ -344,7 +378,10 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
       user_profile_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       &
     )
@@ -376,7 +413,8 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
-        user_profile_id: user_profile_id,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
         diagnostics: diagnostics
       )
 
@@ -387,10 +425,15 @@ module Anthropic
         resolved_output_config,
         cache_control,
         diagnostics: diagnostics,
-        include_user_profiles_beta: !user_profile_id.nil?
+        include_user_profiles_beta: !user_profile_id.nil?,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token
       )
 
-      @client.post_stream("/v1/messages", params, beta_headers) do |response|
+      merged = merge_user_profile_header(beta_headers, user_profile_id)
+      merged = merge_extra_headers(merged, extra_headers)
+
+      @client.post_stream("/v1/messages", params, merged) do |response|
         yield MessageStream.new(response)
       end
     end
@@ -414,6 +457,7 @@ module Anthropic
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
       speed : String? = nil,
+      user_profile_id : String? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : TokenCountResponse
       typed_messages = normalize_messages(messages)
@@ -446,10 +490,11 @@ module Anthropic
         resolved_output_config,
         cache_control,
         diagnostics: diagnostics,
-        include_token_counting_beta: true
+        include_token_counting_beta: true,
+        include_user_profiles_beta: !user_profile_id.nil?
       )
 
-      response = @client.post("/v1/messages/count_tokens?beta=true", params, beta_headers)
+      response = @client.post("/v1/messages/count_tokens?beta=true", params, merge_user_profile_header(beta_headers, user_profile_id))
       TokenCountResponse.from_json(response.body)
     end
 
@@ -478,7 +523,10 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
       user_profile_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : ParsedMessage(T) forall T
       message = create(
@@ -506,7 +554,10 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
         user_profile_id: user_profile_id,
+        extra_headers: extra_headers,
         diagnostics: diagnostics
       )
 
@@ -538,7 +589,10 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
       user_profile_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : ParsedMessage(JSON::Any)
       message = create(
@@ -566,7 +620,10 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
         user_profile_id: user_profile_id,
+        extra_headers: extra_headers,
         diagnostics: diagnostics
       )
 
@@ -628,9 +685,18 @@ module Anthropic
       diagnostics : DiagnosticsParam? = nil,
       include_token_counting_beta : Bool = false,
       include_user_profiles_beta : Bool = false,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
     ) : Hash(String, String)?
+      # Both a fallback chain and a bare credit-token retry require the
+      # server-side fallback beta.
+      merged_betas = betas.dup
+      if (fallbacks && !fallbacks.empty?) || fallback_credit_token
+        merged_betas << SERVER_SIDE_FALLBACK_BETA unless merged_betas.includes?(SERVER_SIDE_FALLBACK_BETA)
+      end
+
       Anthropic.resolve_beta_headers(
-        betas: betas,
+        betas: merged_betas,
         server_tools: server_tools,
         cache_control: cache_control,
         diagnostics: diagnostics,
@@ -643,6 +709,31 @@ module Anthropic
 
     private def requires_extended_cache_beta?(cache_control : CacheControl?) : Bool
       (cache_control.try(&.ttl) || 0) > 0
+    end
+
+    # Merge the `anthropic-user-profile-id` request header into an existing
+    # header hash. The API expects the user profile id as a request header
+    # (not a JSON body field); it scopes memory, trust grants, and other
+    # user-specific state to the referenced profile.
+    private def merge_user_profile_header(headers : Hash(String, String)?, user_profile_id : String?) : Hash(String, String)?
+      return headers if user_profile_id.nil?
+      (headers || {} of String => String).merge({"anthropic-user-profile-id" => user_profile_id})
+    end
+
+    # Merge caller-supplied extra headers into an existing header hash. The
+    # `x-stainless-helper` key uses append semantics (see StainlessHelper) so
+    # multiple helpers composing on one request don't clobber each other.
+    private def merge_extra_headers(headers : Hash(String, String)?, extra : Hash(String, String)?) : Hash(String, String)?
+      return headers if extra.nil? || extra.empty?
+      base = (headers || {} of String => String).dup
+      extra.each do |key, value|
+        if key.downcase == StainlessHelper::HEADER
+          base = StainlessHelper.merge_helper_header(base, value)
+        else
+          base[key] = value
+        end
+      end
+      base
     end
   end
 end

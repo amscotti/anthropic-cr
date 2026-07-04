@@ -7,27 +7,26 @@ require "../spec_helper"
 # encrypted compaction, and error handling gaps (413/504/529 + error_type).
 describe "Opus 4.7 parity updates" do
   describe Anthropic::Model do
-    it "exposes claude-opus-4-7 and claude-mythos-preview constants" do
-      Anthropic::Model::CLAUDE_OPUS_4_7.should eq("claude-opus-4-7")
-      Anthropic::Model::CLAUDE_MYTHOS_PREVIEW.should eq("claude-mythos-preview")
+    it "exposes claude-sonnet-5, claude-fable-5, and claude-mythos-5 constants" do
+      Anthropic::Model::CLAUDE_SONNET_5.should eq("claude-sonnet-5")
+      Anthropic::Model::CLAUDE_FABLE_5.should eq("claude-fable-5")
+      Anthropic::Model::CLAUDE_MYTHOS_5.should eq("claude-mythos-5")
     end
 
     it "points CLAUDE_OPUS rolling alias at 4.8" do
       Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_4_8)
     end
 
-    it "resolves :opus, :opus_4_8, and :opus_4_7 via model_name" do
+    it "resolves :sonnet, :fable, :mythos, :opus, :opus_4_8, and :opus_4_7 via model_name" do
+      Anthropic.model_name(:sonnet).should eq("claude-sonnet-5")
+      Anthropic.model_name(:fable).should eq("claude-fable-5")
+      Anthropic.model_name(:mythos).should eq("claude-mythos-5")
       Anthropic.model_name(:opus).should eq("claude-opus-4-8")
       Anthropic.model_name(:opus_4_8).should eq("claude-opus-4-8")
       Anthropic.model_name(:opus_4_7).should eq("claude-opus-4-7")
     end
 
-    it "resolves :mythos via model_name" do
-      Anthropic.model_name(:mythos).should eq("claude-mythos-preview")
-    end
-
     it "preserves legacy shorthand mappings" do
-      Anthropic.model_name(:sonnet).should eq("claude-sonnet-4-6")
       Anthropic.model_name(:haiku).should eq("claude-haiku-4-5-20251001")
       Anthropic.model_name(:opus_4_5).should eq("claude-opus-4-5-20251101")
     end
@@ -259,8 +258,8 @@ describe "Opus 4.7 parity updates" do
     end
   end
 
-  describe "BetaMessageCreateParams#user_profile_id wiring" do
-    it "includes user_profile_id in the request body when provided" do
+  describe "BetaMessageCreateParams user_profile_id wiring" do
+    it "sends user_profile_id as the anthropic-user-profile-id request header" do
       capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -271,8 +270,9 @@ describe "Opus 4.7 parity updates" do
         user_profile_id: "uprof_01abc"
       )
 
+      capture.headers.not_nil!["anthropic-user-profile-id"].should eq("uprof_01abc")
       body = JSON.parse(capture.body.not_nil!)
-      body["user_profile_id"].as_s.should eq("uprof_01abc")
+      body.as_h.has_key?("user_profile_id").should be_false
     end
 
     it "adds the user-profiles beta header automatically" do
@@ -299,7 +299,25 @@ describe "Opus 4.7 parity updates" do
         messages: [Anthropic::MessageParam.user("hi")]
       )
 
+      capture.headers.not_nil!["anthropic-user-profile-id"]?.should be_nil
       capture.headers.not_nil!["anthropic-beta"]?.try(&.includes?(Anthropic::USER_PROFILES_BETA)).should_not be_true
+    end
+
+    it "sends user_profile_id as a header on the non-beta messages surface" do
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+      client.messages.create(
+        model: Anthropic::Model::CLAUDE_OPUS_4_7,
+        max_tokens: 128,
+        messages: [Anthropic::MessageParam.user("hi")],
+        user_profile_id: "uprof_01abc"
+      )
+
+      capture.headers.not_nil!["anthropic-user-profile-id"].should eq("uprof_01abc")
+      capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::USER_PROFILES_BETA)
+      body = JSON.parse(capture.body.not_nil!)
+      body.as_h.has_key?("user_profile_id").should be_false
     end
   end
 
