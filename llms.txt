@@ -5,14 +5,14 @@ This document provides comprehensive information for working with the anthropic-
 ## Library Metadata
 
 - **Library name:** `anthropic-cr`
-- **Current version:** 0.7.1
+- **Current version:** 0.8.0
 - **Anthropic API version:** `2023-06-01`
 - **Crystal requirement:** `>= 1.18.2`
 - **Repository:** https://github.com/amscotti/anthropic-cr
 - **License:** MIT
 - **Top-level module:** `Anthropic` (note: *not* `Anthropic::CR`)
 - **Entry point:** `src/anthropic-cr.cr`
-- **Tracks:** Opus 4.8 / May 2026 release of the official Python / Ruby / TypeScript SDKs
+- **Tracks:** July 2026 (Sonnet 5 / Fable 5 / Mythos 5) release of the official Python (0.116.0) / Ruby (1.55.0) / TypeScript (0.110.0) SDKs
 
 ### Terminology / Synonyms
 
@@ -26,6 +26,41 @@ The following terms are used interchangeably in this document and in the SDK. Us
 - "messages API" = "chat completions" (Anthropic's equivalent of chat completions)
 - "SSE" = "Server-Sent Events" = "streaming"
 - "task budget" = "token task budget" = "session budget"
+
+## What's New in 0.8.0 (July 2026)
+
+Tracks the July 2026 (Sonnet 5 / Fable 5 / Mythos 5) release of the official Python (0.116.0), Ruby (1.55.0), and TypeScript (0.110.0) SDKs.
+
+### New models
+- `Anthropic::Model::CLAUDE_SONNET_5`, `Anthropic::Model::CLAUDE_FABLE_5`, `Anthropic::Model::CLAUDE_MYTHOS_5`. `CLAUDE_SONNET` / `CLAUDE_FABLE` rolling aliases now resolve here; `:sonnet`, `:fable`, `:mythos` shorthands updated.
+- Retired past-EOL constants (`claude-opus-4`, `claude-mythos-preview`).
+
+### Server-side fallbacks on refusal
+- `Anthropic::FallbackParam`, `Anthropic::FallbackContent` (content block, wired into the `ContentBlock` union + converter), `Anthropic::FallbackInfo`, `Anthropic::FallbackRefusalTrigger`, `Anthropic::FallbackMessageIterationUsage`.
+- `fallbacks:` / `fallback_credit_token:` request params on `messages` and `beta.messages` (`create`, `stream`, `open_stream`).
+- `Usage#iterations` per-hop breakdown. `RefusalStopDetails` gained `fallback_credit_token`, `fallback_has_prefill_claim`, `recommended_model`.
+- Beta constants `SERVER_SIDE_FALLBACK_BETA` (`server-side-fallback-2026-06-01`) and `FALLBACK_CREDIT_BETA` (`fallback-credit-2026-06-01`), auto-attached when `fallbacks:` is set.
+
+### HTTP middleware system
+- `Anthropic::Middleware` module + `Anthropic::APIRequest` / `Anthropic::APIResponse` / `Anthropic::MiddlewareNext`. Runs once per HTTP attempt inside the retry loop.
+- Client registration: `Anthropic::Client.new(middleware: [...])` (outermost first).
+- `Anthropic::BetaRefusalFallbackMiddleware` — client-side refusal fallbacks for providers without server-side fallback support. Tags requests with `fallback-refusal-middleware`.
+
+### New server tools
+- `Anthropic::CodeExecutionTool20260521` (`code_execution_20260521`).
+- `Anthropic::WebFetchTool20260318` and `Anthropic::WebSearchTool20260318` (with `response_inclusion`).
+
+### Managed Agents
+- `client.beta.deployments` — `create`, `retrieve`, `update`, `list`, `archive`, `pause`, `unpause`, `run`.
+- `client.beta.deployment_runs` — `retrieve`, `list`.
+- Event-delta streaming: `event_deltas:` opt-in on `client.beta.sessions.events.stream`, `Anthropic::SessionEventStream`, and `Anthropic::Sessions.accumulate_managed_agents_event`.
+- `Anthropic::InjectionLocation` and `Anthropic::CredentialNetworking` for vault credential injection scoping. Webhook event classification helpers on `BetaWebhookEvent`.
+
+### Changed
+- `user_profile_id` is now sent as the `anthropic-user-profile-id` **request header** (was a JSON body field) across beta + non-beta messages, `count_tokens`, and `parse`.
+- `agent-memory-2026-07-22` beta (`AGENT_MEMORY_BETA`) attached to all memory-stores resources.
+- `Anthropic::StainlessHelper` single-sources the `x-stainless-helper` telemetry header with append semantics; `extra_headers:` plumbing on `messages` / `beta.messages`; `ToolRunner` tags requests.
+- Streaming accumulator parses tool-use input lazily (once per block close).
 
 ## What's New in 0.6.0 (April 2026)
 
@@ -93,7 +128,7 @@ Tracks the Opus 4.7 / April 2026 release of the official Python (0.96.0), Ruby (
 
 ## Overview
 
-The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the Opus 4.8 / May 2026 release of the official Python, Ruby, and TypeScript SDKs. Key features include:
+The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the July 2026 (Sonnet 5 / Fable 5 / Mythos 5) release of the official Python (0.116.0), Ruby (1.55.0), and TypeScript (0.110.0) SDKs. Key features include:
 
 - Full Messages API coverage (create and stream)
 - Tool use / function calling with Schema DSL and typed tools
@@ -103,14 +138,16 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - Models API for listing/retrieving models (rich capabilities including `xhigh` effort)
 - Beta Files API for file uploads/downloads
 - Beta Skills API (full CRUD for skills and skill versions via `client.beta.skills`)
-- **Beta User Profiles API** — create / retrieve / update / list + enrollment URLs via `client.beta.user_profiles`; `user_profile_id:` on beta messages
-- **Managed Agents API** — full environments, memory stores, agents, vaults/credentials, stateful sessions, threads, events, and secure webhook verification via `client.beta`
+- **Beta User Profiles API** — create / retrieve / update / list + enrollment URLs via `client.beta.user_profiles`; `user_profile_id:` sent as the `anthropic-user-profile-id` request header on beta messages
+- **Managed Agents API** — full environments, memory stores, agents, vaults/credentials, stateful sessions, threads, events, deployments, deployment runs, and secure webhook verification via `client.beta`
+- **Server-side refusal fallbacks** — `fallbacks:` request param + `server-side-fallback-2026-06-01` beta; client-side fallbacks via `Anthropic::BetaRefusalFallbackMiddleware`
+- **HTTP middleware** — `Anthropic::Middleware` chain around the SDK's terminal HTTP send
 - **Advisor tool** (`advisor_20260301`) — delegate sub-questions to a secondary model at runtime
-- Web Search server-side tool (`20250305` and `20260209`)
+- Web Search server-side tool (`20250305`, `20260209`, `20260318`)
 - Agent tools (BashTool, TextEditorTool with legacy/2025-01/2025-04/2025-07 variants, ComputerUseTool with legacy and 2025-11-24 variants)
-- Web Fetch server-side tool (`20250910`, `20260209`, `20260309` with cache control)
+- Web Fetch server-side tool (`20250910`, `20260209`, `20260309`, `20260318` with cache control)
 - Memory server-side tool
-- Code Execution server-side tool (`20250522`, `20250825`, `20260120`)
+- Code Execution server-side tool (`20250522`, `20250825`, `20260120`, `20260521`)
 - MCP tools: `MCPTool` (mcp-connector) and `MCPToolset` (mcp-client)
 - Tool search tools (BM25 and Regex) for deferred tool loading
 - Strict mode on tool definitions
@@ -134,7 +171,7 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - **Structured `stop_details`** — `RefusalStopDetails` plus `GenericStopDetails` fallback for future variants
 - Comprehensive error handling with automatic retries (408, 409, 429, 5xx, 529)
 
-**Status**: Feature complete for core functionality. Tracks Opus 4.8 / May 2026.
+**Status**: Feature complete for core functionality. Tracks July 2026 (Sonnet 5 / Fable 5 / Mythos 5).
 
 ---
 
@@ -1149,34 +1186,37 @@ end
 
 ```crystal
 # Rolling aliases — point at the current default precise models
+Anthropic::Model::CLAUDE_SONNET   # "claude-sonnet-5"
+Anthropic::Model::CLAUDE_FABLE    # "claude-fable-5"
 Anthropic::Model::CLAUDE_OPUS     # "claude-opus-4-8"
-Anthropic::Model::CLAUDE_SONNET   # "claude-sonnet-4-6"
 Anthropic::Model::CLAUDE_HAIKU    # "claude-haiku-4-5"
 
-# Latest precise models
-Anthropic::Model::CLAUDE_OPUS_4_8          # "claude-opus-4-8"
-Anthropic::Model::CLAUDE_OPUS_4_7          # "claude-opus-4-7"
-Anthropic::Model::CLAUDE_MYTHOS_PREVIEW    # "claude-mythos-preview"
-Anthropic::Model::CLAUDE_OPUS_4_6          # "claude-opus-4-6"
-Anthropic::Model::CLAUDE_OPUS_4_5          # "claude-opus-4-5-20251101"
-Anthropic::Model::CLAUDE_SONNET_4_6        # "claude-sonnet-4-6"
-Anthropic::Model::CLAUDE_SONNET_4_5        # "claude-sonnet-4-5-20250929"
-Anthropic::Model::CLAUDE_HAIKU_4_5         # "claude-haiku-4-5-20251001"
+# Latest models (July 2026 generation)
+Anthropic::Model::CLAUDE_SONNET_5     # "claude-sonnet-5"
+Anthropic::Model::CLAUDE_FABLE_5      # "claude-fable-5"
+Anthropic::Model::CLAUDE_MYTHOS_5     # "claude-mythos-5"
 
-# Deprecated (EOL June 15, 2026) — migrate to 4.5+ / 4.6+ / 4.8
+# Claude 4.x precise models
+Anthropic::Model::CLAUDE_OPUS_4_8     # "claude-opus-4-8"
+Anthropic::Model::CLAUDE_OPUS_4_7     # "claude-opus-4-7"
+Anthropic::Model::CLAUDE_OPUS_4_6     # "claude-opus-4-6"
+Anthropic::Model::CLAUDE_OPUS_4_5     # "claude-opus-4-5-20251101"
+Anthropic::Model::CLAUDE_SONNET_4_6   # "claude-sonnet-4-6"
+Anthropic::Model::CLAUDE_SONNET_4_5   # "claude-sonnet-4-5-20250929"
+Anthropic::Model::CLAUDE_HAIKU_4_5    # "claude-haiku-4-5-20251001"
+
+# Deprecated (EOL August 5, 2026) — migrate to 4.5+ / Sonnet 5+
 Anthropic::Model::CLAUDE_OPUS_4_1
-Anthropic::Model::CLAUDE_OPUS_4
 Anthropic::Model::CLAUDE_SONNET_4
 
 # Model shorthands
-Anthropic.model_name(:opus)       # => "claude-opus-4-8"
-Anthropic.model_name(:opus_4_7)   # => "claude-opus-4-7"
-Anthropic.model_name(:mythos)     # => "claude-mythos-preview"
-Anthropic.model_name(:opus_4_6)   # => "claude-opus-4-6"
-Anthropic.model_name(:opus_4_5)   # => "claude-opus-4-5-20251101"
-Anthropic.model_name(:sonnet)     # => "claude-sonnet-4-6"
-Anthropic.model_name(:sonnet_4_5) # => "claude-sonnet-4-5-20250929"
-Anthropic.model_name(:haiku)      # => "claude-haiku-4-5-20251001"
+Anthropic.model_name(:sonnet)    # => "claude-sonnet-5"
+Anthropic.model_name(:fable)     # => "claude-fable-5"
+Anthropic.model_name(:mythos)    # => "claude-mythos-5"
+Anthropic.model_name(:opus)      # => "claude-opus-4-8"
+Anthropic.model_name(:opus_4_8)  # => "claude-opus-4-8"
+Anthropic.model_name(:opus_4_7)  # => "claude-opus-4-7"
+Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
 ```
 
 ---
@@ -1571,13 +1611,13 @@ puts enrollment.expires_at
 
 ### Scoping a Message to a Profile
 
-Pass `user_profile_id:` to a beta messages call to scope per-user state:
+Pass `user_profile_id:` to a messages call to scope per-user state. The SDK sends it as the `anthropic-user-profile-id` request header (not a JSON body field) and auto-adds the `user-profiles-2026-03-24` beta header:
 
 ```crystal
 message = client.beta.messages.create(
   model: Anthropic::Model::CLAUDE_OPUS_4_8,
   max_tokens: 512,
-  user_profile_id: profile.id,  # Auto-adds user-profiles-2026-03-24 beta header
+  user_profile_id: profile.id,  # Sent as the anthropic-user-profile-id header
   messages: [{role: "user", content: "Welcome back!"}]
 )
 ```
@@ -1589,6 +1629,75 @@ profile.trust_grants.each do |name, grant|
   puts "#{name}: #{grant.status}"
 end
 ```
+
+---
+
+## Server-Side Fallbacks (Beta)
+
+When a model refuses a request for policy reasons, server-side fallbacks let the API automatically retry against a fallback model chain in a single round-trip. The SDK auto-attaches the `server-side-fallback-2026-06-01` beta when `fallbacks:` is set. This is **mutually exclusive** with the client-side `BetaRefusalFallbackMiddleware`.
+
+```crystal
+message = client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_FABLE_5,
+  max_tokens: 1024,
+  fallbacks: [
+    Anthropic::FallbackParam.new(model: Anthropic::Model::CLAUDE_OPUS_4_8),
+  ],
+  messages: [{role: "user", content: "..."}]
+)
+
+# If a fallback fired, the response carries a `fallback` content block at the
+# model boundary and per-hop `usage.iterations`.
+if fallback = message.content.find(&.is_a?(Anthropic::FallbackContent))
+  fb = fallback.as(Anthropic::FallbackContent)
+  puts "Fell back: #{fb.from.model} -> #{fb.to.model} (#{fb.trigger.category})"
+end
+```
+
+Types: `Anthropic::FallbackParam` (model + optional max_tokens/output_config/speed/thinking overrides), `Anthropic::FallbackContent` (response content block), `Anthropic::FallbackInfo`, `Anthropic::FallbackRefusalTrigger`, `Anthropic::FallbackMessageIterationUsage`. `RefusalStopDetails` carries `fallback_credit_token`, `fallback_has_prefill_claim`, and `recommended_model`. Beta constants: `SERVER_SIDE_FALLBACK_BETA`, `FALLBACK_CREDIT_BETA`.
+
+---
+
+## HTTP Middleware
+
+Inspect, rewrite, or short-circuit requests and responses around the SDK's terminal HTTP send. The chain runs **once per HTTP attempt, inside the retry loop**. A middleware is any type that `include Anthropic::Middleware` and implements `#call(request, nxt)`. **Limitation:** only buffered JSON requests (GET/POST/DELETE) run through the chain — streaming (`stream` / `open_stream` / SSE endpoints), raw downloads, and multipart uploads bypass middleware.
+
+```crystal
+class LoggingMiddleware
+  include Anthropic::Middleware
+
+  def call(request : Anthropic::APIRequest, nxt : Anthropic::MiddlewareNext) : Anthropic::APIResponse
+    puts "-> #{request.method} #{request.path}"
+    response = nxt.call(request)
+    puts "<- HTTP #{response.status}"
+    response
+  end
+end
+
+client = Anthropic::Client.new(middleware: [LoggingMiddleware.new])
+```
+
+- `Anthropic::APIRequest` — `method`, `path`, `headers` (`HTTP::Headers`), `body` (`String?`), `metadata` (mutable cross-attempt scratchpad), plus `#with(method:, path:, headers:, body:)`. Note: `headers`/`metadata` are shared by reference with `#with` copies — `dup` headers before mutating.
+- `Anthropic::MiddlewareNext` — `Proc(APIRequest, APIResponse)`; calling it sends the request through the rest of the chain.
+- `Anthropic::APIResponse` — `status` (`Int32`), `headers`, `body`, `#success?`, `#parse(type)`. Returned for **every** status (4xx/5xx do not raise inside the chain); connection errors (`APITimeoutError` / `APIConnectionError`) do raise from `nxt.call`. A middleware may call `nxt` multiple times for custom retry logic, or return a fabricated `APIResponse` to short-circuit.
+
+### Client-Side Refusal Fallback Middleware
+
+`Anthropic::BetaRefusalFallbackMiddleware` retries refused `POST /v1/messages` requests down a client-side fallback chain for providers without server-side fallback support. It tags every hop with `fallback-refusal-middleware` and the `fallback-credit-2026-06-01` beta:
+
+```crystal
+client = Anthropic::Client.new(
+  middleware: [
+    Anthropic::BetaRefusalFallbackMiddleware.new(
+      [Anthropic::FallbackParam.new(model: Anthropic::Model::CLAUDE_OPUS_4_8)],
+    ),
+  ],
+)
+```
+
+### x-stainless-helper telemetry
+
+`Anthropic::StainlessHelper` single-sources the `x-stainless-helper` telemetry header with append semantics. `messages` / `beta.messages` accept an `extra_headers:` option; the `ToolRunner` automatically tags its requests with `BetaToolRunner`.
 
 ---
 
@@ -2170,23 +2279,36 @@ client.beta.messages.tool_runner(
 |------|---------|
 | `src/anthropic-cr/models/message.cr` | `Message`, `MessageParam`, `RefusalStopDetails`, `GenericStopDetails`, `StopDetails` union + converter |
 | `src/anthropic-cr/models/content.cr` | Content blocks (Text, Image, Tool, Citation variants, Advisor result blocks, Compaction with `encrypted_content`) |
-| `src/anthropic-cr/models/params.cr` | Request parameters including `OutputConfig`, `BetaTokenTaskBudget`, `BetaMessageCreateParams#user_profile_id` |
+| `src/anthropic-cr/models/params.cr` | Request parameters including `OutputConfig`, `BetaTokenTaskBudget`, `BetaMessageCreateParams`, `MessageCreateParams` (with `fallbacks` / `fallback_credit_token`) |
 | `src/anthropic-cr/models/role.cr` | Role enum |
-| `src/anthropic-cr/models/usage.cr` | Usage struct |
-| `src/anthropic-cr/models/model_info.cr` | Model constants (`CLAUDE_OPUS_4_8`, `CLAUDE_OPUS_4_7`, `CLAUDE_MYTHOS_PREVIEW`), `ModelInfo`, `EffortCapability` (with `xhigh`) |
+| `src/anthropic-cr/models/usage.cr` | Usage struct (with `iterations` per-hop fallback breakdown) |
+| `src/anthropic-cr/models/model_info.cr` | Model constants (`CLAUDE_SONNET_5`, `CLAUDE_FABLE_5`, `CLAUDE_MYTHOS_5`, `CLAUDE_OPUS_4_8`, ...), `MODEL_SHORTHANDS`, `ModelInfo`, `EffortCapability` (with `xhigh`) |
+| `src/anthropic-cr/models/fallbacks.cr` | `FallbackParam`, `FallbackContent`, `FallbackInfo`, `FallbackRefusalTrigger`, `FallbackMessageIterationUsage` |
+| `src/anthropic-cr/models/deployments.cr` | `BetaManagedAgentsDeployment`, `BetaManagedAgentsDeploymentRun` + list responses |
 
 ### Resource Files
 
 | File | Purpose |
 |------|---------|
 | `src/anthropic-cr/resources/file_upload.cr` | FileUpload struct for multipart uploads |
-| `src/anthropic-cr/resources/messages.cr` | Messages API |
+| `src/anthropic-cr/resources/messages.cr` | Messages API (with `fallbacks`, `user_profile_id` header, `extra_headers`) |
 | `src/anthropic-cr/resources/batches.cr` | Batches API |
 | `src/anthropic-cr/resources/models.cr` | Models API |
 | `src/anthropic-cr/resources/files.cr` | Files API |
 | `src/anthropic-cr/resources/skills.cr` | Skills API (beta) |
 | `src/anthropic-cr/resources/user_profiles.cr` | User Profiles API (beta) |
+| `src/anthropic-cr/resources/deployments.cr` | Deployments + Deployment Runs API (beta) |
 | `src/anthropic-cr/resources/beta.cr` | Beta namespace |
+
+### Core / Middleware Files
+
+| File | Purpose |
+|------|---------|
+| `src/anthropic-cr/middleware.cr` | `Middleware` module, `APIRequest`, `APIResponse`, `MiddlewareNext` |
+| `src/anthropic-cr/refusal_fallback_middleware.cr` | `BetaRefusalFallbackMiddleware` (client-side refusal fallbacks) |
+| `src/anthropic-cr/stainless_helper.cr` | `StainlessHelper` (single-sourced `x-stainless-helper` telemetry header) |
+| `src/anthropic-cr/sessions.cr` | `Sessions.accumulate_managed_agents_event` + delta types |
+| `src/anthropic-cr/streaming/session_event_stream.cr` | Generic SSE stream for Managed Agents events |
 
 ### Tool Files
 
@@ -2194,8 +2316,8 @@ client.beta.messages.tool_runner(
 |------|---------|
 | `src/anthropic-cr/tools/tool.cr` | `Tool`, `InlineTool`, `TypedTool` |
 | `src/anthropic-cr/tools/tool_choice.cr` | `ToolChoice` types |
-| `src/anthropic-cr/tools/server_tools.cr` | Server tools: `WebSearchTool`, `WebSearchTool20260209`, `BashTool`, `TextEditorTool` (+ 20250124, 20250429, legacy 20241022), `ComputerUseTool` (+ 20251124, legacy), `WebFetchTool` (+ 20260209, 20260309), `MemoryTool`, `CodeExecutionTool` (+ 20250522, 20260120), `AdvisorTool`, `MCPTool`, `MCPToolset`, `ToolSearchBM25Tool`, `ToolSearchRegexTool`, and all beta header constants |
-| `src/anthropic-cr/tools/runner.cr` | `ToolRunner` |
+| `src/anthropic-cr/tools/server_tools.cr` | Server tools: `WebSearchTool` (+ 20260209, 20260318), `BashTool`, `TextEditorTool` (+ 20250124, 20250429, legacy 20241022), `ComputerUseTool` (+ 20251124, legacy), `WebFetchTool` (+ 20260209, 20260309, 20260318), `MemoryTool`, `CodeExecutionTool` (+ 20250522, 20260120, 20260521), `AdvisorTool`, `MCPTool`, `MCPToolset`, `ToolSearchBM25Tool`, `ToolSearchRegexTool`, and all beta header constants |
+| `src/anthropic-cr/tools/runner.cr` | `ToolRunner` (tags requests with `x-stainless-helper: BetaToolRunner`) |
 
 ### Streaming Files
 
@@ -2223,11 +2345,11 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.7.1 (May 2026)
+- **Current Version**: 0.8.0 (July 2026)
 - **API Version**: 2023-06-01
 - **Crystal Version**: >= 1.18.2
-- **Tracks**: Opus 4.8 / May 2026 release of the official Python (0.105.0), Ruby (1.44.0), and TypeScript SDKs
-- **Previous version**: 0.7.0 (Opus 4.8 / May 2026)
+- **Tracks**: July 2026 (Sonnet 5 / Fable 5 / Mythos 5) release of the official Python (0.116.0), Ruby (1.55.0), and TypeScript (0.110.0) SDKs
+- **Previous version**: 0.7.1 (May 2026 — Managed Agents agents/vaults)
 
 ### Version History Highlights
 

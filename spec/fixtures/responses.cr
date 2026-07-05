@@ -104,6 +104,10 @@ module Fixtures
 
     MESSAGE_WITH_ADVISOR_ERROR = %({"id":"msg_adv_03","type":"message","role":"assistant","content":[{"type":"advisor_tool_result","tool_use_id":"stu_adv_03","content":{"type":"advisor_tool_result_error","error_code":"max_uses_exceeded"}}],"model":"claude-opus-4-7","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":50}})
 
+    # Server-side fallback: a fallback content block marks the model boundary,
+    # and stop_details carries a fallback_credit_token + recommended_model.
+    MESSAGE_WITH_FALLBACK = %({"id":"msg_fallback_01","type":"message","role":"assistant","content":[{"type":"fallback","from":{"model":"claude-fable-5"},"to":{"model":"claude-opus-4-8"},"trigger":{"type":"refusal","category":"frontier_llm"}},{"type":"text","text":"Here is a safe answer."}],"model":"claude-opus-4-8","stop_reason":"end_turn","stop_details":{"type":"refusal","category":"frontier_llm","fallback_credit_token":"fct_01ABC","fallback_has_prefill_claim":true,"recommended_model":null},"stop_sequence":null,"usage":{"input_tokens":40,"output_tokens":30,"iterations":[{"type":"message","model":"claude-fable-5","input_tokens":20,"output_tokens":5},{"type":"fallback_message","model":"claude-opus-4-8","input_tokens":20,"output_tokens":30}]}})
+
     # User Profiles API responses
     USER_PROFILE = %({"id":"uprof_01abc","type":"user_profile","created_at":"2026-04-16T00:00:00Z","updated_at":"2026-04-16T00:00:00Z","metadata":{"plan":"pro"},"trust_grants":{},"external_id":"ext-123"})
 

@@ -2,7 +2,13 @@ module Anthropic
   # Structured stop details returned on refusal stops.
   #
   # `category` is typically one of the known refusal categories such as
-  # "cyber" or "bio", though unknown categories may appear as the API evolves.
+  # "cyber", "bio", "frontier_llm", or "reasoning_extraction", though unknown
+  # categories may appear as the API evolves.
+  #
+  # The `fallback_*` fields are populated on the beta messages surface when a
+  # server-side or client-side fallback chain is in play. `fallback_credit_token`
+  # is an opaque, ~5-minute-expiry token redeemable on retry to refund the
+  # cache-miss cost of the refused attempt.
   struct RefusalStopDetails
     include JSON::Serializable
 
@@ -14,7 +20,25 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter explanation : String?
 
-    def initialize(@category : String? = nil, @explanation : String? = nil)
+    # Opaque token redeemable on a fallback retry (beta surface only).
+    @[JSON::Field(key: "fallback_credit_token", emit_null: false)]
+    getter fallback_credit_token : String?
+
+    # Whether the credit token permits an appended-assistant (prefill) retry.
+    @[JSON::Field(key: "fallback_has_prefill_claim", emit_null: false)]
+    getter fallback_has_prefill_claim : Bool?
+
+    # The server's suggested retry target when no fallback could be made.
+    @[JSON::Field(key: "recommended_model", emit_null: false)]
+    getter recommended_model : String?
+
+    def initialize(
+      @category : String? = nil,
+      @explanation : String? = nil,
+      @fallback_credit_token : String? = nil,
+      @fallback_has_prefill_claim : Bool? = nil,
+      @recommended_model : String? = nil,
+    )
       @type = "refusal"
     end
   end

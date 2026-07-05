@@ -58,6 +58,10 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
+      user_profile_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
@@ -85,12 +89,16 @@ module Anthropic
         container: container,
         output_config: output_config,
         inference_geo: inference_geo,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id)
 
-      response = @client.post("/v1/messages", params, beta_headers)
+      merged = merge_user_profile_header(beta_headers, user_profile_id)
+      merged = merge_extra_headers(merged, extra_headers)
+      response = @client.post("/v1/messages", params, merged)
       Message.from_json(response.body)
     end
 
@@ -127,6 +135,10 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
+      user_profile_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       &
     )
@@ -149,6 +161,10 @@ module Anthropic
         container: container,
         output_config: output_config,
         inference_geo: inference_geo,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
+        user_profile_id: user_profile_id,
+        extra_headers: extra_headers,
         diagnostics: diagnostics
       ) do |stream|
         stream.each { |event| yield event }
@@ -175,6 +191,10 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
+      user_profile_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       &
     )
@@ -200,12 +220,16 @@ module Anthropic
         container: container,
         output_config: output_config,
         inference_geo: inference_geo,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id)
+      merged = merge_user_profile_header(beta_headers, user_profile_id)
+      merged = merge_extra_headers(merged, extra_headers)
 
-      @client.post_stream("/v1/messages", params, beta_headers) do |response|
+      @client.post_stream("/v1/messages", params, merged) do |response|
         yield MessageStream.new(response)
       end
     end
@@ -238,6 +262,7 @@ module Anthropic
       cache_control : CacheControl? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
+      user_profile_id : String? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : TokenCountResponse
       # Convert messages to typed MessageParam array
@@ -259,9 +284,9 @@ module Anthropic
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, user_profile_id: user_profile_id)
 
-      response = @client.post("/v1/messages/count_tokens", params, beta_headers)
+      response = @client.post("/v1/messages/count_tokens", params, merge_user_profile_header(beta_headers, user_profile_id))
       TokenCountResponse.from_json(response.body)
     end
 
@@ -298,16 +323,58 @@ module Anthropic
     end
 
     # Build beta headers based on server tools used
-    private def build_beta_headers(server_tools : Array(ServerTool)?, cache_control : CacheControl?, diagnostics : DiagnosticsParam? = nil) : Hash(String, String)?
+    private def build_beta_headers(
+      server_tools : Array(ServerTool)?,
+      cache_control : CacheControl?,
+      diagnostics : DiagnosticsParam? = nil,
+      fallbacks : Array(FallbackParam)? = nil,
+      fallback_credit_token : String? = nil,
+      user_profile_id : String? = nil,
+    ) : Hash(String, String)?
+      betas = [] of String
+
+      # Both a fallback chain and a bare credit-token retry require the
+      # server-side fallback beta.
+      if (fallbacks && !fallbacks.empty?) || fallback_credit_token
+        betas << SERVER_SIDE_FALLBACK_BETA unless betas.includes?(SERVER_SIDE_FALLBACK_BETA)
+      end
+
       Anthropic.resolve_beta_headers(
+        betas: betas,
         server_tools: server_tools,
         cache_control: cache_control,
-        diagnostics: diagnostics
+        diagnostics: diagnostics,
+        include_user_profiles: !user_profile_id.nil?
       )
     end
 
     private def requires_extended_cache_beta?(cache_control : CacheControl?) : Bool
       (cache_control.try(&.ttl) || 0) > 0
+    end
+
+    # Merge the `anthropic-user-profile-id` request header into an existing
+    # header hash. The API expects the user profile id as a request header
+    # (not a JSON body field); it scopes memory, trust grants, and other
+    # user-specific state to the referenced profile.
+    private def merge_user_profile_header(headers : Hash(String, String)?, user_profile_id : String?) : Hash(String, String)?
+      return headers if user_profile_id.nil?
+      (headers || {} of String => String).merge({"anthropic-user-profile-id" => user_profile_id})
+    end
+
+    # Merge caller-supplied extra headers into an existing header hash. The
+    # `x-stainless-helper` key uses append semantics (see StainlessHelper) so
+    # multiple helpers composing on one request don't clobber each other.
+    private def merge_extra_headers(headers : Hash(String, String)?, extra : Hash(String, String)?) : Hash(String, String)?
+      return headers if extra.nil? || extra.empty?
+      base = (headers || {} of String => String).dup
+      extra.each do |key, value|
+        if key.downcase == StainlessHelper::HEADER
+          base = StainlessHelper.merge_helper_header(base, value)
+        else
+          base[key] = value
+        end
+      end
+      base
     end
   end
 end

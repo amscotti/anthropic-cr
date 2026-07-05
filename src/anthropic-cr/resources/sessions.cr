@@ -134,15 +134,28 @@ module Anthropic
       JSON.parse(response.body)
     end
 
-    # Stream session events
+    # Stream session events.
+    #
+    # Pass `event_deltas: [Anthropic::Sessions::DeltaType::AGENT_MESSAGE]` to
+    # opt into live `event_start` / `event_delta` preview deltas. The block
+    # receives each SSE event as a `JSON::Any`. Use
+    # `Anthropic::Sessions.accumulate_managed_agents_event` to fold preview
+    # deltas into a buffered `agent.message` snapshot.
     def stream(
       session_id : String,
+      event_deltas : Array(String)? = nil,
       betas : Array(String) = [] of String,
-      &
+      & : JSON::Any -> _
     )
-      # Session events are streamed using SSE
-      @client.get_stream("/v1/sessions/#{session_id}/events/stream?beta=true", beta_headers(betas)) do |response|
-        yield MessageStream.new(response)
+      path = "/v1/sessions/#{session_id}/events/stream?beta=true"
+      if event_deltas && !event_deltas.empty?
+        params = URI::Params.new
+        event_deltas.each { |delta_type| params.add("event_deltas", delta_type) }
+        path = "#{path}&#{params}"
+      end
+
+      @client.get_stream(path, beta_headers(betas)) do |response|
+        SessionEventStream.new(response).each { |event| yield event }
       end
     end
   end
@@ -285,15 +298,18 @@ module Anthropic
       JSON.parse(response.body)
     end
 
-    # Stream thread events
+    # Stream thread events.
+    #
+    # The block receives each SSE event as a `JSON::Any` (thread event streams
+    # carry managed-agents event shapes, not `/v1/messages` event shapes).
     def stream(
       session_id : String,
       thread_id : String,
       betas : Array(String) = [] of String,
-      &
+      & : JSON::Any -> _
     )
       @client.get_stream("/v1/sessions/#{session_id}/threads/#{thread_id}/stream?beta=true", beta_headers(betas)) do |response|
-        yield MessageStream.new(response)
+        SessionEventStream.new(response).each { |event| yield event }
       end
     end
   end

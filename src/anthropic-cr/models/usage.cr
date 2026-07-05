@@ -84,6 +84,12 @@ module Anthropic
     # Breakdown of output tokens by type (e.g. thinking)
     @[JSON::Field(key: "output_tokens_details")]
     getter output_tokens_details : OutputTokensDetails?
+
+    # Per-hop usage when a fallback chain ran. Each entry is either a declined
+    # (`type: "message"`) or serving (`type: "fallback_message"`) hop. Present
+    # only on responses that exercised server-side fallbacks.
+    @[JSON::Field(emit_null: false)]
+    getter iterations : Array(FallbackMessageIterationUsage)?
   end
 
   # Response from the token counting API

@@ -235,6 +235,37 @@ describe Anthropic::MessageStream do
       message.refusal?.should be_true
       message.refusal_stop_details.not_nil!.category.should eq("cyber")
     end
+
+    it "parses accumulated tool input once the content block stops" do
+      body = [
+        sse_event("message_start", %({"type":"message_start","message":{"id":"msg_tool_01","type":"message","role":"assistant","content":[],"model":"claude-sonnet-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+        sse_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"get_weather","input":{}}})),
+        sse_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"location\\":"}})),
+        sse_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\\"Tokyo\\"}"}})),
+        sse_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+        sse_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":8}})),
+        sse_event("message_stop", %({"type":"message_stop"})),
+      ].join("\n\n")
+
+      message = Anthropic::MessageStream.new(sse_response(body)).final_message.not_nil!
+
+      tool_use = message.tool_use_blocks.first
+      tool_use.name.should eq("get_weather")
+      tool_use.input["location"].as_s.should eq("Tokyo")
+    end
+
+    it "finalizes pending tool input even when the stream is truncated before content_block_stop" do
+      body = [
+        sse_event("message_start", %({"type":"message_start","message":{"id":"msg_tool_02","type":"message","role":"assistant","content":[],"model":"claude-sonnet-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+        sse_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_2","name":"get_weather","input":{}}})),
+        sse_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"location\\":\\"Kyoto\\"}"}})),
+      ].join("\n\n")
+
+      message = Anthropic::MessageStream.new(sse_response(body)).final_message.not_nil!
+
+      tool_use = message.tool_use_blocks.first
+      tool_use.input["location"].as_s.should eq("Kyoto")
+    end
   end
 
   describe "#tool_use_deltas" do

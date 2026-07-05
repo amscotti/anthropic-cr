@@ -74,32 +74,43 @@ end
 
 describe Anthropic::Model do
   it "has rolling alias constants for current default models" do
+    Anthropic::Model::CLAUDE_SONNET.should eq("claude-sonnet-5")
+    Anthropic::Model::CLAUDE_FABLE.should eq("claude-fable-5")
     Anthropic::Model::CLAUDE_OPUS.should eq("claude-opus-4-8")
-    Anthropic::Model::CLAUDE_SONNET.should eq("claude-sonnet-4-6")
     Anthropic::Model::CLAUDE_HAIKU.should eq("claude-haiku-4-5")
   end
 
   it "has precise versioned model constants" do
+    Anthropic::Model::CLAUDE_SONNET_5.should eq("claude-sonnet-5")
+    Anthropic::Model::CLAUDE_FABLE_5.should eq("claude-fable-5")
+    Anthropic::Model::CLAUDE_MYTHOS_5.should eq("claude-mythos-5")
     Anthropic::Model::CLAUDE_OPUS_4_8.should eq("claude-opus-4-8")
     Anthropic::Model::CLAUDE_OPUS_4_7.should eq("claude-opus-4-7")
-    Anthropic::Model::CLAUDE_MYTHOS_PREVIEW.should eq("claude-mythos-preview")
     Anthropic::Model::CLAUDE_OPUS_4_6.should eq("claude-opus-4-6")
     Anthropic::Model::CLAUDE_SONNET_4_6.should eq("claude-sonnet-4-6")
     Anthropic::Model::CLAUDE_OPUS_4_5.should eq("claude-opus-4-5-20251101")
     Anthropic::Model::CLAUDE_SONNET_4_5.should eq("claude-sonnet-4-5-20250929")
     Anthropic::Model::CLAUDE_OPUS_4_1.should eq("claude-opus-4-1-20250805")
     Anthropic::Model::CLAUDE_HAIKU_4_5.should eq("claude-haiku-4-5-20251001")
-    Anthropic::Model::CLAUDE_OPUS_4.should eq("claude-opus-4-20250514")
     Anthropic::Model::CLAUDE_SONNET_4.should eq("claude-sonnet-4-20250514")
   end
 
   it "maps rolling aliases to the current precise defaults where applicable" do
+    Anthropic::Model::CLAUDE_SONNET.should eq(Anthropic::Model::CLAUDE_SONNET_5)
+    Anthropic::Model::CLAUDE_FABLE.should eq(Anthropic::Model::CLAUDE_FABLE_5)
     Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_4_8)
-    Anthropic::Model::CLAUDE_SONNET.should eq(Anthropic::Model::CLAUDE_SONNET_4_6)
   end
 
-  it "maps :opus shorthand to Opus 4.8" do
-    Anthropic.model_name(:opus).should eq("claude-opus-4-8")
+  it "maps :sonnet shorthand to Sonnet 5" do
+    Anthropic.model_name(:sonnet).should eq("claude-sonnet-5")
+  end
+
+  it "maps :fable shorthand to Fable 5" do
+    Anthropic.model_name(:fable).should eq("claude-fable-5")
+  end
+
+  it "maps :mythos shorthand to Mythos 5" do
+    Anthropic.model_name(:mythos).should eq("claude-mythos-5")
   end
 
   it "maps :opus_4_8 shorthand to the precise 4.8 model id" do
@@ -108,10 +119,6 @@ describe Anthropic::Model do
 
   it "maps :opus_4_7 shorthand to the precise 4.7 model id" do
     Anthropic.model_name(:opus_4_7).should eq("claude-opus-4-7")
-  end
-
-  it "maps :mythos shorthand to the mythos preview model id" do
-    Anthropic.model_name(:mythos).should eq("claude-mythos-preview")
   end
 
   it "maps :opus_4_5 shorthand to Opus 4.5" do

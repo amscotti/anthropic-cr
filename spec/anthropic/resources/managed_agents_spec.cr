@@ -87,7 +87,7 @@ describe "Stateful Managed Agents APIs" do
       ver_json = %({"id":"ver_123","memory_id":"mem_123","memory_store_id":"store_123","operation":"create","created_at":""})
 
       stub_and_capture(:post, "https://api.anthropic.com/v1/memory_stores?beta=true", store_json)
-      stub_and_capture(:post, "https://api.anthropic.com/v1/memory_stores/store_123/memories?beta=true", mem_json)
+      mem_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/memory_stores/store_123/memories?beta=true", mem_json)
       stub_and_capture(:get, "https://api.anthropic.com/v1/memory_stores/store_123/versions/ver_123?beta=true", ver_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -98,6 +98,10 @@ describe "Stateful Managed Agents APIs" do
       memory = client.beta.memory_stores.memories.create(memory_store_id: "store_123", path: "/test", content: "hello")
       memory.id.should eq("mem_123")
       memory.memory_store_id.should eq("store_123")
+
+      # All memory-stores requests carry the managed-agents AND agent-memory betas.
+      mem_capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::MANAGED_AGENTS_BETA)
+      mem_capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::AGENT_MEMORY_BETA)
 
       version = client.beta.memory_stores.memory_versions.retrieve(memory_store_id: "store_123", version_id: "ver_123")
       version.id.should eq("ver_123")
@@ -260,7 +264,7 @@ describe "Stateful Managed Agents APIs" do
       agent.version.should eq(1)
 
       create_body = JSON.parse(create_capture.body.not_nil!)
-      create_body["model"].as_s.should eq("claude-sonnet-4-6")
+      create_body["model"].as_s.should eq("claude-sonnet-5")
       create_body["name"].as_s.should eq("My Agent")
       create_body["system"].as_s.should eq("Pirate speak")
       create_capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::MANAGED_AGENTS_BETA)

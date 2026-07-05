@@ -3,6 +3,49 @@
 All notable changes to `anthropic-cr` are documented here. The project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-07-04
+
+Tracks the July 2026 release of the official Python (0.116.0), Ruby (1.55.0), and TypeScript (0.110.0) SDKs, centered on the Claude Sonnet 5 / Fable 5 / Mythos 5 generation.
+
+### Added — Models
+
+- `Anthropic::Model::CLAUDE_SONNET_5`, `Anthropic::Model::CLAUDE_FABLE_5`, `Anthropic::Model::CLAUDE_MYTHOS_5`. `CLAUDE_SONNET` / `CLAUDE_FABLE` rolling aliases now resolve here; `:sonnet`, `:fable`, `:mythos` shorthands updated.
+- Retired past-EOL model constants (`claude-opus-4`, `claude-mythos-preview`).
+
+### Added — Server-side fallbacks on refusal
+
+- `Anthropic::FallbackParam`, `Anthropic::FallbackContent` (content block, wired into the `ContentBlock` union + converter), `Anthropic::FallbackInfo`, `Anthropic::FallbackRefusalTrigger`, `Anthropic::FallbackMessageIterationUsage`.
+- `fallbacks:` / `fallback_credit_token:` request params on `messages` and `beta.messages` (`create`, `stream`, `open_stream`).
+- `Usage#iterations` per-hop breakdown.
+- `RefusalStopDetails` gained `fallback_credit_token`, `fallback_has_prefill_claim`, `recommended_model`.
+- Beta constants `SERVER_SIDE_FALLBACK_BETA` (`server-side-fallback-2026-06-01`) and `FALLBACK_CREDIT_BETA` (`fallback-credit-2026-06-01`), auto-attached when `fallbacks:` is set.
+
+### Added — HTTP middleware system
+
+- `Anthropic::Middleware` module + `Anthropic::APIRequest` / `Anthropic::APIResponse` / `Anthropic::MiddlewareNext`. Middleware runs once per HTTP attempt inside the retry loop.
+- Client registration via `Anthropic::Client.new(middleware: [...])`.
+- `Anthropic::BetaRefusalFallbackMiddleware` — client-side refusal fallbacks for providers without server-side fallback support. Tags requests with `fallback-refusal-middleware`.
+
+### Added — New server tools
+
+- `Anthropic::CodeExecutionTool20260521` (`code_execution_20260521`).
+- `Anthropic::WebFetchTool20260318` and `Anthropic::WebSearchTool20260318` (with `response_inclusion`).
+
+### Added — Managed Agents
+
+- `client.beta.deployments` — `create`, `retrieve`, `update`, `list`, `archive`, `pause`, `unpause`, `run`.
+- `client.beta.deployment_runs` — `retrieve`, `list`.
+- Managed Agents event-delta streaming: `event_deltas:` opt-in on `client.beta.sessions.events.stream`, `Anthropic::SessionEventStream`, and the `Anthropic::Sessions.accumulate_managed_agents_event` helper.
+- `Anthropic::InjectionLocation` and `Anthropic::CredentialNetworking` for vault credential injection scoping.
+- Webhook event classification helpers on `BetaWebhookEvent`.
+
+### Changed
+
+- `user_profile_id` is now sent as the `anthropic-user-profile-id` **request header** (was a JSON body field) across beta + non-beta messages, `count_tokens`, and `parse`, matching the official SDKs.
+- `agent-memory-2026-07-22` beta (`AGENT_MEMORY_BETA`) attached to all memory-stores resources.
+- `Anthropic::StainlessHelper` single-sources the `x-stainless-helper` telemetry header with append semantics; `extra_headers:` plumbing on `messages` / `beta.messages`; `ToolRunner` now tags requests.
+- Streaming accumulator parses tool-use input lazily (once per block close) instead of on every `input_json_delta`.
+
 ## [0.7.1] — 2026-05-31
 
 Adds support for the Managed Agents beta API, providing agent definition management and secure credential storage (Vaults).

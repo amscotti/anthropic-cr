@@ -84,3 +84,13 @@ crystal run examples/01_basic_message.cr
 | `34_opus_48.cr` | Claude Opus 4.8 with `xhigh` effort and `BetaTokenTaskBudget` |
 | `35_advisor_tool.cr` | Advisor tool (`advisor_20260301`) with typed result-block handling |
 | `36_user_profiles.cr` | User Profiles API + `user_profile_id` scoped messaging |
+
+### Sonnet 5 / Fable 5 / July 2026
+
+| File | Description |
+|------|-------------|
+| `37_sonnet_5_fable_5.cr` | Claude Sonnet 5 / Fable 5 / Mythos 5 models |
+| `38_new_tools.cr` | New server tools (`code_execution_20260521`, `web_fetch_20260318`, `web_search_20260318`) |
+| `39_fallbacks.cr` | Server-side refusal fallbacks (`fallbacks:` request param) |
+| `40_middleware.cr` | HTTP middleware (logging + header injection) |
+| `41_refusal_fallback_middleware.cr` | Client-side `BetaRefusalFallbackMiddleware` |

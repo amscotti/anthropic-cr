@@ -20,13 +20,13 @@ module Anthropic
 
     tools.try &.each do |tool|
       case tool
-      when WebSearchTool, WebSearchTool20260209
+      when WebSearchTool, WebSearchTool20260209, WebSearchTool20260318
         betas << WEB_SEARCH_BETA unless betas.includes?(WEB_SEARCH_BETA)
       when ComputerUseTool, ComputerUseTool20251124
         betas << COMPUTER_USE_BETA unless betas.includes?(COMPUTER_USE_BETA)
-      when CodeExecutionTool, CodeExecutionTool20260120
+      when CodeExecutionTool, CodeExecutionTool20260120, CodeExecutionTool20260521
         betas << CODE_EXECUTION_BETA unless betas.includes?(CODE_EXECUTION_BETA)
-      when WebFetchTool, WebFetchTool20260209, WebFetchTool20260309
+      when WebFetchTool, WebFetchTool20260209, WebFetchTool20260309, WebFetchTool20260318
         betas << WEB_FETCH_BETA unless betas.includes?(WEB_FETCH_BETA)
       when MemoryTool
         betas << MEMORY_BETA unless betas.includes?(MEMORY_BETA)
@@ -137,6 +137,21 @@ module Anthropic
 
   # Fast mode beta header.
   FAST_MODE_BETA = "fast-mode-2026-02-01"
+
+  # Server-side fallbacks beta header.
+  #
+  # When supplied alongside a top-level `fallbacks:` request param, the API
+  # retries a refused request itself in one round-trip.
+  SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-06-01"
+
+  # Client-side fallback credit beta header.
+  #
+  # Used by the client-side `BetaRefusalFallbackMiddleware` to redeem
+  # `fallback_credit_token`s returned on refusal stop details.
+  FALLBACK_CREDIT_BETA = "fallback-credit-2026-06-01"
+
+  # Agent persistent memory beta header (Memory Stores API).
+  AGENT_MEMORY_BETA = "agent-memory-2026-07-22"
 
   # Web search tool - allows Claude to search the internet
   #
@@ -255,6 +270,58 @@ module Anthropic
     end
   end
 
+  # Web search tool (March 2026 variant).
+  #
+  # Adds `response_inclusion` ("full" or "excluded") on top of the 20260209
+  # variant, controlling how search result blocks are surfaced when the tool is
+  # consumed by a completed `code_execution` call in the same turn.
+  struct WebSearchTool20260318 < ServerTool
+    include JSON::Serializable
+
+    getter type : String = "web_search_20260318"
+    getter name : String = "web_search"
+
+    @[JSON::Field(key: "allowed_callers", emit_null: false)]
+    getter allowed_callers : Array(String)?
+
+    @[JSON::Field(key: "allowed_domains", emit_null: false)]
+    getter allowed_domains : Array(String)?
+
+    @[JSON::Field(key: "blocked_domains", emit_null: false)]
+    getter blocked_domains : Array(String)?
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    @[JSON::Field(key: "defer_loading", emit_null: false)]
+    getter defer_loading : Bool?
+
+    @[JSON::Field(key: "max_uses", emit_null: false)]
+    getter max_uses : Int32?
+
+    @[JSON::Field(key: "response_inclusion", emit_null: false)]
+    getter response_inclusion : String?
+
+    @[JSON::Field(key: "strict", emit_null: false)]
+    getter strict : Bool?
+
+    @[JSON::Field(key: "user_location", emit_null: false)]
+    getter user_location : UserLocation?
+
+    def initialize(
+      @allowed_callers : Array(String)? = nil,
+      @allowed_domains : Array(String)? = nil,
+      @blocked_domains : Array(String)? = nil,
+      @cache_control : CacheControl? = nil,
+      @defer_loading : Bool? = nil,
+      @max_uses : Int32? = nil,
+      @response_inclusion : String? = nil,
+      @strict : Bool? = nil,
+      @user_location : UserLocation? = nil,
+    )
+    end
+  end
+
   # User location for localized web search results
   struct UserLocation
     include JSON::Serializable
@@ -306,6 +373,39 @@ module Anthropic
     include JSON::Serializable
 
     getter type : String = "code_execution_20260120"
+    getter name : String = "code_execution"
+
+    @[JSON::Field(key: "allowed_callers", emit_null: false)]
+    getter allowed_callers : Array(String)?
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    @[JSON::Field(key: "defer_loading", emit_null: false)]
+    getter defer_loading : Bool?
+
+    @[JSON::Field(key: "strict", emit_null: false)]
+    getter strict : Bool?
+
+    def initialize(
+      @allowed_callers : Array(String)? = nil,
+      @cache_control : CacheControl? = nil,
+      @defer_loading : Bool? = nil,
+      @strict : Bool? = nil,
+    )
+    end
+  end
+
+  # Code execution tool (May 2026 variant).
+  #
+  # Code execution tool with REPL state persistence. Functionally identical to
+  # `CodeExecutionTool20260120` but uses the newer `code_execution_20260521`
+  # type string. The `allowed_callers` union now also accepts
+  # `"code_execution_20260521"`.
+  struct CodeExecutionTool20260521 < ServerTool
+    include JSON::Serializable
+
+    getter type : String = "code_execution_20260521"
     getter name : String = "code_execution"
 
     @[JSON::Field(key: "allowed_callers", emit_null: false)]
@@ -731,6 +831,67 @@ module Anthropic
     end
   end
 
+  # Web fetch tool (March 2026 variant).
+  #
+  # Adds `response_inclusion` ("full" or "excluded") on top of the 20260309
+  # variant. `response_inclusion` controls how the fetched result blocks are
+  # surfaced when the tool is consumed by a completed `code_execution` call in
+  # the same turn.
+  struct WebFetchTool20260318 < ServerTool
+    include JSON::Serializable
+
+    getter type : String = "web_fetch_20260318"
+    getter name : String = "web_fetch"
+
+    @[JSON::Field(key: "allowed_callers", emit_null: false)]
+    getter allowed_callers : Array(String)?
+
+    @[JSON::Field(key: "allowed_domains", emit_null: false)]
+    getter allowed_domains : Array(String)?
+
+    @[JSON::Field(key: "blocked_domains", emit_null: false)]
+    getter blocked_domains : Array(String)?
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    @[JSON::Field(emit_null: false)]
+    getter citations : CitationConfig?
+
+    @[JSON::Field(key: "defer_loading", emit_null: false)]
+    getter defer_loading : Bool?
+
+    @[JSON::Field(key: "max_content_tokens", emit_null: false)]
+    getter max_content_tokens : Int32?
+
+    @[JSON::Field(key: "max_uses", emit_null: false)]
+    getter max_uses : Int32?
+
+    @[JSON::Field(key: "response_inclusion", emit_null: false)]
+    getter response_inclusion : String?
+
+    @[JSON::Field(key: "strict", emit_null: false)]
+    getter strict : Bool?
+
+    @[JSON::Field(key: "use_cache", emit_null: false)]
+    getter use_cache : Bool?
+
+    def initialize(
+      @allowed_callers : Array(String)? = nil,
+      @allowed_domains : Array(String)? = nil,
+      @blocked_domains : Array(String)? = nil,
+      @cache_control : CacheControl? = nil,
+      @citations : CitationConfig? = nil,
+      @defer_loading : Bool? = nil,
+      @max_content_tokens : Int32? = nil,
+      @max_uses : Int32? = nil,
+      @response_inclusion : String? = nil,
+      @strict : Bool? = nil,
+      @use_cache : Bool? = nil,
+    )
+    end
+  end
+
   # Memory tool - allows Claude to store and retrieve information across conversations
   #
   # A server-side tool for persistent memory management.
@@ -847,7 +1008,8 @@ module Anthropic
     getter model : String
 
     # Allowed callers for the advisor tool. Valid values include `"direct"`,
-    # `"code_execution_20250825"`, and `"code_execution_20260120"`.
+    # `"code_execution_20250825"`, `"code_execution_20260120"`, and
+    # `"code_execution_20260521"`.
     @[JSON::Field(key: "allowed_callers", emit_null: false)]
     getter allowed_callers : Array(String)?
 
@@ -1045,10 +1207,11 @@ module Anthropic
 
   # Union type for all server tools
   alias AnyServerTool = WebSearchTool | CodeExecutionTool | MCPTool |
-                        WebSearchTool20260209 | CodeExecutionTool20250522 | CodeExecutionTool20260120 |
+                        WebSearchTool20260209 | WebSearchTool20260318 |
+                        CodeExecutionTool20250522 | CodeExecutionTool20260120 | CodeExecutionTool20260521 |
                         BashTool | TextEditorTool | TextEditorTool20250124 | TextEditorTool20250429 |
                         ComputerUseTool |
-                        ComputerUseTool20251124 | WebFetchTool | WebFetchTool20260209 | WebFetchTool20260309 | MemoryTool |
+                        ComputerUseTool20251124 | WebFetchTool | WebFetchTool20260209 | WebFetchTool20260309 | WebFetchTool20260318 | MemoryTool |
                         ToolSearchBM25Tool | ToolSearchRegexTool |
                         MCPToolset |
                         AdvisorTool |

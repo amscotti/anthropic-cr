@@ -137,6 +137,34 @@ describe Anthropic::CodeExecutionTool20260120 do
   end
 end
 
+describe Anthropic::CodeExecutionTool20260521 do
+  it "creates with the May 2026 type string" do
+    tool = Anthropic::CodeExecutionTool20260521.new(
+      allowed_callers: ["direct", "code_execution_20260521"],
+      defer_loading: true,
+      strict: true
+    )
+
+    tool.type.should eq("code_execution_20260521")
+    tool.name.should eq("code_execution")
+    tool.allowed_callers.should eq(["direct", "code_execution_20260521"])
+  end
+
+  it "serializes with the 20260521 type" do
+    tool = Anthropic::CodeExecutionTool20260521.new
+    json = tool.to_json
+    parsed = JSON.parse(json)
+
+    parsed["type"].as_s.should eq("code_execution_20260521")
+    parsed["name"].as_s.should eq("code_execution")
+  end
+
+  it "collects the code execution beta header via beta_headers_for_tools" do
+    tools = [Anthropic::CodeExecutionTool20260521.new] of (Anthropic::ServerTool | Anthropic::ToolDefinition)
+    Anthropic.beta_headers_for_tools(tools).should contain(Anthropic::CODE_EXECUTION_BETA)
+  end
+end
+
 describe Anthropic::WebFetchTool20260309 do
   it "creates with expected fields" do
     tool = Anthropic::WebFetchTool20260309.new(
@@ -159,6 +187,60 @@ describe Anthropic::WebFetchTool20260309 do
 
     json.should contain("web_fetch_20260309")
     json.should contain("use_cache")
+  end
+end
+
+describe Anthropic::WebFetchTool20260318 do
+  it "creates with the March 2026 type string and response_inclusion" do
+    tool = Anthropic::WebFetchTool20260318.new(
+      allowed_domains: ["example.com"],
+      max_uses: 3,
+      response_inclusion: "full",
+      use_cache: true
+    )
+
+    tool.type.should eq("web_fetch_20260318")
+    tool.name.should eq("web_fetch")
+    tool.response_inclusion.should eq("full")
+    tool.use_cache.should be_true
+  end
+
+  it "omits response_inclusion when not set" do
+    tool = Anthropic::WebFetchTool20260318.new
+    parsed = JSON.parse(tool.to_json)
+    parsed.as_h.has_key?("response_inclusion").should be_false
+  end
+
+  it "collects the web fetch beta header via beta_headers_for_tools" do
+    tools = [Anthropic::WebFetchTool20260318.new] of (Anthropic::ServerTool | Anthropic::ToolDefinition)
+    Anthropic.beta_headers_for_tools(tools).should contain(Anthropic::WEB_FETCH_BETA)
+  end
+end
+
+describe Anthropic::WebSearchTool20260318 do
+  it "creates with the March 2026 type string and response_inclusion" do
+    tool = Anthropic::WebSearchTool20260318.new(
+      max_uses: 5,
+      response_inclusion: "excluded"
+    )
+
+    tool.type.should eq("web_search_20260318")
+    tool.name.should eq("web_search")
+    tool.response_inclusion.should eq("excluded")
+  end
+
+  it "serializes response_inclusion when set" do
+    tool = Anthropic::WebSearchTool20260318.new(response_inclusion: "full")
+    json = tool.to_json
+    parsed = JSON.parse(json)
+
+    parsed["type"].as_s.should eq("web_search_20260318")
+    parsed["response_inclusion"].as_s.should eq("full")
+  end
+
+  it "collects the web search beta header via beta_headers_for_tools" do
+    tools = [Anthropic::WebSearchTool20260318.new] of (Anthropic::ServerTool | Anthropic::ToolDefinition)
+    Anthropic.beta_headers_for_tools(tools).should contain(Anthropic::WEB_SEARCH_BETA)
   end
 end
 

@@ -2,7 +2,7 @@
 
 An unofficial Anthropic API client for Crystal. Access Claude AI models with idiomatic Crystal code.
 
-**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, Managed Agents API (agents, environments, sessions, memory stores, vaults), tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Tracks the Opus 4.8 / May 2026 release of the official Python, Ruby, and TypeScript SDKs. API design inspired by official Ruby SDK patterns.
+**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, Managed Agents API (agents, environments, sessions, deployments, memory stores, vaults), tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, HTTP middleware, server-side and client-side refusal fallbacks, and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Tracks the July 2026 release (Sonnet 5 / Fable 5 / Mythos 5) of the official Python, Ruby, and TypeScript SDKs. API design inspired by official Ruby SDK patterns.
 
 > **Note:** A large portion of this library was written with the assistance of AI (Claude), including code, tests, and documentation.
 
@@ -19,7 +19,8 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **Agent Tools** — BashTool, TextEditorTool, ComputerUseTool for agentic workflows
 - ✅ **Web Fetch** — Built-in web page fetching via server-side tool
 - ✅ **Memory** — Persistent memory tool for cross-conversation context
-- ✅ **Code Execution** — Sandboxed code execution via server-side tool (three versions: `20250522`, `20250825`, `20260120`)
+- ✅ **Code Execution** — Sandboxed code execution via server-side tool (four versions: `20250522`, `20250825`, `20260120`, `20260521`)
+- ✅ **Web Fetch / Web Search (March 2026)** — `WebFetchTool20260318` and `WebSearchTool20260318` with `response_inclusion`
 - ✅ **Advisor Tool** (`advisor_20260301`) — Delegate sub-questions to a secondary model at runtime
 - ✅ **Strict Mode** — Enforce strict schema validation on tool definitions
 - ✅ **Extended Thinking** — Claude's reasoning process (including adaptive thinking)
@@ -29,8 +30,11 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **Containers** — Core container reuse plus beta container skill loading
 - ✅ **Tool Search** — BM25 and Regex tool search for deferred tool loading
 - ✅ **Legacy Tool Versions** — October 2024 and intermediate versions (`BashToolLegacy`, `TextEditorToolLegacy`, `TextEditorTool20250124`, `TextEditorTool20250429`, `ComputerUseToolLegacy`)
+- ✅ **HTTP Middleware** — Inspect, rewrite, or short-circuit requests/responses around the SDK's terminal HTTP send (`Anthropic::Middleware`, runs per attempt inside the retry loop)
+- ✅ **Server-Side Fallbacks** — Automatic refusal retries via the `fallbacks:` request param + `server-side-fallback-2026-06-01` beta; `FallbackContent` block + per-hop `usage.iterations`
+- ✅ **Client-Side Refusal Fallback Middleware** — `Anthropic::BetaRefusalFallbackMiddleware` for providers without server-side fallback support
 - ✅ **Skills API** — Full CRUD for skills and skill versions (beta)
-- ✅ **User Profiles API** — Create / retrieve / update / list profiles + enrollment URLs; `user_profile_id:` on beta messages (beta: `user-profiles-2026-03-24`)
+- ✅ **User Profiles API** — Create / retrieve / update / list profiles + enrollment URLs; `user_profile_id:` sent as the `anthropic-user-profile-id` request header (beta: `user-profiles-2026-03-24`)
 - ✅ **Token Task Budgets** — `BetaTokenTaskBudget` for session-wide token caps via `output_config.task_budget`
 - ✅ **Extended Tool Fields** — Beta `allowed_callers`, `defer_loading`, `input_examples`, `eager_input_streaming`
 - ✅ **Effort Control** — Control output effort level via `output_config` (`low` / `medium` / `high` / `xhigh` / `max`)
@@ -39,7 +43,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **Citations** — Document citations across all location variants (char, page, content block, web search result, search result) with streaming support
 - ✅ **Beta Namespace** — `client.beta.messages`, `client.beta.user_profiles`, etc. matching Ruby SDK
 - ✅ **Model Capabilities** — Richer Models API metadata (`capabilities` with `xhigh` effort, `max_input_tokens`, `max_tokens`)
-- ✅ **Stop Details Union** — Structured `refusal` stop details plus `GenericStopDetails` fallback for future variants
+- ✅ **Stop Details Union** — Structured `refusal` stop details (with `fallback_credit_token` / `fallback_has_prefill_claim` / `recommended_model`) plus `GenericStopDetails` fallback for future variants
 - ✅ Vision (image understanding)
 - ✅ System prompts and temperature control
 - ✅ Message Batches API (create, list, retrieve, results, cancel, delete)
@@ -51,7 +55,9 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ Beta Files API (upload, download, delete)
 - ✅ Token counting API
 - ✅ Prompt caching with TTL control
-- ✅ Managed Agents (agents / environments / sessions / vaults / secure webhooks)
+- ✅ Managed Agents (agents / environments / sessions / deployments / deployment runs / vaults / secure webhooks)
+- ✅ **Managed Agents Event Streaming** — `SessionEventStream` + `event_deltas:` opt-in + `accumulate_managed_agents_event` helper
+- ✅ **x-stainless-helper Telemetry** — Single-sourced helper header with append semantics
 - 🚧 AWS Bedrock & Google Vertex support — planned
 
 ## Installation
@@ -68,7 +74,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 
 ## Beta Status
 
-Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (Opus 4.8 / May 2026 release).
+Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (July 2026 / Sonnet 5 release).
 
 Still beta upstream:
 - Files API via `client.beta.files`
@@ -76,7 +82,9 @@ Still beta upstream:
 - **User Profiles API** via `client.beta.user_profiles` (`user-profiles-2026-03-24`)
 - **Advisor tool** (`advisor-tool-2026-03-01`) via `Anthropic::AdvisorTool`
 - **Token task budgets** via `output_config.task_budget`
-- **Managed Agents API** via `client.beta.agents`, `client.beta.vaults`, `client.beta.sessions`, `client.beta.environments`, `client.beta.memory_stores`, and secure webhook verification (`managed-agents-2026-04-01`)
+- **Server-side fallbacks** via the `fallbacks:` request param (`server-side-fallback-2026-06-01`); client-side fallbacks via `Anthropic::BetaRefusalFallbackMiddleware` (`fallback-credit-2026-06-01`)
+- **Managed Agents API** via `client.beta.agents`, `client.beta.vaults`, `client.beta.sessions`, `client.beta.deployments`, `client.beta.deployment_runs`, `client.beta.environments`, `client.beta.memory_stores`, and secure webhook verification (`managed-agents-2026-04-01`)
+- **Memory Stores** (`agent-memory-2026-07-22`)
 - Context management (`context_management`)
 - MCP server definitions (`mcp_servers`)
 - Skill-loading container configs (`container: Anthropic::ContainerConfig`)
@@ -98,7 +106,7 @@ client = Anthropic::Client.new
 
 # Create a message
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_6,
+  model: Anthropic::Model::CLAUDE_SONNET_5,
   max_tokens: 1024,
   messages: [
     {role: "user", content: "Hello, Claude!"}
@@ -613,36 +621,114 @@ client.beta.user_profiles.retrieve(profile.id)
 client.beta.user_profiles.update(profile.id, metadata: {"plan" => "enterprise"})
 ```
 
+### Server-Side Fallbacks (Beta)
+
+When a model refuses a request for policy reasons, the server-side fallbacks feature lets the API automatically retry against a fallback model chain in a single round-trip. The SDK auto-attaches the `server-side-fallback-2026-06-01` beta when `fallbacks:` is set:
+
+```crystal
+message = client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_FABLE_5,
+  max_tokens: 1024,
+  fallbacks: [
+    Anthropic::FallbackParam.new(model: Anthropic::Model::CLAUDE_OPUS_4_8),
+  ],
+  messages: [{role: "user", content: "..."}]
+)
+
+# If a fallback fired, the response carries a `fallback` content block at the
+# model boundary and per-hop `usage.iterations`.
+if fallback = message.content.find(&.is_a?(Anthropic::FallbackContent))
+  fb = fallback.as(Anthropic::FallbackContent)
+  puts "Fell back: #{fb.from.model} -> #{fb.to.model}"
+end
+```
+
+### Client-Side Refusal Fallback Middleware (Beta)
+
+For API providers that don't support server-side fallbacks, `BetaRefusalFallbackMiddleware` retries refused requests down a client-side fallback chain. It is mutually exclusive with the `fallbacks:` request param:
+
+```crystal
+client = Anthropic::Client.new(
+  middleware: [
+    Anthropic::BetaRefusalFallbackMiddleware.new(
+      [Anthropic::FallbackParam.new(model: Anthropic::Model::CLAUDE_OPUS_4_8)],
+    ),
+  ],
+)
+
+message = client.beta.messages.create(
+  model: Anthropic::Model::CLAUDE_FABLE_5,
+  max_tokens: 1024,
+  messages: [{role: "user", content: "..."}],
+)
+```
+
+### HTTP Middleware
+
+Inspect, rewrite, or short-circuit requests and responses around the SDK's terminal HTTP send. The chain runs once per attempt inside the retry loop:
+
+```crystal
+class LoggingMiddleware
+  include Anthropic::Middleware
+
+  def call(request : Anthropic::APIRequest, nxt : Anthropic::MiddlewareNext) : Anthropic::APIResponse
+    puts "-> #{request.method} #{request.path}"
+    response = nxt.call(request)
+    puts "<- HTTP #{response.status}"
+    response
+  end
+end
+
+client = Anthropic::Client.new(middleware: [LoggingMiddleware.new])
+
+# Inject a custom request header
+class AddHeaderMiddleware
+  include Anthropic::Middleware
+
+  def call(request : Anthropic::APIRequest, nxt : Anthropic::MiddlewareNext) : Anthropic::APIResponse
+    new_headers = request.headers.dup
+    new_headers["x-custom"] = "injected"
+    nxt.call(request.with(headers: new_headers))
+  end
+end
+```
+
+`nxt.call` returns an `APIResponse` for **every** status (4xx/5xx do not raise inside the chain); connection errors do raise. Middleware may call `nxt` multiple times to implement custom retry logic. **Limitation:** only buffered JSON requests run through the chain — streaming, raw downloads, and multipart uploads bypass middleware.
+
 ## Model Constants
 
 ```crystal
 # Rolling aliases — point at the current default precise models
-Anthropic::Model::CLAUDE_OPUS          # => "claude-opus-4-8"
-Anthropic::Model::CLAUDE_SONNET        # => "claude-sonnet-4-6"
-Anthropic::Model::CLAUDE_HAIKU         # => "claude-haiku-4-5"
+Anthropic::Model::CLAUDE_SONNET       # => "claude-sonnet-5"
+Anthropic::Model::CLAUDE_FABLE        # => "claude-fable-5"
+Anthropic::Model::CLAUDE_OPUS         # => "claude-opus-4-8"
+Anthropic::Model::CLAUDE_HAIKU        # => "claude-haiku-4-5"
 
-# Latest precise models
-Anthropic::Model::CLAUDE_OPUS_4_8          # Frontier intelligence (May 2026)
-Anthropic::Model::CLAUDE_OPUS_4_7          # Frontier intelligence (April 2026)
-Anthropic::Model::CLAUDE_MYTHOS_PREVIEW    # Coding & cybersecurity-focused preview
-Anthropic::Model::CLAUDE_OPUS_4_6          # Opus 4.6
-Anthropic::Model::CLAUDE_OPUS_4_5          # Opus 4.5
-Anthropic::Model::CLAUDE_SONNET_4_6        # Sonnet 4.6
-Anthropic::Model::CLAUDE_SONNET_4_5        # Sonnet 4.5
-Anthropic::Model::CLAUDE_HAIKU_4_5         # Haiku 4.5
+# Latest models (July 2026 generation)
+Anthropic::Model::CLAUDE_SONNET_5     # High-performance model for coding and agents
+Anthropic::Model::CLAUDE_FABLE_5      # Next-gen intelligence for the hardest knowledge work
+Anthropic::Model::CLAUDE_MYTHOS_5     # Most capable for cybersecurity & biology research
 
-# Deprecated (EOL June 15, 2026)
+# Claude 4.x models
+Anthropic::Model::CLAUDE_OPUS_4_8     # Frontier intelligence (May 2026)
+Anthropic::Model::CLAUDE_OPUS_4_7     # Frontier intelligence (April 2026)
+Anthropic::Model::CLAUDE_OPUS_4_6     # Opus 4.6
+Anthropic::Model::CLAUDE_OPUS_4_5     # Opus 4.5
+Anthropic::Model::CLAUDE_SONNET_4_6   # Sonnet 4.6
+Anthropic::Model::CLAUDE_SONNET_4_5   # Sonnet 4.5
+Anthropic::Model::CLAUDE_HAIKU_4_5    # Haiku 4.5
+
+# Deprecated (EOL August 5, 2026)
 Anthropic::Model::CLAUDE_OPUS_4_1
-Anthropic::Model::CLAUDE_OPUS_4
 Anthropic::Model::CLAUDE_SONNET_4
 
 # Or use shorthands
-Anthropic.model_name(:opus)      # => "claude-opus-4-7"
+Anthropic.model_name(:sonnet)    # => "claude-sonnet-5"
+Anthropic.model_name(:fable)     # => "claude-fable-5"
+Anthropic.model_name(:mythos)    # => "claude-mythos-5"
+Anthropic.model_name(:opus)      # => "claude-opus-4-8"
+Anthropic.model_name(:opus_4_8)  # => "claude-opus-4-8"
 Anthropic.model_name(:opus_4_7)  # => "claude-opus-4-7"
-Anthropic.model_name(:mythos)    # => "claude-mythos-preview"
-Anthropic.model_name(:opus_4_6)  # => "claude-opus-4-6"
-Anthropic.model_name(:opus_4_5)  # => "claude-opus-4-5-20251101"
-Anthropic.model_name(:sonnet)    # => "claude-sonnet-4-6"
 Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
 ```
 
@@ -692,6 +778,11 @@ See the [examples/](./examples/) directory for complete working examples:
 - `34_managed_agents.cr` - Stateful Managed Agents API (environments, memory stores, agents, vaults, webhooks)
 - `35_advisor_tool.cr` - Advisor tool (`advisor_20260301`) with typed result-block handling
 - `36_user_profiles.cr` - User Profiles API create / list / enrollment and scoped messaging
+- `37_sonnet_5_fable_5.cr` - Claude Sonnet 5 / Fable 5 / Mythos 5 models
+- `38_new_tools.cr` - New server tools (`code_execution_20260521`, `web_fetch_20260318`, `web_search_20260318`)
+- `39_fallbacks.cr` - Server-side refusal fallbacks (`fallbacks:` request param)
+- `40_middleware.cr` - HTTP middleware (logging + header injection)
+- `41_refusal_fallback_middleware.cr` - Client-side `BetaRefusalFallbackMiddleware`
 
 Run examples with:
 ```bash

@@ -13,6 +13,7 @@ module Anthropic
     @initial_retry_delay : Float64
     @max_retry_delay : Float64
     @default_headers : Hash(String, String)
+    @middleware : Array(Middleware)
 
     def initialize(
       api_key : String? = nil,
@@ -22,6 +23,7 @@ module Anthropic
       initial_retry_delay : Float64 = DEFAULT_INITIAL_DELAY,
       max_retry_delay : Float64 = DEFAULT_MAX_DELAY,
       default_headers : Hash(String, String) = {} of String => String,
+      middleware : Array = [] of Middleware,
     )
       @api_key = api_key || ENV["ANTHROPIC_API_KEY"]? || raise ArgumentError.new(
         "API key required. Set ANTHROPIC_API_KEY environment variable or pass api_key parameter."
@@ -32,6 +34,12 @@ module Anthropic
       @initial_retry_delay = initial_retry_delay
       @max_retry_delay = max_retry_delay
       @default_headers = default_headers
+      @middleware = middleware.map(&.as(Middleware))
+    end
+
+    # The configured middleware chain (outermost first).
+    def middleware : Array(Middleware)
+      @middleware
     end
 
     # Resource accessors
@@ -220,9 +228,47 @@ module Anthropic
 
     private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
       uri = URI.parse(@base_url)
-      response = nil
       req_headers = headers(extra_headers, method: method)
 
+      # Fast path: no middleware — send directly with the existing retry loop.
+      return request_direct(method, path, body, uri, req_headers) if @middleware.empty?
+
+      # Middleware path: compose a chain around the terminal HTTP send. The
+      # chain runs once per attempt inside the retry loop. The terminal returns
+      # an APIResponse for every status (4xx/5xx do not raise); connection
+      # errors do raise. Typed error raising happens after the chain returns.
+      api_request = APIRequest.new(method, path, req_headers, body)
+
+      response = nil
+      (@max_retries + 1).times do |attempt|
+        begin
+          api_response = invoke_chain(api_request, uri)
+          response = to_http_response(api_response)
+
+          if api_response.success? || !should_retry?(response)
+            handle_error(response) unless response.success?
+            return response
+          end
+        rescue ex : APITimeoutError
+          raise ex if attempt >= @max_retries
+        rescue ex : APIConnectionError
+          raise ex if attempt >= @max_retries
+        end
+
+        if attempt < @max_retries
+          sleep(backoff_delay(attempt, response))
+        end
+      end
+
+      if resp = response
+        handle_error(resp)
+      end
+      raise APIError.new("Request failed after #{@max_retries} retries")
+    end
+
+    # Send a single HTTP attempt and return its raw response (no middleware).
+    private def request_direct(method : String, path : String, body : String?, uri : URI, req_headers : HTTP::Headers) : HTTP::Client::Response
+      response = nil
       (@max_retries + 1).times do |attempt|
         begin
           HTTP::Client.new(uri) do |client|
@@ -259,6 +305,55 @@ module Anthropic
         handle_error(resp)
       end
       raise APIError.new("Request failed after #{@max_retries} retries")
+    end
+
+    # Compose the middleware chain around the terminal HTTP send and invoke it
+    # for a single attempt.
+    private def invoke_chain(api_request : APIRequest, uri : URI) : APIResponse
+      terminal = MiddlewareNext.new do |req|
+        send_terminal(req, uri)
+      end
+
+      chain = @middleware.reverse.reduce(terminal) do |inner, layer|
+        inner_next = inner
+        MiddlewareNext.new do |req|
+          layer.call(req, inner_next)
+        end
+      end
+
+      chain.call(api_request)
+    end
+
+    # The terminal HTTP send: performs one attempt and returns an APIResponse
+    # for every status. Connection-level errors raise.
+    private def send_terminal(api_request : APIRequest, uri : URI) : APIResponse
+      HTTP::Client.new(uri) do |client|
+        client.connect_timeout = @timeout
+        client.read_timeout = @timeout
+
+        http_response = case api_request.method
+                        when "GET"    then client.get(api_request.path, headers: api_request.headers)
+                        when "POST"   then client.post(api_request.path, headers: api_request.headers, body: api_request.body)
+                        when "DELETE" then client.delete(api_request.path, headers: api_request.headers)
+                        else               raise "Unknown HTTP method: #{api_request.method}"
+                        end
+
+        APIResponse.new(http_response.status_code, http_response.headers, http_response.body, api_request)
+      end
+    rescue ex : IO::TimeoutError
+      raise APITimeoutError.new("Request timed out")
+    rescue ex : IO::Error | Socket::Error
+      raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex)
+    end
+
+    # Reconstruct an HTTP::Client::Response from an APIResponse so the existing
+    # error-handling and retry helpers can be reused.
+    private def to_http_response(api_response : APIResponse) : HTTP::Client::Response
+      HTTP::Client::Response.new(
+        api_response.status,
+        body: api_response.body,
+        headers: api_response.headers,
+      )
     end
 
     private def encode_query_params(params : QueryParams) : String
