@@ -27,7 +27,7 @@ development_dependencies:
     github: spoved/vcr.cr
   ameba:
     github: crystal-ameba/ameba
-    version: ~> 1.6
+    version: ~> 1.7.0-dev
   dotenv:
     github: drum445/dotenv
 

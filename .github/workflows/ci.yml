@@ -33,6 +33,10 @@ jobs:
       - name: Install dependencies
         run: shards install
 
+      # Ameba 1.7+ no longer postinstalls its binary; build via project target.
+      - name: Build Ameba
+        run: shards build ameba
+
       - name: Run Ameba
         run: bin/ameba
 

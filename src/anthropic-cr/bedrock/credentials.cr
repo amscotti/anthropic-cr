@@ -385,19 +385,14 @@ module Anthropic
         role_name = present(section["sso_role_name"]?)
         return nil if account_id.nil? || role_name.nil?
 
-        start_url : String? = nil
-        sso_region : String? = nil
+        start_url, sso_region = if session_name = present(section["sso_session"]?)
+                                  session = config_ini["sso-session #{session_name}"]?
+                                  return nil unless session
 
-        if session_name = present(section["sso_session"]?)
-          session = config_ini["sso-session #{session_name}"]?
-          return nil unless session
-
-          start_url = present(session["sso_start_url"]?)
-          sso_region = present(session["sso_region"]?)
-        else
-          start_url = present(section["sso_start_url"]?)
-          sso_region = present(section["sso_region"]?)
-        end
+                                  {present(session["sso_start_url"]?), present(session["sso_region"]?)}
+                                else
+                                  {present(section["sso_start_url"]?), present(section["sso_region"]?)}
+                                end
 
         return nil if start_url.nil? || sso_region.nil?
 

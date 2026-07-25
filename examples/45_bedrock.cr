@@ -59,7 +59,9 @@ puts "2. Streaming messages.stream (optional)"
 puts "-" * 60
 puts "Skip with SKIP_BEDROCK_STREAM=1 if needed."
 
-unless ENV["SKIP_BEDROCK_STREAM"]?
+if ENV["SKIP_BEDROCK_STREAM"]?
+  puts "Skipped (SKIP_BEDROCK_STREAM set)."
+else
   begin
     print "stream: "
     client.messages.stream(
@@ -78,8 +80,6 @@ unless ENV["SKIP_BEDROCK_STREAM"]?
   rescue ex : ArgumentError
     puts "Config error: #{ex.message}"
   end
-else
-  puts "Skipped (SKIP_BEDROCK_STREAM set)."
 end
 
 puts
