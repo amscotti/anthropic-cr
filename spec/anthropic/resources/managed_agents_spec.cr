@@ -136,6 +136,25 @@ describe "Stateful Managed Agents APIs" do
       thread.session_id.should eq("sess_123")
       thread.status.should eq("running")
     end
+
+    it "includes initial_events on session create" do
+      session_json = %({"id":"sess_init","environment_id":"env_123","vault_ids":[],"outcome_evaluations":[],"resources":[],"metadata":{},"created_at":"","updated_at":"","status":"idle","agent":{},"stats":{},"usage":{}})
+      session_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions?beta=true", session_json)
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+      client.beta.sessions.create(
+        environment_id: "env_123",
+        agent: "agent_123",
+        initial_events: [
+          JSON.parse(%({"type":"user.message","content":[{"type":"text","text":"Hello"}]})),
+        ],
+      )
+
+      body = JSON.parse(session_capture.body.not_nil!)
+      body["initial_events"].as_a.size.should eq(1)
+      body["initial_events"][0]["type"].as_s.should eq("user.message")
+      body["initial_events"][0]["content"][0]["text"].as_s.should eq("Hello")
+    end
   end
 
   describe Anthropic::BetaWebhooks do
@@ -286,6 +305,96 @@ describe "Stateful Managed Agents APIs" do
       # Archive
       archived = client.beta.agents.archive("agent_123")
       archived.id.should eq("agent_123")
+    end
+
+    it "creates an agent with model config effort and speed" do
+      agent_json = %({
+        "id": "agent_cfg",
+        "name": "Config Agent",
+        "type": "agent",
+        "version": 1,
+        "model": {"id": "claude-sonnet-5", "effort": {"type": "high"}, "speed": "fast"},
+        "created_at": "2026-05-24T12:00:00Z",
+        "updated_at": "2026-05-24T12:00:00Z",
+        "archived_at": null
+      })
+
+      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents?beta=true", agent_json)
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+      agent = client.beta.agents.create(
+        model: Anthropic::BetaManagedAgentsModelConfig.new(
+          id: :sonnet,
+          effort: "high",
+          speed: "fast",
+        ),
+        name: "Config Agent",
+      )
+      agent.id.should eq("agent_cfg")
+
+      body = JSON.parse(create_capture.body.not_nil!)
+      body["model"]["id"].as_s.should eq("claude-sonnet-5")
+      body["model"]["effort"].as_s.should eq("high")
+      body["model"]["speed"].as_s.should eq("fast")
+    end
+
+    it "creates an agent with effort as typed object" do
+      agent_json = %({
+        "id": "agent_obj",
+        "name": "Obj Agent",
+        "type": "agent",
+        "version": 1,
+        "model": {"id": "claude-sonnet-5", "effort": {"type": "xhigh"}},
+        "created_at": "",
+        "updated_at": "",
+        "archived_at": null
+      })
+
+      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents?beta=true", agent_json)
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+      client.beta.agents.create(
+        model: Anthropic::BetaManagedAgentsModelConfig.new(
+          id: "claude-sonnet-5",
+          effort: Anthropic::BetaManagedAgentsEffort.xhigh,
+        ),
+        name: "Obj Agent",
+      )
+
+      body = JSON.parse(create_capture.body.not_nil!)
+      body["model"]["effort"]["type"].as_s.should eq("xhigh")
+    end
+
+    it "updates an agent model config" do
+      agent_json = %({
+        "id": "agent_123",
+        "name": "My Agent",
+        "type": "agent",
+        "version": 2,
+        "model": {"id": "claude-sonnet-5", "effort": {"type": "medium"}, "speed": "standard"},
+        "created_at": "",
+        "updated_at": "",
+        "archived_at": null
+      })
+
+      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123?beta=true", agent_json)
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+      client.beta.agents.update(
+        "agent_123",
+        version: 1,
+        model: Anthropic::BetaManagedAgentsModelConfig.new(
+          id: :sonnet,
+          effort: Anthropic::BetaManagedAgentsEffort.medium,
+          speed: "standard",
+        ),
+      )
+
+      body = JSON.parse(update_capture.body.not_nil!)
+      body["version"].as_i.should eq(1)
+      body["model"]["id"].as_s.should eq("claude-sonnet-5")
+      body["model"]["effort"]["type"].as_s.should eq("medium")
+      body["model"]["speed"].as_s.should eq("standard")
     end
   end
 

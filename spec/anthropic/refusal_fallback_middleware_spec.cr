@@ -139,9 +139,16 @@ describe Anthropic::BetaRefusalFallbackMiddleware do
     # idempotency key (a key-honoring server would replay the cached refusal).
     captured_requests[0].headers["idempotency-key"].should_not eq(captured_requests[1].headers["idempotency-key"])
 
-    # The retry body carries the credit token + swapped model.
+    # The retry body carries the credit token in object form (best_effort) + swapped model.
     body2 = JSON.parse(captured_requests[1].body.not_nil!.gets_to_end)
     body2["model"].as_s.should eq("claude-opus-4-8")
-    body2["fallback_credit_token"].as_s.should eq("fct_1")
+    body2["fallback_credit_token"]["token"].as_s.should eq("fct_1")
+    body2["fallback_credit_token"]["mode"].as_s.should eq("best_effort")
+  end
+
+  it "defaults DEFAULT_BETAS to fallback-credit-2026-07-01" do
+    Anthropic::BetaRefusalFallbackMiddleware::DEFAULT_BETAS.should eq(
+      [Anthropic::FALLBACK_CREDIT_BETA_2026_07_01]
+    )
   end
 end

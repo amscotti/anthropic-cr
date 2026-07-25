@@ -75,9 +75,26 @@ describe "Phase E3 additions" do
       run_event.deployment_run_event?.should be_true
     end
 
+    it "classifies environment and memory_store events" do
+      env_event = Anthropic::BetaWebhookEvent.from_json(%({"id":"wh_4","created_at":"","type":"environment.created","data":{}}))
+      mem_event = Anthropic::BetaWebhookEvent.from_json(%({"id":"wh_5","created_at":"","type":"memory_store.archived","data":{}}))
+
+      env_event.environment_event?.should be_true
+      env_event.memory_store_event?.should be_false
+      mem_event.memory_store_event?.should be_true
+      mem_event.environment_event?.should be_false
+    end
+
     it "exposes the EventType vocabulary" do
       Anthropic::BetaWebhookEvent::EventType::AGENT_CREATED.should eq("agent.created")
       Anthropic::BetaWebhookEvent::EventType::DEPLOYMENT_RUN_SUCCEEDED.should eq("deployment_run.succeeded")
+      Anthropic::BetaWebhookEvent::EventType::ENVIRONMENT_CREATED.should eq("environment.created")
+      Anthropic::BetaWebhookEvent::EventType::ENVIRONMENT_UPDATED.should eq("environment.updated")
+      Anthropic::BetaWebhookEvent::EventType::ENVIRONMENT_ARCHIVED.should eq("environment.archived")
+      Anthropic::BetaWebhookEvent::EventType::ENVIRONMENT_DELETED.should eq("environment.deleted")
+      Anthropic::BetaWebhookEvent::EventType::MEMORY_STORE_CREATED.should eq("memory_store.created")
+      Anthropic::BetaWebhookEvent::EventType::MEMORY_STORE_ARCHIVED.should eq("memory_store.archived")
+      Anthropic::BetaWebhookEvent::EventType::MEMORY_STORE_DELETED.should eq("memory_store.deleted")
     end
   end
 end

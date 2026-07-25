@@ -10,9 +10,39 @@ module Anthropic
       {"anthropic-beta" => merged_betas.join(",")}
     end
 
-    # Create a new stateful agent
+    # Serialize a model param (string, symbol, config object, or hash) for the API.
+    private def serialize_model(model : BetaManagedAgentsModelParamLike) : JSON::Any
+      case model
+      when Symbol
+        JSON::Any.new(Anthropic.model_name(model))
+      when String
+        JSON::Any.new(model)
+      when JSON::Any
+        model
+      else
+        JSON.parse(model.to_json)
+      end
+    end
+
+    # Create a new stateful agent.
+    #
+    # `model` accepts a model string / shorthand symbol, or a
+    # `BetaManagedAgentsModelConfig` (or hash) for effort/speed control:
+    #
+    # ```
+    # client.beta.agents.create(model: :sonnet, name: "Helper")
+    #
+    # client.beta.agents.create(
+    #   model: Anthropic::BetaManagedAgentsModelConfig.new(
+    #     id: :sonnet,
+    #     effort: "high",
+    #     speed: "fast",
+    #   ),
+    #   name: "Helper",
+    # )
+    # ```
     def create(
-      model : String | Symbol,
+      model : BetaManagedAgentsModelParamLike,
       name : String,
       description : String? = nil,
       mcp_servers : Array(JSON::Any | Hash(String, JSON::Any))? = nil,
@@ -24,7 +54,7 @@ module Anthropic
       betas : Array(String) = [] of String,
     ) : BetaAgent
       params = {} of String => JSON::Any
-      params["model"] = JSON::Any.new(model.is_a?(Symbol) ? Anthropic.model_name(model) : model)
+      params["model"] = serialize_model(model)
       params["name"] = JSON::Any.new(name)
       params["description"] = JSON::Any.new(description) if description
       params["mcp_servers"] = JSON.parse(mcp_servers.to_json).as_a if mcp_servers
@@ -51,11 +81,14 @@ module Anthropic
       BetaAgent.from_json(response.body)
     end
 
-    # Update an existing agent
+    # Update an existing agent.
+    #
+    # `model` accepts the same shapes as `#create` (string, symbol, config
+    # object, or hash). Omitting it leaves the stored model config unchanged.
     def update(
       agent_id : String,
       version : Int32,
-      model : String | Symbol? = nil,
+      model : BetaManagedAgentsModelParamLike? = nil,
       name : String? = nil,
       description : String? = nil,
       mcp_servers : Array(JSON::Any | Hash(String, JSON::Any))? = nil,
@@ -68,7 +101,7 @@ module Anthropic
     ) : BetaAgent
       params = {} of String => JSON::Any
       params["version"] = JSON::Any.new(version.to_i64)
-      params["model"] = JSON::Any.new(model.is_a?(Symbol) ? Anthropic.model_name(model) : model) if model
+      params["model"] = serialize_model(model) if model
       params["name"] = JSON::Any.new(name) if name
       params["description"] = JSON::Any.new(description) if description
       params["mcp_servers"] = JSON.parse(mcp_servers.to_json).as_a if mcp_servers

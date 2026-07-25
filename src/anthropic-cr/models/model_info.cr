@@ -8,7 +8,7 @@ module Anthropic
     # to a single concrete model name.
     CLAUDE_SONNET = "claude-sonnet-5"
     CLAUDE_FABLE  = "claude-fable-5"
-    CLAUDE_OPUS   = "claude-opus-4-8"
+    CLAUDE_OPUS   = "claude-opus-5"
     CLAUDE_HAIKU  = "claude-haiku-4-5"
 
     # Claude Sonnet 5 — High-performance model for coding and agents.
@@ -19,6 +19,9 @@ module Anthropic
 
     # Claude Mythos 5 — Most capable model for cybersecurity and biology research.
     CLAUDE_MYTHOS_5 = "claude-mythos-5"
+
+    # Claude Opus 5 — Powerful intelligence for long-running agents and coding.
+    CLAUDE_OPUS_5 = "claude-opus-5"
 
     # Claude 4.8
     CLAUDE_OPUS_4_8 = "claude-opus-4-8"
@@ -53,13 +56,14 @@ module Anthropic
   # ```
   # Anthropic::Model::CLAUDE_SONNET # => "claude-sonnet-5"
   # Anthropic::Model::CLAUDE_FABLE  # => "claude-fable-5"
-  # Anthropic::Model::CLAUDE_OPUS   # => "claude-opus-4-8"
+  # Anthropic::Model::CLAUDE_OPUS   # => "claude-opus-5"
   # Anthropic::Model::CLAUDE_HAIKU  # => "claude-haiku-4-5"
   #
   # Anthropic.model_name(:sonnet) # => "claude-sonnet-5"
   # Anthropic.model_name(:fable)  # => "claude-fable-5"
   # Anthropic.model_name(:mythos) # => "claude-mythos-5"
-  # Anthropic.model_name(:opus)   # => "claude-opus-4-8"
+  # Anthropic.model_name(:opus)   # => "claude-opus-5"
+  # Anthropic.model_name(:opus_5) # => "claude-opus-5"
   # Anthropic.model_name(:haiku)  # => "claude-haiku-4-5-20251001"
   # ```
   MODEL_SHORTHANDS = {
@@ -69,7 +73,8 @@ module Anthropic
     :fable_5    => Model::CLAUDE_FABLE_5,
     :mythos     => Model::CLAUDE_MYTHOS_5,
     :mythos_5   => Model::CLAUDE_MYTHOS_5,
-    :opus       => Model::CLAUDE_OPUS_4_8,
+    :opus       => Model::CLAUDE_OPUS_5,
+    :opus_5     => Model::CLAUDE_OPUS_5,
     :opus_4_8   => Model::CLAUDE_OPUS_4_8,
     :opus_4_7   => Model::CLAUDE_OPUS_4_7,
     :haiku      => Model::CLAUDE_HAIKU_4_5,

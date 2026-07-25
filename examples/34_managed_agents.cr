@@ -101,10 +101,21 @@ begin
   # Showcase how to create an agent configuration (wrapped in a conditional/dry run logic)
   puts
   puts "Example workflow for creating a new agent definition:"
+  puts "  # Bare model string / shorthand:"
   puts "  client.beta.agents.create("
   puts "    model: :sonnet,"
   puts "    name: \"Development Assistant\","
   puts "    description: \"Agent configured to assist with programming tasks.\""
+  puts "  )"
+  puts
+  puts "  # Or model config with effort/speed:"
+  puts "  client.beta.agents.create("
+  puts "    model: Anthropic::BetaManagedAgentsModelConfig.new("
+  puts "      id: :sonnet,"
+  puts "      effort: \"high\",  # or BetaManagedAgentsEffort.high"
+  puts "      speed: \"fast\","
+  puts "    ),"
+  puts "    name: \"Development Assistant\","
   puts "  )"
 rescue ex : Anthropic::APIError
   puts "Note: Managing agents requires appropriate beta permissions."
@@ -166,9 +177,13 @@ begin
   created_env_id = env.id
   puts "Environment created: #{env.id}"
 
-  puts "Creating an agent definition..."
+  puts "Creating an agent definition (with model config effort/speed)..."
   agent = client.beta.agents.create(
-    model: :sonnet,
+    model: Anthropic::BetaManagedAgentsModelConfig.new(
+      id: :sonnet,
+      effort: "high",
+      speed: "standard",
+    ),
     name: "Integration Test Agent",
     description: "Temporary agent for integration testing.",
     system: "You are a helpful assistant."
@@ -181,10 +196,14 @@ begin
   found = agents.data.any? { |agt| agt.id == agent.id }
   puts "   Agent #{agent.id} in list: #{found ? "Yes" : "No"}"
 
-  puts "Starting a stateful session to talk to the agent..."
+  puts "Starting a stateful session (optional initial_events: user.message / user.define_outcome, max 50)..."
   session = client.beta.sessions.create(
     environment_id: env.id,
-    agent: agent.id
+    agent: agent.id,
+    # Seed the session with an initial user message at create time:
+    # initial_events: [
+    #   {"type" => "user.message", "content" => [{"type" => "text", "text" => "Hello"}]},
+    # ],
   )
   created_session_id = session.id
   puts "Session created: #{session.id}"

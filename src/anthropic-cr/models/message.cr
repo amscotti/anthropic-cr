@@ -2,8 +2,8 @@ module Anthropic
   # Structured stop details returned on refusal stops.
   #
   # `category` is typically one of the known refusal categories such as
-  # "cyber", "bio", "frontier_llm", or "reasoning_extraction", though unknown
-  # categories may appear as the API evolves.
+  # "cyber", "bio", "frontier_llm", "reasoning_extraction", or "general_harms",
+  # though unknown categories may appear as the API evolves.
   #
   # The `fallback_*` fields are populated on the beta messages surface when a
   # server-side or client-side fallback chain is in play. `fallback_credit_token`
@@ -139,7 +139,7 @@ module Anthropic
     getter model : String
 
     @[JSON::Field(key: "stop_reason")]
-    getter stop_reason : String? # "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | "pause_turn" | "refusal"
+    getter stop_reason : String? # "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | "pause_turn" | "refusal" | "model_context_window_exceeded"
 
     @[JSON::Field(key: "stop_details", converter: Anthropic::StopDetailsConverter, emit_null: false)]
     getter stop_details : StopDetails?

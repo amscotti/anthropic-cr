@@ -13,15 +13,17 @@ describe "Opus 4.7 parity updates" do
       Anthropic::Model::CLAUDE_MYTHOS_5.should eq("claude-mythos-5")
     end
 
-    it "points CLAUDE_OPUS rolling alias at 4.8" do
-      Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_4_8)
+    it "exposes CLAUDE_OPUS_5 and points CLAUDE_OPUS rolling alias at it" do
+      Anthropic::Model::CLAUDE_OPUS_5.should eq("claude-opus-5")
+      Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_5)
     end
 
-    it "resolves :sonnet, :fable, :mythos, :opus, :opus_4_8, and :opus_4_7 via model_name" do
+    it "resolves :sonnet, :fable, :mythos, :opus, :opus_5, :opus_4_8, and :opus_4_7 via model_name" do
       Anthropic.model_name(:sonnet).should eq("claude-sonnet-5")
       Anthropic.model_name(:fable).should eq("claude-fable-5")
       Anthropic.model_name(:mythos).should eq("claude-mythos-5")
-      Anthropic.model_name(:opus).should eq("claude-opus-4-8")
+      Anthropic.model_name(:opus).should eq("claude-opus-5")
+      Anthropic.model_name(:opus_5).should eq("claude-opus-5")
       Anthropic.model_name(:opus_4_8).should eq("claude-opus-4-8")
       Anthropic.model_name(:opus_4_7).should eq("claude-opus-4-7")
     end
@@ -507,14 +509,14 @@ describe "Opus 4.7 parity updates" do
       block = Anthropic::ContentBlockConverter.from_json(JSON::PullParser.new(json))
       sys = block.as(Anthropic::MidConversationSystemContent)
       sys.type.should eq("mid_conv_system")
-      sys.content.first.text.should eq("System rule updated.")
+      sys.content.first.as(Anthropic::TextContent).text.should eq("System rule updated.")
       sys.cache_control.not_nil!.type.should eq("ephemeral")
 
       # Test round-trip
       serialized = sys.to_json
       parsed = Anthropic::MidConversationSystemContent.from_json(serialized)
       parsed.type.should eq("mid_conv_system")
-      parsed.content.first.text.should eq("System rule updated.")
+      parsed.content.first.as(Anthropic::TextContent).text.should eq("System rule updated.")
       parsed.cache_control.not_nil!.type.should eq("ephemeral")
     end
   end

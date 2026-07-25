@@ -101,6 +101,44 @@ module Anthropic
     def deployment_runs : BetaDeploymentRuns
       BetaDeploymentRuns.new(@client)
     end
+
+    # Access beta Dreams API (memory consolidation, research preview).
+    #
+    # Auto-merges `managed-agents-2026-04-01` and `dreaming-2026-04-21`.
+    # Research-preview access must be requested; without it the API returns 404.
+    #
+    # ```
+    # dream = client.beta.dreams.create(
+    #   inputs: [
+    #     Anthropic::BetaDreamMemoryStoreInput.new("memstore_abc"),
+    #     Anthropic::BetaDreamSessionsInput.new(["sess_1"]),
+    #   ],
+    #   model: "claude-opus-4-7",
+    # )
+    # client.beta.dreams.retrieve(dream.id)
+    # ```
+    def dreams : BetaDreams
+      BetaDreams.new(@client)
+    end
+
+    # Access beta MCP Tunnels API (research preview).
+    #
+    # Auto-merges `mcp-tunnels-2026-06-22`. Tunnel *management* requires a
+    # Workload Identity Federation bearer with `workspace:manage_tunnels`
+    # (standard API keys return 401). Using a tunnel URL from Messages is
+    # separate and uses a normal API key + MCP client beta.
+    #
+    # ```
+    # tunnel = client.beta.tunnels.create(display_name: "prod-gateway")
+    # token = client.beta.tunnels.reveal_token(tunnel.id)
+    # cert = client.beta.tunnels.certificates.create(
+    #   tunnel.id,
+    #   ca_certificate_pem: File.read("ca.pem"),
+    # )
+    # ```
+    def tunnels : BetaTunnels
+      BetaTunnels.new(@client)
+    end
   end
 
   # Beta Messages API with explicit beta header support
@@ -210,8 +248,8 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
@@ -310,8 +348,8 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
@@ -378,8 +416,8 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
@@ -523,8 +561,8 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
@@ -589,8 +627,8 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
@@ -685,14 +723,18 @@ module Anthropic
       diagnostics : DiagnosticsParam? = nil,
       include_token_counting_beta : Bool = false,
       include_user_profiles_beta : Bool = false,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
     ) : Hash(String, String)?
-      # Both a fallback chain and a bare credit-token retry require the
-      # server-side fallback beta.
+      # Explicit chain / "default" and bare-string credit tokens auto-attach the
+      # server-side fallback beta. Object-form credit tokens need the July 2026
+      # fallback-credit beta (mode support).
       merged_betas = betas.dup
-      if (fallbacks && !fallbacks.empty?) || fallback_credit_token
+      if Anthropic.fallbacks_present?(fallbacks) || fallback_credit_token.is_a?(String)
         merged_betas << SERVER_SIDE_FALLBACK_BETA unless merged_betas.includes?(SERVER_SIDE_FALLBACK_BETA)
+      end
+      if fallback_credit_token.is_a?(FallbackCreditTokenParam)
+        merged_betas << FALLBACK_CREDIT_BETA_2026_07_01 unless merged_betas.includes?(FALLBACK_CREDIT_BETA_2026_07_01)
       end
 
       Anthropic.resolve_beta_headers(

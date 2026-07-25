@@ -393,8 +393,14 @@ module Anthropic
     end
 
     private def execute_tools(tool_uses : Array(ToolUseContent)) : Array(ToolResultContent)
+      # Mid-conversation tool_removal / tool_addition only affect local dispatch;
+      # removed tools take the same unknown-tool path as never-declared tools.
+      available = ToolDispatch.available_tool_names(@current_messages, @tools.map(&.name))
+
       tool_uses.map do |tool_use|
-        tool = @tools.find { |available_tool| available_tool.name == tool_use.name }
+        tool = if available.includes?(tool_use.name)
+                 @tools.find { |available_tool| available_tool.name == tool_use.name }
+               end
 
         if tool
           begin
@@ -690,6 +696,78 @@ module Anthropic
       case container
       when String
         container
+      else
+        nil
+      end
+    end
+  end
+
+  # Shared helpers for folding mid-conversation tool_removal / tool_addition
+  # blocks over the locally runnable tool set (mirrors official SDK tool dispatch).
+  #
+  # Only `role: "system"` messages carry these blocks. Only a `tool_reference`
+  # can name a locally runnable tool — MCP references execute server-side and
+  # are ignored. `mid_conv_system` content is walked one level deep.
+  module ToolDispatch
+    extend self
+
+    # Fold mid-conversation tool_removal / tool_addition over `tool_names`.
+    #
+    # Removal of an absent name is a set no-op. Addition is unconditional; the
+    # runner still requires a registry hit to execute a tool.
+    def available_tool_names(messages : Array(MessageParam), tool_names : Enumerable(String)) : Set(String)
+      available = Set(String).new
+      tool_names.each { |name| available.add(name) }
+
+      messages.each do |message|
+        next unless message.role == "system"
+
+        content = message.content
+        next if content.is_a?(String)
+
+        content.each do |block|
+          apply_tool_change(block, available)
+        end
+      end
+
+      available
+    end
+
+    private def apply_tool_change(block : ContentBlock, available : Set(String)) : Nil
+      case block
+      when ToolRemovalContent, ToolAdditionContent
+        apply_tool_reference_change(block, available)
+      when MidConversationSystemContent
+        block.content.each do |inner|
+          case inner
+          when ToolRemovalContent, ToolAdditionContent
+            apply_tool_reference_change(inner, available)
+          end
+        end
+      end
+    end
+
+    private def apply_tool_reference_change(
+      block : ToolRemovalContent | ToolAdditionContent,
+      available : Set(String),
+    ) : Nil
+      name = referenced_tool_name(block.tool)
+      return unless name
+
+      case block
+      when ToolRemovalContent
+        available.delete(name)
+      when ToolAdditionContent
+        available.add(name)
+      end
+    end
+
+    # Locally runnable tool name for a tool-change reference, or nil for
+    # MCP / unknown references (forward compatibility).
+    private def referenced_tool_name(ref : ToolChangeReference) : String?
+      case ref
+      when ToolChangeToolReference
+        ref.name
       else
         nil
       end

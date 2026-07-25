@@ -5,16 +5,17 @@ module Anthropic
   #
   # Retries refused `POST /v1/messages` requests down a client-side fallback
   # chain. Use this when the API provider does **not** support server-side
-  # fallbacks (the `server-side-fallback-2026-06-01` beta). It is mutually
+  # fallbacks (the `server-side-fallback-2026-07-01` beta). It is mutually
   # exclusive with the request-body `fallbacks:` param.
   #
   # On a `stop_reason: "refusal"` response, the middleware walks each fallback
   # entry (merging `model`, `max_tokens`, `thinking`, `output_config`, and
   # `speed` over the original body) and retries, carrying the refusal's
-  # `fallback_credit_token` when present. The accepting hop's response is
-  # returned verbatim; a chain-exhausted refusal is also returned verbatim.
-  # Unlike server-side fallbacks, no synthetic `fallback` content block is
-  # inserted — inspect `message.model` to detect which model served.
+  # `fallback_credit_token` in object form with `mode: "best_effort"` when
+  # present. The accepting hop's response is returned verbatim; a
+  # chain-exhausted refusal is also returned verbatim. Unlike server-side
+  # fallbacks, no synthetic `fallback` content block is inserted — inspect
+  # `message.model` to detect which model served.
   #
   # This implementation handles the **non-streaming** path. For streaming
   # fallbacks, prefer server-side fallbacks (`betas: [SERVER_SIDE_FALLBACK_BETA]`
@@ -36,7 +37,8 @@ module Anthropic
   class BetaRefusalFallbackMiddleware
     include Middleware
 
-    DEFAULT_BETAS = [FALLBACK_CREDIT_BETA] of String
+    # Matches the official Python/Ruby SDK default (`fallback-credit-2026-07-01`).
+    DEFAULT_BETAS = [FALLBACK_CREDIT_BETA_2026_07_01] of String
 
     @fallbacks : Array(FallbackParam)
     @betas : Array(String)
@@ -57,7 +59,7 @@ module Anthropic
       if original_body["fallbacks"]?
         raise ArgumentError.new(
           "BetaRefusalFallbackMiddleware is incompatible with the request-body `fallbacks:` param. " \
-          "Use the server-side-fallback-2026-06-01 beta header instead."
+          "Use the server-side-fallback-2026-07-01 beta header instead."
         )
       end
 
@@ -144,7 +146,12 @@ module Anthropic
         hash["output_config"] = JSON.parse(output_config.to_json)
       end
       if token = credit_token
-        hash["fallback_credit_token"] = JSON::Any.new(token)
+        # Object form with best_effort: a failing redemption no longer 400s the
+        # hop — the retry proceeds at normal price and reports outcome on
+        # usage.fallback_credit. Matches official Python SDK middleware.
+        hash["fallback_credit_token"] = JSON.parse(
+          FallbackCreditTokenParam.new(token: token, mode: "best_effort").to_json
+        )
       end
 
       JSON::Any.new(hash)

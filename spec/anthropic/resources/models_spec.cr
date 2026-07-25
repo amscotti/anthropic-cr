@@ -76,7 +76,7 @@ describe Anthropic::Model do
   it "has rolling alias constants for current default models" do
     Anthropic::Model::CLAUDE_SONNET.should eq("claude-sonnet-5")
     Anthropic::Model::CLAUDE_FABLE.should eq("claude-fable-5")
-    Anthropic::Model::CLAUDE_OPUS.should eq("claude-opus-4-8")
+    Anthropic::Model::CLAUDE_OPUS.should eq("claude-opus-5")
     Anthropic::Model::CLAUDE_HAIKU.should eq("claude-haiku-4-5")
   end
 
@@ -84,6 +84,7 @@ describe Anthropic::Model do
     Anthropic::Model::CLAUDE_SONNET_5.should eq("claude-sonnet-5")
     Anthropic::Model::CLAUDE_FABLE_5.should eq("claude-fable-5")
     Anthropic::Model::CLAUDE_MYTHOS_5.should eq("claude-mythos-5")
+    Anthropic::Model::CLAUDE_OPUS_5.should eq("claude-opus-5")
     Anthropic::Model::CLAUDE_OPUS_4_8.should eq("claude-opus-4-8")
     Anthropic::Model::CLAUDE_OPUS_4_7.should eq("claude-opus-4-7")
     Anthropic::Model::CLAUDE_OPUS_4_6.should eq("claude-opus-4-6")
@@ -98,7 +99,7 @@ describe Anthropic::Model do
   it "maps rolling aliases to the current precise defaults where applicable" do
     Anthropic::Model::CLAUDE_SONNET.should eq(Anthropic::Model::CLAUDE_SONNET_5)
     Anthropic::Model::CLAUDE_FABLE.should eq(Anthropic::Model::CLAUDE_FABLE_5)
-    Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_4_8)
+    Anthropic::Model::CLAUDE_OPUS.should eq(Anthropic::Model::CLAUDE_OPUS_5)
   end
 
   it "maps :sonnet shorthand to Sonnet 5" do
@@ -111,6 +112,11 @@ describe Anthropic::Model do
 
   it "maps :mythos shorthand to Mythos 5" do
     Anthropic.model_name(:mythos).should eq("claude-mythos-5")
+  end
+
+  it "maps :opus and :opus_5 shorthands to Opus 5" do
+    Anthropic.model_name(:opus).should eq("claude-opus-5")
+    Anthropic.model_name(:opus_5).should eq("claude-opus-5")
   end
 
   it "maps :opus_4_8 shorthand to the precise 4.8 model id" do

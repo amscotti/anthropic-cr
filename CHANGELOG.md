@@ -3,6 +3,84 @@
 All notable changes to `anthropic-cr` are documented here. The project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-07-24
+
+Tracks the late-July 2026 release of the official Python (0.120.0), Ruby (1.59.0), and TypeScript (0.115.0) SDKs (OpenAPI 131 endpoints).
+
+### Added — Models
+
+- `Anthropic::Model::CLAUDE_OPUS_5` (`claude-opus-5`) — powerful intelligence for long-running agents and coding.
+- `:opus_5` shorthand on `Anthropic.model_name`.
+
+### Added — Dreams API (beta)
+
+- `client.beta.dreams` — memory-consolidation jobs: `create`, `retrieve`, `list`, `archive`, `cancel`.
+- Types: `BetaDream`, inputs (`BetaDreamMemoryStoreInput` / `BetaDreamSessionsInput`), model config, status, usage, list page.
+- Beta constant `DREAMING_BETA` (`dreaming-2026-04-21`); Dreams calls auto-attach **both** `MANAGED_AGENTS_BETA` and `DREAMING_BETA` (official requirement). Research-preview access is separately gated (404 without it).
+- Example: `examples/43_dreams.cr`.
+
+### Added — MCP Tunnels API (beta, research preview)
+
+- `client.beta.tunnels` — `create`, `retrieve`, `list`, `archive`, `reveal_token`, `rotate_token`.
+- Nested `client.beta.tunnels.certificates` — `create`, `retrieve`, `list`, `archive`.
+- Types: `BetaTunnel`, `BetaTunnelToken`, `BetaTunnelCertificate`.
+- Beta constant `MCP_TUNNELS_BETA` (`mcp-tunnels-2026-06-22`), auto-attached on tunnels + certificates.
+- Management endpoints require WIF with `workspace:manage_tunnels` (standard API keys return 401). Using tunnel URLs from Messages is separate.
+- Example: `examples/44_tunnels.cr`.
+
+### Added — Fallbacks expansions
+
+- `fallbacks: "default"` requests the server-defined default fallback chain (in addition to an explicit `Array(FallbackParam)`). Only the exact string `"default"` is accepted; other strings raise.
+- Object-form `fallback_credit_token: FallbackCreditTokenParam.new(token:, mode: "strict" | "best_effort")` (union with bare `String`).
+- Response `Usage#fallback_credit` (`FallbackCreditUsage` with `redeemed` / `not_applied` status) and `Usage#speed` (`"standard"` / `"fast"`); same fields on streaming `DeltaUsage` where applicable.
+- Alias `FallbacksParam` / `FallbackCreditToken` + converters.
+
+### Added — Tool addition / removal
+
+- Request content blocks `ToolAdditionContent` (`tool_addition`) and `ToolRemovalContent` (`tool_removal`) with tool-change references (`tool_reference`, `mcp_tool_reference`, `mcp_toolset_reference`).
+- `MidConversationSystemContent#content` expanded to `Array(MidConversationSystemBlock)` = text | tool_addition | tool_removal.
+- `Anthropic::ToolDispatch` folds mid-conversation tool_addition/removal (including nested under `mid_conv_system`) into the tool runner’s available tool set.
+
+### Added — Managed Agents
+
+- `BetaManagedAgentsModelConfig` with optional `effort` (bare string or `{type: "high"}` objects via `BetaManagedAgentsEffort`) and `speed` (`"standard"` / `"fast"`).
+- `client.beta.agents.create` / `update` accept model as string, symbol, or model config object.
+- Session create accepts `initial_events:` (e.g. `user.message` / `user.define_outcome`).
+- Thread event stream accepts `event_deltas:` (same as session-level event stream).
+
+### Added — Docs / polish
+
+- Refusal category docs include `general_harms`; `stop_reason` docs include `model_context_window_exceeded`.
+- Webhook event type constants for `environment.*` and `memory_store.*`.
+- Opt-in beta constant `THINKING_TOKEN_COUNT_BETA` (`thinking-token-count-2026-05-13`) — not auto-attached.
+- Examples: `42_opus_5.cr`, `43_dreams.cr`, `44_tunnels.cr`.
+
+### Changed (breaking)
+
+- **`CLAUDE_OPUS` / `:opus` rolling alias** now resolves to `claude-opus-5` (was `claude-opus-4-8`). Pin with `CLAUDE_OPUS_4_8` / `:opus_4_8` if you need 4.8.
+- **Primary fallback beta constants** now track July 2026:
+  - `SERVER_SIDE_FALLBACK_BETA` → `server-side-fallback-2026-07-01` (pin June with `SERVER_SIDE_FALLBACK_BETA_2026_06_01`)
+  - `FALLBACK_CREDIT_BETA` → `fallback-credit-2026-07-01` (pin June with `FALLBACK_CREDIT_BETA_2026_06_01`)
+- `BetaRefusalFallbackMiddleware` defaults to `fallback-credit-2026-07-01` and redeems credit tokens in object form with `mode: "best_effort"`.
+- **`MidConversationSystemContent#content`** type is now `Array(MidConversationSystemBlock)` instead of `Array(TextContent)`. Call sites that type the array as `Array(TextContent)` or call `.text` without casting need a small update.
+
+### Added — Amazon Bedrock
+
+- `Anthropic::Bedrock::Client` (Runtime) with AWS SigV4 or `AWS_BEARER_TOKEN_BEDROCK`.
+- Credential resolution (pure Crystal chain): explicit keys → env → shared credentials → `aws login` cache → **IAM Identity Center SSO** (`GetRoleCredentials` via cached access token; legacy profile keys and modern `[sso-session …]`) → IMDS (best-effort).
+- Request rewrite `/v1/messages` → `/model/{id}/invoke` (+ stream path); injects `anthropic_version: bedrock-2023-05-31`.
+- **Streaming:** AWS Event Stream → SSE transcoder so `messages.stream` works.
+- **Limited beta surface** on Runtime: `client.beta.messages` only; other beta resources raise.
+- **`Anthropic::Bedrock::MantleClient`:** Mantle endpoint (`bedrock-mantle.{region}.api.aws/anthropic`), SigV4 service `bedrock-mantle`, native `/v1/messages` (no rewrite).
+- Batches / count_tokens / Models raise `NotImplementedError` (same as official SDKs).
+- Examples: `45_bedrock.cr`, `46_bedrock_mantle.cr`.
+
+### Not included
+
+- `claude-mythos-preview` constant (still EOL / omitted by design).
+- Google Cloud / Vertex provider package.
+- `credential_process`, assume-role profiles, and web-identity federation (use env/shared keys, `aws login`, SSO, or IMDS).
+
 ## [0.8.0] — 2026-07-04
 
 Tracks the July 2026 release of the official Python (0.116.0), Ruby (1.55.0), and TypeScript (0.110.0) SDKs, centered on the Claude Sonnet 5 / Fable 5 / Mythos 5 generation.
