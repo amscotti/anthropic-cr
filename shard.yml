@@ -1,5 +1,5 @@
 name: anthropic-cr
-version: 0.8.0
+version: 0.9.0
 
 description: |
   An unofficial Anthropic API client for Crystal. Access Claude AI models with
@@ -27,7 +27,7 @@ development_dependencies:
     github: spoved/vcr.cr
   ameba:
     github: crystal-ameba/ameba
-    version: ~> 1.6
+    version: ~> 1.7.0-dev
   dotenv:
     github: drum445/dotenv
 

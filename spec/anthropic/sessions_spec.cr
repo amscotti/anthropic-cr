@@ -159,4 +159,21 @@ describe "BetaSessionEvents#stream (end-to-end call)" do
     events.size.should eq(1)
     events[0]["id"].to_s.should eq("evt_9")
   end
+
+  it "passes event_deltas as repeated query params on thread stream" do
+    body = "event: event_start\ndata: {\"type\":\"event_start\",\"event\":{\"id\":\"evt_t\",\"type\":\"agent.message\"}}\n\n"
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/threads/thread_1/stream?beta=true&event_deltas=agent.message")
+      .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
+    client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+    events = [] of JSON::Any
+    client.beta.sessions.threads.events.stream(
+      "sess_1",
+      "thread_1",
+      event_deltas: [Anthropic::Sessions::DeltaType::AGENT_MESSAGE],
+    ) { |event| events << event }
+
+    events.size.should eq(1)
+    events[0]["type"].to_s.should eq("event_start")
+  end
 end

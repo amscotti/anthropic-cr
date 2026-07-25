@@ -341,20 +341,201 @@ module Anthropic
     end
   end
 
-  # Mid-conversation system instructions content block.
+  # Reference to a single tool declared directly in the request's `tools[]`.
   #
-  # Use this block to provide or update system-level instructions at a specific
-  # point in the conversation, rather than only via the top-level `system` parameter.
-  struct MidConversationSystemContent
+  # Used by mid-conversation `tool_addition` / `tool_removal` blocks.
+  # Does not accept the composed `{server}_{name}` form assigned to MCP-resolved
+  # tools — use `ToolChangeMCPToolReference` or `ToolChangeMCPToolsetReference`.
+  #
+  # Distinct from `ToolReferenceContent` (tool search results), which uses
+  # `tool_name` rather than `name`.
+  struct ToolChangeToolReference
     include JSON::Serializable
 
-    getter type : String = "mid_conv_system"
-    getter content : Array(TextContent)
+    getter type : String = "tool_reference"
+    getter name : String
+
+    def initialize(@name : String)
+      @type = "tool_reference"
+    end
+  end
+
+  # Reference to a single MCP tool by server and remote name
+  # (same `server_name`/`name` pair that `mcp_tool_use` carries).
+  struct ToolChangeMCPToolReference
+    include JSON::Serializable
+
+    getter type : String = "mcp_tool_reference"
+    getter name : String
+
+    @[JSON::Field(key: "server_name")]
+    getter server_name : String
+
+    def initialize(@name : String, @server_name : String)
+      @type = "mcp_tool_reference"
+    end
+  end
+
+  # Reference to every tool in the named MCP server's toolset.
+  struct ToolChangeMCPToolsetReference
+    include JSON::Serializable
+
+    getter type : String = "mcp_toolset_reference"
+
+    @[JSON::Field(key: "server_name")]
+    getter server_name : String
+
+    def initialize(@server_name : String)
+      @type = "mcp_toolset_reference"
+    end
+  end
+
+  # Union of tool-change reference types for addition/removal blocks.
+  alias ToolChangeReference = ToolChangeToolReference | ToolChangeMCPToolReference | ToolChangeMCPToolsetReference
+
+  # Discriminated-union converter for tool-change references.
+  module ToolChangeReferenceConverter
+    def self.from_json(pull : JSON::PullParser) : ToolChangeReference
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s)
+      raw = json.to_json
+
+      case type
+      when "tool_reference"
+        ToolChangeToolReference.from_json(raw)
+      when "mcp_tool_reference"
+        ToolChangeMCPToolReference.from_json(raw)
+      when "mcp_toolset_reference"
+        ToolChangeMCPToolsetReference.from_json(raw)
+      else
+        # Forward-compatible fallback: treat unknown shapes as a named tool_reference
+        # when a `name` is present so callers can still inspect the payload.
+        if name = json["name"]?.try(&.as_s)
+          ToolChangeToolReference.new(name: name)
+        else
+          raise JSON::ParseException.new("Unknown tool change reference type: #{type.inspect}", 0, 0)
+        end
+      end
+    end
+
+    def self.to_json(value : ToolChangeReference, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  # Mid-conversation directive to surface a declared tool.
+  #
+  # `tool` references a tool (or MCP toolset) from the request's `tools[]`; it is
+  # offered to the model from this point in the conversation onward.
+  # Primarily request-only; serialization and echo parsing are supported.
+  struct ToolAdditionContent
+    include JSON::Serializable
+
+    getter type : String = "tool_addition"
+
+    @[JSON::Field(converter: Anthropic::ToolChangeReferenceConverter)]
+    getter tool : ToolChangeReference
 
     @[JSON::Field(key: "cache_control", emit_null: false)]
     getter cache_control : CacheControl?
 
-    def initialize(@content : Array(TextContent), @cache_control : CacheControl? = nil)
+    def initialize(@tool : ToolChangeReference, @cache_control : CacheControl? = nil)
+      @type = "tool_addition"
+    end
+
+    # Convenience for a locally declared tool name.
+    def self.for_tool(name : String, cache_control : CacheControl? = nil) : self
+      new(tool: ToolChangeToolReference.new(name: name), cache_control: cache_control)
+    end
+  end
+
+  # Mid-conversation directive to withdraw a tool.
+  #
+  # `tool` references a tool (or MCP toolset) from the request's `tools[]`; it is
+  # no longer offered to the model from this point in the conversation onward.
+  # Primarily request-only; serialization and echo parsing are supported.
+  struct ToolRemovalContent
+    include JSON::Serializable
+
+    getter type : String = "tool_removal"
+
+    @[JSON::Field(converter: Anthropic::ToolChangeReferenceConverter)]
+    getter tool : ToolChangeReference
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(@tool : ToolChangeReference, @cache_control : CacheControl? = nil)
+      @type = "tool_removal"
+    end
+
+    # Convenience for a locally declared tool name.
+    def self.for_tool(name : String, cache_control : CacheControl? = nil) : self
+      new(tool: ToolChangeToolReference.new(name: name), cache_control: cache_control)
+    end
+  end
+
+  # Allowed inner blocks for `mid_conv_system` content arrays.
+  alias MidConversationSystemBlock = TextContent | ToolAdditionContent | ToolRemovalContent
+
+  # Discriminated-union converter for mid_conv_system nested content.
+  module MidConversationSystemBlockConverter
+    def self.from_json(pull : JSON::PullParser) : MidConversationSystemBlock
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s)
+      raw = json.to_json
+
+      case type
+      when "text"
+        TextContent.from_json(raw)
+      when "tool_addition"
+        ToolAdditionContent.from_json(raw)
+      when "tool_removal"
+        ToolRemovalContent.from_json(raw)
+      else
+        # Unknown nested types fall back to text with the raw JSON for forward compatibility.
+        TextContent.new(text: raw)
+      end
+    end
+
+    def self.to_json(value : MidConversationSystemBlock, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  module MidConversationSystemBlockArrayConverter
+    def self.from_json(pull : JSON::PullParser) : Array(MidConversationSystemBlock)
+      result = [] of MidConversationSystemBlock
+      pull.read_array do
+        result << MidConversationSystemBlockConverter.from_json(pull)
+      end
+      result
+    end
+
+    def self.to_json(value : Array(MidConversationSystemBlock), builder : JSON::Builder)
+      builder.array do
+        value.each(&.to_json(builder))
+      end
+    end
+  end
+
+  # Mid-conversation system instructions content block.
+  #
+  # Use this block to provide or update system-level instructions at a specific
+  # point in the conversation, rather than only via the top-level `system` parameter.
+  # Nested content may include text, tool_addition, and tool_removal blocks.
+  struct MidConversationSystemContent
+    include JSON::Serializable
+
+    getter type : String = "mid_conv_system"
+
+    @[JSON::Field(converter: Anthropic::MidConversationSystemBlockArrayConverter)]
+    getter content : Array(MidConversationSystemBlock)
+
+    @[JSON::Field(key: "cache_control", emit_null: false)]
+    getter cache_control : CacheControl?
+
+    def initialize(@content : Array(MidConversationSystemBlock), @cache_control : CacheControl? = nil)
       @type = "mid_conv_system"
     end
   end
@@ -1015,7 +1196,8 @@ module Anthropic
   alias ContentBlock = TextContent | ImageContent | ToolUseContent | ToolResultContent |
                        ThinkingContent | RedactedThinkingContent | DocumentContent |
                        SearchResultContent | ContainerUploadContent | CompactionContent |
-                       MidConversationSystemContent | ServerToolUseContent |
+                       MidConversationSystemContent | ToolAdditionContent | ToolRemovalContent |
+                       ServerToolUseContent |
                        WebSearchToolResultContent | CodeExecutionToolResultContent |
                        WebFetchToolResultContent | ToolSearchToolResultContent |
                        BashCodeExecutionToolResultContent | TextEditorCodeExecutionToolResultContent |
@@ -1050,6 +1232,8 @@ module Anthropic
       when "container_upload"  then ContainerUploadContent.from_json(raw)
       when "compaction"        then CompactionContent.from_json(raw)
       when "mid_conv_system"   then MidConversationSystemContent.from_json(raw)
+      when "tool_addition"     then ToolAdditionContent.from_json(raw)
+      when "tool_removal"      then ToolRemovalContent.from_json(raw)
       when "fallback"          then FallbackContent.from_json(raw)
       end
     end

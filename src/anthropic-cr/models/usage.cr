@@ -90,6 +90,14 @@ module Anthropic
     # only on responses that exercised server-side fallbacks.
     @[JSON::Field(emit_null: false)]
     getter iterations : Array(FallbackMessageIterationUsage)?
+
+    # Outcome of the `fallback_credit_token` presented on this request.
+    @[JSON::Field(key: "fallback_credit", emit_null: false)]
+    getter fallback_credit : FallbackCreditUsage?
+
+    # Inference speed mode (`"standard"` or `"fast"`).
+    @[JSON::Field(emit_null: false)]
+    getter speed : String?
   end
 
   # Response from the token counting API
@@ -133,8 +141,10 @@ module Anthropic
 
   # Usage statistics for streaming delta events
   #
-  # In streaming message_delta events, only output_tokens is provided
-  # (input_tokens was already reported in message_start)
+  # In streaming `message_delta` events, `output_tokens` is always present.
+  # Other fields (including `fallback_credit` and `iterations` when a
+  # fallback-credit token or fallback chain was used) are cumulative and
+  # optional.
   struct DeltaUsage
     include JSON::Serializable
 
@@ -143,7 +153,27 @@ module Anthropic
     getter output_tokens : Int32
 
     # Breakdown of output tokens by type (e.g. thinking)
-    @[JSON::Field(key: "output_tokens_details")]
+    @[JSON::Field(key: "output_tokens_details", emit_null: false)]
     getter output_tokens_details : OutputTokensDetails?
+
+    @[JSON::Field(key: "input_tokens", emit_null: false)]
+    getter input_tokens : Int32?
+
+    @[JSON::Field(key: "cache_creation_input_tokens", emit_null: false)]
+    getter cache_creation_input_tokens : Int32?
+
+    @[JSON::Field(key: "cache_read_input_tokens", emit_null: false)]
+    getter cache_read_input_tokens : Int32?
+
+    @[JSON::Field(key: "server_tool_use", emit_null: false)]
+    getter server_tool_use : ServerToolUsage?
+
+    # Per-hop usage when a fallback chain ran (streaming terminal delta).
+    @[JSON::Field(emit_null: false)]
+    getter iterations : Array(FallbackMessageIterationUsage)?
+
+    # Outcome of the `fallback_credit_token` presented on this request.
+    @[JSON::Field(key: "fallback_credit", emit_null: false)]
+    getter fallback_credit : FallbackCreditUsage?
   end
 end

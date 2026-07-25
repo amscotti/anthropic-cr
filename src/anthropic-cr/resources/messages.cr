@@ -58,8 +58,8 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
@@ -135,8 +135,8 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
@@ -191,8 +191,8 @@ module Anthropic
       container : String? = nil,
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
@@ -327,16 +327,20 @@ module Anthropic
       server_tools : Array(ServerTool)?,
       cache_control : CacheControl?,
       diagnostics : DiagnosticsParam? = nil,
-      fallbacks : Array(FallbackParam)? = nil,
-      fallback_credit_token : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
     ) : Hash(String, String)?
       betas = [] of String
 
-      # Both a fallback chain and a bare credit-token retry require the
-      # server-side fallback beta.
-      if (fallbacks && !fallbacks.empty?) || fallback_credit_token
+      # Explicit chain / "default" and bare-string credit tokens auto-attach the
+      # server-side fallback beta. Object-form credit tokens need the July 2026
+      # fallback-credit beta (mode support).
+      if Anthropic.fallbacks_present?(fallbacks) || fallback_credit_token.is_a?(String)
         betas << SERVER_SIDE_FALLBACK_BETA unless betas.includes?(SERVER_SIDE_FALLBACK_BETA)
+      end
+      if fallback_credit_token.is_a?(FallbackCreditTokenParam)
+        betas << FALLBACK_CREDIT_BETA_2026_07_01 unless betas.includes?(FALLBACK_CREDIT_BETA_2026_07_01)
       end
 
       Anthropic.resolve_beta_headers(

@@ -26,6 +26,8 @@ require "./anthropic-cr/models/agents"
 require "./anthropic-cr/models/vaults"
 require "./anthropic-cr/models/fallbacks"
 require "./anthropic-cr/models/deployments"
+require "./anthropic-cr/models/dreams"
+require "./anthropic-cr/models/tunnels"
 
 # Streaming
 require "./anthropic-cr/streaming/events"
@@ -59,10 +61,18 @@ require "./anthropic-cr/resources/webhooks"
 require "./anthropic-cr/resources/agents"
 require "./anthropic-cr/resources/vaults"
 require "./anthropic-cr/resources/deployments"
+require "./anthropic-cr/resources/dreams"
+require "./anthropic-cr/resources/tunnels"
 require "./anthropic-cr/resources/beta"
 
 # Client (must come after resources that define types used in Client methods)
 require "./anthropic-cr/client"
+
+# Amazon Bedrock Runtime + Mantle (SigV4 / optional bearer)
+require "./anthropic-cr/bedrock/credentials"
+require "./anthropic-cr/bedrock/sigv4"
+require "./anthropic-cr/bedrock/client"
+require "./anthropic-cr/bedrock/mantle_client"
 
 module Anthropic
 end

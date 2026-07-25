@@ -435,6 +435,202 @@ describe Anthropic::ToolRunner do
   end
 end
 
+describe Anthropic::ToolDispatch do
+  describe ".available_tool_names" do
+    it "starts with the declared tool names" do
+      names = Anthropic::ToolDispatch.available_tool_names(
+        [Anthropic::MessageParam.user("hi")],
+        ["get_weather", "calculator"]
+      )
+      names.should eq(Set{"get_weather", "calculator"})
+    end
+
+    it "removes tools after a system tool_removal" do
+      messages = [
+        Anthropic::MessageParam.user("What's the weather?"),
+        Anthropic::MessageParam.new(
+          role: "system",
+          content: [Anthropic::ToolRemovalContent.for_tool("get_weather").as(Anthropic::ContentBlock)]
+        ),
+      ]
+      names = Anthropic::ToolDispatch.available_tool_names(messages, ["get_weather", "calculator"])
+      names.should eq(Set{"calculator"})
+    end
+
+    it "re-enables a removed tool after a later tool_addition" do
+      messages = [
+        Anthropic::MessageParam.user("What's the weather?"),
+        Anthropic::MessageParam.new(
+          role: "system",
+          content: [Anthropic::ToolRemovalContent.for_tool("get_weather").as(Anthropic::ContentBlock)]
+        ),
+        Anthropic::MessageParam.new(
+          role: "system",
+          content: [Anthropic::ToolAdditionContent.for_tool("get_weather").as(Anthropic::ContentBlock)]
+        ),
+      ]
+      names = Anthropic::ToolDispatch.available_tool_names(messages, ["get_weather"])
+      names.should eq(Set{"get_weather"})
+    end
+
+    it "honors tool_removal nested in mid_conv_system" do
+      messages = [
+        Anthropic::MessageParam.user("What's the weather?"),
+        Anthropic::MessageParam.new(
+          role: "system",
+          content: [
+            Anthropic::MidConversationSystemContent.new(
+              content: [
+                Anthropic::TextContent.new(text: "Weather tool is no longer available."),
+                Anthropic::ToolRemovalContent.for_tool("get_weather"),
+              ] of Anthropic::MidConversationSystemBlock
+            ).as(Anthropic::ContentBlock),
+          ]
+        ),
+      ]
+      names = Anthropic::ToolDispatch.available_tool_names(messages, ["get_weather", "calculator"])
+      names.should eq(Set{"calculator"})
+    end
+
+    it "ignores tool changes on non-system roles" do
+      messages = [
+        Anthropic::MessageParam.new(
+          role: "user",
+          content: [Anthropic::ToolRemovalContent.for_tool("get_weather").as(Anthropic::ContentBlock)]
+        ),
+      ]
+      names = Anthropic::ToolDispatch.available_tool_names(messages, ["get_weather"])
+      names.should eq(Set{"get_weather"})
+    end
+
+    it "ignores MCP tool references" do
+      messages = [
+        Anthropic::MessageParam.new(
+          role: "system",
+          content: [
+            Anthropic::ToolRemovalContent.new(
+              tool: Anthropic::ToolChangeMCPToolReference.new(name: "search", server_name: "github")
+            ).as(Anthropic::ContentBlock),
+          ]
+        ),
+      ]
+      names = Anthropic::ToolDispatch.available_tool_names(messages, ["get_weather"])
+      names.should eq(Set{"get_weather"})
+    end
+  end
+end
+
+describe Anthropic::ToolRunner do
+  describe "mid-conversation tool removal" do
+    it "does not execute a removed tool" do
+      call_count = 0
+      weather_tool = Anthropic.tool(
+        name: "get_weather",
+        description: "Get weather",
+        schema: {} of String => Anthropic::Schema::Property,
+        required: [] of String
+      ) do |_|
+        call_count += 1
+        "sunny"
+      end
+
+      request_count = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        request_count += 1
+        body = if request_count == 1
+                 Fixtures::Responses::MESSAGE_WITH_TOOL_USE
+               else
+                 Fixtures::Responses::MESSAGE_BASIC
+               end
+        HTTP::Client::Response.new(200, body: body)
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = Anthropic::ToolRunner.new(
+        client: client,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [
+          Anthropic::MessageParam.user("What's the weather?"),
+          Anthropic::MessageParam.new(
+            role: "system",
+            content: [Anthropic::ToolRemovalContent.for_tool("get_weather").as(Anthropic::ContentBlock)]
+          ),
+        ],
+        tools: [weather_tool] of Anthropic::Tool
+      )
+
+      runner.run_until_finished
+
+      call_count.should eq(0)
+      tool_result_message = runner.current_messages.find do |msg|
+        content = msg.content
+        content.is_a?(Array) && content.any?(Anthropic::ToolResultContent)
+      end
+      tool_result_message.should_not be_nil
+      blocks = tool_result_message.not_nil!.content.as(Array(Anthropic::ContentBlock))
+      result = blocks.find(&.is_a?(Anthropic::ToolResultContent)).as(Anthropic::ToolResultContent)
+      result.is_error.should eq(true)
+      result.content.should eq("Unknown tool: get_weather")
+    end
+
+    it "executes a tool after tool_addition re-enables it" do
+      call_count = 0
+      weather_tool = Anthropic.tool(
+        name: "get_weather",
+        description: "Get weather",
+        schema: {} of String => Anthropic::Schema::Property,
+        required: [] of String
+      ) do |_|
+        call_count += 1
+        "sunny"
+      end
+
+      request_count = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        request_count += 1
+        body = if request_count == 1
+                 Fixtures::Responses::MESSAGE_WITH_TOOL_USE
+               else
+                 Fixtures::Responses::MESSAGE_BASIC
+               end
+        HTTP::Client::Response.new(200, body: body)
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = Anthropic::ToolRunner.new(
+        client: client,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [
+          Anthropic::MessageParam.user("What's the weather?"),
+          Anthropic::MessageParam.new(
+            role: "system",
+            content: [Anthropic::ToolRemovalContent.for_tool("get_weather").as(Anthropic::ContentBlock)]
+          ),
+          Anthropic::MessageParam.new(
+            role: "system",
+            content: [Anthropic::ToolAdditionContent.for_tool("get_weather").as(Anthropic::ContentBlock)]
+          ),
+        ],
+        tools: [weather_tool] of Anthropic::Tool
+      )
+
+      runner.run_until_finished
+
+      call_count.should eq(1)
+      tool_result_message = runner.current_messages.find do |msg|
+        content = msg.content
+        content.is_a?(Array) && content.any?(Anthropic::ToolResultContent)
+      end
+      blocks = tool_result_message.not_nil!.content.as(Array(Anthropic::ContentBlock))
+      result = blocks.find(&.is_a?(Anthropic::ToolResultContent)).as(Anthropic::ToolResultContent)
+      result.content.should eq("sunny")
+      result.is_error.should be_nil
+    end
+  end
+end
+
 describe Anthropic::CompactionConfig do
   describe ".enabled" do
     it "creates enabled config with threshold" do

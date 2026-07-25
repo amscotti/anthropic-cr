@@ -292,6 +292,153 @@ describe Anthropic::ThinkingConfig do
   end
 end
 
+describe Anthropic::ToolChangeToolReference do
+  it "serializes and parses tool references" do
+    ref = Anthropic::ToolChangeToolReference.new(name: "get_weather")
+    json = ref.to_json
+    parsed = JSON.parse(json)
+
+    parsed["type"].as_s.should eq("tool_reference")
+    parsed["name"].as_s.should eq("get_weather")
+
+    roundtrip = Anthropic::ToolChangeToolReference.from_json(json)
+    roundtrip.name.should eq("get_weather")
+  end
+end
+
+describe Anthropic::ToolChangeMCPToolReference do
+  it "serializes server and tool name" do
+    ref = Anthropic::ToolChangeMCPToolReference.new(name: "search", server_name: "github")
+    json = JSON.parse(ref.to_json)
+
+    json["type"].as_s.should eq("mcp_tool_reference")
+    json["name"].as_s.should eq("search")
+    json["server_name"].as_s.should eq("github")
+  end
+end
+
+describe Anthropic::ToolChangeMCPToolsetReference do
+  it "serializes server name" do
+    ref = Anthropic::ToolChangeMCPToolsetReference.new(server_name: "github")
+    json = JSON.parse(ref.to_json)
+
+    json["type"].as_s.should eq("mcp_toolset_reference")
+    json["server_name"].as_s.should eq("github")
+  end
+end
+
+describe Anthropic::ToolAdditionContent do
+  it "serializes and parses tool_addition blocks" do
+    block = Anthropic::ToolAdditionContent.for_tool(
+      "get_weather",
+      cache_control: Anthropic::CacheControl.ephemeral
+    )
+    json = block.to_json
+    parsed = JSON.parse(json)
+
+    parsed["type"].as_s.should eq("tool_addition")
+    parsed["tool"]["type"].as_s.should eq("tool_reference")
+    parsed["tool"]["name"].as_s.should eq("get_weather")
+    parsed["cache_control"]["type"].as_s.should eq("ephemeral")
+
+    roundtrip = Anthropic::ToolAdditionContent.from_json(json)
+    roundtrip.type.should eq("tool_addition")
+    roundtrip.tool.as(Anthropic::ToolChangeToolReference).name.should eq("get_weather")
+  end
+
+  it "supports MCP tool references" do
+    block = Anthropic::ToolAdditionContent.new(
+      tool: Anthropic::ToolChangeMCPToolReference.new(name: "list_issues", server_name: "github")
+    )
+    parsed = JSON.parse(block.to_json)
+
+    parsed["tool"]["type"].as_s.should eq("mcp_tool_reference")
+    parsed["tool"]["server_name"].as_s.should eq("github")
+  end
+end
+
+describe Anthropic::ToolRemovalContent do
+  it "serializes and parses tool_removal blocks" do
+    block = Anthropic::ToolRemovalContent.for_tool("get_weather")
+    json = block.to_json
+    parsed = JSON.parse(json)
+
+    parsed["type"].as_s.should eq("tool_removal")
+    parsed["tool"]["type"].as_s.should eq("tool_reference")
+    parsed["tool"]["name"].as_s.should eq("get_weather")
+
+    roundtrip = Anthropic::ToolRemovalContent.from_json(json)
+    roundtrip.type.should eq("tool_removal")
+    roundtrip.tool.as(Anthropic::ToolChangeToolReference).name.should eq("get_weather")
+  end
+
+  it "supports MCP toolset references" do
+    block = Anthropic::ToolRemovalContent.new(
+      tool: Anthropic::ToolChangeMCPToolsetReference.new(server_name: "github")
+    )
+    parsed = JSON.parse(block.to_json)
+
+    parsed["tool"]["type"].as_s.should eq("mcp_toolset_reference")
+    parsed["tool"]["server_name"].as_s.should eq("github")
+  end
+end
+
+describe Anthropic::MidConversationSystemContent do
+  it "parses text-only content" do
+    json = %({"type":"mid_conv_system","content":[{"type":"text","text":"Be brief."}]})
+    content = Anthropic::MidConversationSystemContent.from_json(json)
+
+    content.type.should eq("mid_conv_system")
+    content.content.size.should eq(1)
+    content.content.first.should be_a(Anthropic::TextContent)
+    content.content.first.as(Anthropic::TextContent).text.should eq("Be brief.")
+  end
+
+  it "parses and serializes nested tool_addition and tool_removal" do
+    content = Anthropic::MidConversationSystemContent.new(
+      content: [
+        Anthropic::TextContent.new(text: "Weather tool is disabled."),
+        Anthropic::ToolRemovalContent.for_tool("get_weather"),
+        Anthropic::ToolAdditionContent.for_tool("calculator"),
+      ] of Anthropic::MidConversationSystemBlock,
+      cache_control: Anthropic::CacheControl.ephemeral
+    )
+
+    json = content.to_json
+    parsed = JSON.parse(json)
+
+    parsed["type"].as_s.should eq("mid_conv_system")
+    parsed["content"].as_a.size.should eq(3)
+    parsed["content"].as_a[0]["type"].as_s.should eq("text")
+    parsed["content"].as_a[1]["type"].as_s.should eq("tool_removal")
+    parsed["content"].as_a[1]["tool"]["name"].as_s.should eq("get_weather")
+    parsed["content"].as_a[2]["type"].as_s.should eq("tool_addition")
+    parsed["content"].as_a[2]["tool"]["name"].as_s.should eq("calculator")
+    parsed["cache_control"]["type"].as_s.should eq("ephemeral")
+
+    roundtrip = Anthropic::MidConversationSystemContent.from_json(json)
+    roundtrip.content[1].should be_a(Anthropic::ToolRemovalContent)
+    roundtrip.content[2].should be_a(Anthropic::ToolAdditionContent)
+  end
+
+  it "round-trips as a MessageParam content block" do
+    mid = Anthropic::MidConversationSystemContent.new(
+      content: [
+        Anthropic::ToolRemovalContent.for_tool("get_weather"),
+      ] of Anthropic::MidConversationSystemBlock
+    )
+    msg = Anthropic::MessageParam.new(
+      role: "system",
+      content: [mid.as(Anthropic::ContentBlock)]
+    )
+
+    parsed = JSON.parse(msg.to_json)
+    parsed["role"].as_s.should eq("system")
+    parsed["content"].as_a[0]["type"].as_s.should eq("mid_conv_system")
+    parsed["content"].as_a[0]["content"].as_a[0]["type"].as_s.should eq("tool_removal")
+  end
+end
+
 describe Anthropic::ContentBlockConverter do
   it "parses text content" do
     json = %({"type":"text","text":"Hello"})
@@ -299,6 +446,33 @@ describe Anthropic::ContentBlockConverter do
     content = Anthropic::ContentBlockConverter.from_json(pull)
 
     content.should be_a(Anthropic::TextContent)
+  end
+
+  it "parses tool_addition content" do
+    json = %({"type":"tool_addition","tool":{"type":"tool_reference","name":"get_weather"}})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::ToolAdditionContent)
+    content.as(Anthropic::ToolAdditionContent).tool.as(Anthropic::ToolChangeToolReference).name.should eq("get_weather")
+  end
+
+  it "parses tool_removal content" do
+    json = %({"type":"tool_removal","tool":{"type":"tool_reference","name":"get_weather"}})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    content.should be_a(Anthropic::ToolRemovalContent)
+  end
+
+  it "parses mid_conv_system with nested tool changes" do
+    json = %({"type":"mid_conv_system","content":[{"type":"text","text":"update"},{"type":"tool_removal","tool":{"type":"tool_reference","name":"old_tool"}}]})
+    pull = JSON::PullParser.new(json)
+    content = Anthropic::ContentBlockConverter.from_json(pull)
+
+    mid = content.as(Anthropic::MidConversationSystemContent)
+    mid.content.size.should eq(2)
+    mid.content[1].should be_a(Anthropic::ToolRemovalContent)
   end
 
   it "parses tool_use content" do

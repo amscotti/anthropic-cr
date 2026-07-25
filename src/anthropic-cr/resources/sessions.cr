@@ -22,7 +22,21 @@ module Anthropic
       BetaSessionThreads.new(@client)
     end
 
-    # Create a session
+    # Create a session.
+    #
+    # `initial_events` sends events to the session at creation (processed in
+    # order). Supports `user.message` and `user.define_outcome` events.
+    # Maximum 50 events per the API.
+    #
+    # ```
+    # client.beta.sessions.create(
+    #   environment_id: env.id,
+    #   agent: agent.id,
+    #   initial_events: [
+    #     {"type" => "user.message", "content" => [{"type" => "text", "text" => "Hello"}]},
+    #   ],
+    # )
+    # ```
     def create(
       environment_id : String,
       agent : BetaManagedAgentsAgentParamLike,
@@ -30,6 +44,7 @@ module Anthropic
       metadata : Hash(String, String)? = nil,
       resources : Enumerable(BetaManagedAgentsSessionResourceParam)? = nil,
       vault_ids : Array(String)? = nil,
+      initial_events : Array(JSON::Any | Hash(String, JSON::Any))? = nil,
       betas : Array(String) = [] of String,
     ) : BetaManagedAgentsSession
       params = {} of String => JSON::Any
@@ -39,6 +54,7 @@ module Anthropic
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
       params["resources"] = JSON.parse(resources.to_a.to_json) if resources
       params["vault_ids"] = JSON.parse(vault_ids.to_json) if vault_ids
+      params["initial_events"] = JSON.parse(initial_events.to_json) if initial_events
 
       response = @client.post("/v1/sessions?beta=true", params, beta_headers(betas))
       BetaManagedAgentsSession.from_json(response.body)
@@ -302,13 +318,25 @@ module Anthropic
     #
     # The block receives each SSE event as a `JSON::Any` (thread event streams
     # carry managed-agents event shapes, not `/v1/messages` event shapes).
+    #
+    # Pass `event_deltas: [Anthropic::Sessions::DeltaType::AGENT_MESSAGE]` to
+    # opt into live `event_start` / `event_delta` preview deltas, same as
+    # session-level event streams.
     def stream(
       session_id : String,
       thread_id : String,
+      event_deltas : Array(String)? = nil,
       betas : Array(String) = [] of String,
       & : JSON::Any -> _
     )
-      @client.get_stream("/v1/sessions/#{session_id}/threads/#{thread_id}/stream?beta=true", beta_headers(betas)) do |response|
+      path = "/v1/sessions/#{session_id}/threads/#{thread_id}/stream?beta=true"
+      if event_deltas && !event_deltas.empty?
+        params = URI::Params.new
+        event_deltas.each { |delta_type| params.add("event_deltas", delta_type) }
+        path = "#{path}&#{params}"
+      end
+
+      @client.get_stream(path, beta_headers(betas)) do |response|
         SessionEventStream.new(response).each { |event| yield event }
       end
     end

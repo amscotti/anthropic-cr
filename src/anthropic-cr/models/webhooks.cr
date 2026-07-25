@@ -32,6 +32,17 @@ module Anthropic
       DEPLOYMENT_RUN_SUCCEEDED = "deployment_run.succeeded"
       DEPLOYMENT_RUN_FAILED    = "deployment_run.failed"
 
+      # Environment lifecycle events.
+      ENVIRONMENT_CREATED  = "environment.created"
+      ENVIRONMENT_UPDATED  = "environment.updated"
+      ENVIRONMENT_ARCHIVED = "environment.archived"
+      ENVIRONMENT_DELETED  = "environment.deleted"
+
+      # Memory store lifecycle events.
+      MEMORY_STORE_CREATED  = "memory_store.created"
+      MEMORY_STORE_ARCHIVED = "memory_store.archived"
+      MEMORY_STORE_DELETED  = "memory_store.deleted"
+
       # Session lifecycle events.
       SESSION_UPDATED = "session.updated"
     end
@@ -46,6 +57,14 @@ module Anthropic
 
     def deployment_run_event? : Bool
       type.starts_with?("deployment_run.")
+    end
+
+    def environment_event? : Bool
+      type.starts_with?("environment.")
+    end
+
+    def memory_store_event? : Bool
+      type.starts_with?("memory_store.")
     end
 
     def session_event? : Bool

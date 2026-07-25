@@ -186,12 +186,14 @@ module Anthropic
     @[JSON::Field(key: "inference_geo", emit_null: false)]
     getter inference_geo : String?
 
-    # Server-side fallback chain. Requires the `server-side-fallback-2026-06-01` beta.
-    @[JSON::Field(emit_null: false)]
-    getter fallbacks : Array(FallbackParam)?
+    # Server-side fallback chain (`Array(FallbackParam)`) or `"default"`.
+    # Requires the `server-side-fallback-2026-07-01` beta (auto-attached).
+    @[JSON::Field(converter: Anthropic::FallbacksParamConverter, emit_null: false)]
+    getter fallbacks : FallbacksParam?
 
-    @[JSON::Field(key: "fallback_credit_token", emit_null: false)]
-    getter fallback_credit_token : String?
+    # Bare credit-token string or object form `{token, mode}`.
+    @[JSON::Field(key: "fallback_credit_token", converter: Anthropic::FallbackCreditTokenConverter, emit_null: false)]
+    getter fallback_credit_token : FallbackCreditToken?
 
     @[JSON::Field(emit_null: false)]
     getter diagnostics : DiagnosticsParam?
@@ -215,8 +217,8 @@ module Anthropic
       @container : String? = nil,
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
-      @fallbacks : Array(FallbackParam)? = nil,
-      @fallback_credit_token : String? = nil,
+      @fallbacks : FallbacksParam? = nil,
+      @fallback_credit_token : FallbackCreditToken? = nil,
       @diagnostics : DiagnosticsParam? = nil,
     )
     end
@@ -428,14 +430,15 @@ module Anthropic
     @[JSON::Field(key: "mcp_servers", emit_null: false)]
     getter mcp_servers : Array(MCPServerDefinition)?
 
-    # Server-side fallback chain. Each entry names a model to try if the primary
-    # model refuses. Requires the `server-side-fallback-2026-06-01` beta.
-    @[JSON::Field(emit_null: false)]
-    getter fallbacks : Array(FallbackParam)?
+    # Server-side fallback chain (`Array(FallbackParam)`) or `"default"`.
+    # Requires the `server-side-fallback-2026-07-01` beta (auto-attached).
+    @[JSON::Field(converter: Anthropic::FallbacksParamConverter, emit_null: false)]
+    getter fallbacks : FallbacksParam?
 
-    # Opaque credit token redeemable on a server-side fallback retry.
-    @[JSON::Field(key: "fallback_credit_token", emit_null: false)]
-    getter fallback_credit_token : String?
+    # Opaque credit token (bare string) or object form with redemption mode.
+    # Object form requires `fallback-credit-2026-07-01`.
+    @[JSON::Field(key: "fallback_credit_token", converter: Anthropic::FallbackCreditTokenConverter, emit_null: false)]
+    getter fallback_credit_token : FallbackCreditToken?
 
     @[JSON::Field(emit_null: false)]
     getter diagnostics : DiagnosticsParam?
@@ -463,8 +466,8 @@ module Anthropic
       @context_management : ContextManagementConfig? = nil,
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
-      @fallbacks : Array(FallbackParam)? = nil,
-      @fallback_credit_token : String? = nil,
+      @fallbacks : FallbacksParam? = nil,
+      @fallback_credit_token : FallbackCreditToken? = nil,
       @diagnostics : DiagnosticsParam? = nil,
     )
     end

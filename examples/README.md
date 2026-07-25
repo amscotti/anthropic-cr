@@ -85,12 +85,32 @@ crystal run examples/01_basic_message.cr
 | `35_advisor_tool.cr` | Advisor tool (`advisor_20260301`) with typed result-block handling |
 | `36_user_profiles.cr` | User Profiles API + `user_profile_id` scoped messaging |
 
-### Sonnet 5 / Fable 5 / July 2026
+### Sonnet 5 / Fable 5 / July 2026 (0.8.0)
 
 | File | Description |
 |------|-------------|
 | `37_sonnet_5_fable_5.cr` | Claude Sonnet 5 / Fable 5 / Mythos 5 models |
 | `38_new_tools.cr` | New server tools (`code_execution_20260521`, `web_fetch_20260318`, `web_search_20260318`) |
-| `39_fallbacks.cr` | Server-side refusal fallbacks (`fallbacks:` request param) |
+| `39_fallbacks.cr` | Server-side refusal fallbacks (`fallbacks:` chain or `"default"`, object credit tokens) |
 | `40_middleware.cr` | HTTP middleware (logging + header injection) |
 | `41_refusal_fallback_middleware.cr` | Client-side `BetaRefusalFallbackMiddleware` |
+
+### Opus 5 / Dreams / Tunnels / July 2026 (0.9.0)
+
+| File | Description |
+|------|-------------|
+| `42_opus_5.cr` | Claude Opus 5 model smoke test (`CLAUDE_OPUS` / `:opus` rolling alias) |
+| `43_dreams.cr` | Dreams API — memory consolidation (gated research preview; 404 without access) |
+| `44_tunnels.cr` | MCP Tunnels management (WIF `workspace:manage_tunnels`; API keys return 401) |
+
+`34_managed_agents.cr` also covers 0.9.0 additions: agent model config with `effort` / `speed`, session `initial_events`, and thread stream `event_deltas`.
+
+### Amazon Bedrock
+
+| File | Description |
+|------|-------------|
+| `45_bedrock.cr` | Bedrock Runtime — SigV4, non-streaming + streaming (event-stream→SSE) |
+| `46_bedrock_mantle.cr` | Bedrock Mantle — native `/v1/messages`, SigV4 service `bedrock-mantle` |
+
+Prefer inference profile model IDs for Runtime (`us.anthropic.*` / `global.anthropic.*`). Credentials resolve from env, `~/.aws/credentials`, `aws login` cache, IAM Identity Center SSO (`aws sso login`), or IMDS. Mantle Anthropic models may need separate account entitlement beyond Runtime access.
+

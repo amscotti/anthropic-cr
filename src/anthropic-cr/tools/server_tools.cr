@@ -138,20 +138,51 @@ module Anthropic
   # Fast mode beta header.
   FAST_MODE_BETA = "fast-mode-2026-02-01"
 
-  # Server-side fallbacks beta header.
+  # Server-side fallbacks beta header (June 2026).
   #
-  # When supplied alongside a top-level `fallbacks:` request param, the API
-  # retries a refused request itself in one round-trip.
-  SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-06-01"
+  # Prefer `SERVER_SIDE_FALLBACK_BETA` / `SERVER_SIDE_FALLBACK_BETA_2026_07_01`
+  # for new code; this constant is kept for callers that pin the older header.
+  SERVER_SIDE_FALLBACK_BETA_2026_06_01 = "server-side-fallback-2026-06-01"
 
-  # Client-side fallback credit beta header.
-  #
-  # Used by the client-side `BetaRefusalFallbackMiddleware` to redeem
-  # `fallback_credit_token`s returned on refusal stop details.
-  FALLBACK_CREDIT_BETA = "fallback-credit-2026-06-01"
+  # Server-side fallbacks beta header (July 2026) — supports `fallbacks: "default"`
+  # and aligns with the official Python/Ruby/TS SDKs.
+  SERVER_SIDE_FALLBACK_BETA_2026_07_01 = "server-side-fallback-2026-07-01"
+
+  # Primary server-side fallbacks beta. Tracks the latest official default
+  # (July 2026). Auto-attached when `fallbacks:` is set.
+  SERVER_SIDE_FALLBACK_BETA = SERVER_SIDE_FALLBACK_BETA_2026_07_01
+
+  # Fallback-credit beta header (June 2026). Kept for callers that pin the
+  # older bare-string credit-token behavior.
+  FALLBACK_CREDIT_BETA_2026_06_01 = "fallback-credit-2026-06-01"
+
+  # Fallback-credit beta header (July 2026) — required for object-form
+  # `fallback_credit_token` (`{token, mode}`) and used by default by
+  # `BetaRefusalFallbackMiddleware`.
+  FALLBACK_CREDIT_BETA_2026_07_01 = "fallback-credit-2026-07-01"
+
+  # Primary fallback-credit beta. Tracks the latest official default (July 2026).
+  FALLBACK_CREDIT_BETA = FALLBACK_CREDIT_BETA_2026_07_01
 
   # Agent persistent memory beta header (Memory Stores API).
   AGENT_MEMORY_BETA = "agent-memory-2026-07-22"
+
+  # Dreams (memory consolidation) beta header.
+  #
+  # Research-preview API: request/response shapes may change without a
+  # deprecation period. Required by `client.beta.dreams.*` together with
+  # `MANAGED_AGENTS_BETA` (both auto-attached). Access is separately gated.
+  DREAMING_BETA = "dreaming-2026-04-21"
+
+  # MCP Tunnels beta header (research preview).
+  #
+  # Required by `client.beta.tunnels.*` and `client.beta.tunnels.certificates.*`.
+  # Supersedes Admin API `/v1/organizations/tunnels` during a migration window.
+  # Management calls need WIF with `workspace:manage_tunnels` — not API keys.
+  MCP_TUNNELS_BETA = "mcp-tunnels-2026-06-22"
+
+  # Thinking token count in streaming deltas (optional display).
+  THINKING_TOKEN_COUNT_BETA = "thinking-token-count-2026-05-13"
 
   # Web search tool - allows Claude to search the internet
   #
