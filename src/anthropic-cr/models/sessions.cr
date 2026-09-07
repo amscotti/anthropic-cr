@@ -99,6 +99,37 @@ module Anthropic
 
   alias BetaManagedAgentsSessionResourceParam = BetaManagedAgentsGitHubRepositoryResourceParam | BetaManagedAgentsFileResourceParam | BetaManagedAgentsMemoryStoreResourceParam | JSON::Any | Hash(String, JSON::Any)
 
+  # A monetary amount in a specific currency.
+  #
+  # `amount` is in minor units as an integer decimal string with no leading
+  # zeros (`"2500"` is $25.00). A string rather than a number so no float
+  # rounding is ever applied. `currency` is an uppercase ISO-4217 code
+  # (`"USD"` is currently the only supported currency).
+  struct BetaMonetaryAmount
+    include JSON::Serializable
+
+    getter amount : String
+    getter currency : String
+
+    def initialize(@amount : String, @currency : String)
+    end
+  end
+
+  # A hard spend ceiling for a session. The session stops issuing new model
+  # requests once the tracked list cost reaches `max_list_cost`.
+  struct BetaManagedAgentsBudgetLimit
+    include JSON::Serializable
+
+    @[JSON::Field(key: "max_list_cost")]
+    getter max_list_cost : BetaMonetaryAmount
+
+    getter type : String = "limit"
+
+    def initialize(@max_list_cost : BetaMonetaryAmount)
+      @type = "limit"
+    end
+  end
+
   struct BetaManagedAgentsSession
     include JSON::Serializable
 
@@ -130,6 +161,10 @@ module Anthropic
 
     @[JSON::Field(key: "archived_at")]
     getter archived_at : String?
+
+    # Hard spend ceiling (`nil` when the session has no budget).
+    @[JSON::Field(emit_null: false)]
+    getter budget : BetaManagedAgentsBudgetLimit?
   end
 
   struct BetaManagedAgentsDeletedSession

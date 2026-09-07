@@ -42,6 +42,25 @@ module Anthropic
     # Optional platform-assigned external identifier (not enforced unique).
     @[JSON::Field(key: "external_id", emit_null: false)]
     getter external_id : String?
+
+    # How the platform uses the API on behalf of the entity this profile
+    # represents: `"application"` or `"passthrough"`.
+    @[JSON::Field(key: "access_type", emit_null: false)]
+    getter access_type : String?
+
+    # Real-world name of the entity this profile represents.
+    @[JSON::Field(emit_null: false)]
+    getter name : String?
+
+    # RFC 3339 timestamp recording when the end user completed onboarding.
+    @[JSON::Field(key: "external_user_onboarded_at", emit_null: false)]
+    getter external_user_onboarded_at : String?
+  end
+
+  # Access-type values for `BetaUserProfile#access_type`.
+  module UserProfileAccessType
+    APPLICATION = "application"
+    PASSTHROUGH = "passthrough"
   end
 
   # Enrollment URL response for a user profile.
@@ -104,10 +123,18 @@ module Anthropic
     def create(
       external_id : String? = nil,
       metadata : Hash(String, String)? = nil,
+      access_type : String? = nil,
+      name : String? = nil,
+      external_user_onboarded_at : String? = nil,
     ) : BetaUserProfile
       body = {} of String => JSON::Any
       body["external_id"] = JSON::Any.new(external_id) if external_id
       body["metadata"] = JSON.parse(metadata.to_json) if metadata
+      body["access_type"] = JSON::Any.new(access_type) if access_type
+      body["name"] = JSON::Any.new(name) if name
+      if onboarded = external_user_onboarded_at
+        body["external_user_onboarded_at"] = JSON::Any.new(onboarded)
+      end
 
       response = @client.post("/v1/user_profiles?beta=true", body, beta_headers)
       BetaUserProfile.from_json(response.body)
@@ -127,10 +154,18 @@ module Anthropic
       user_profile_id : String,
       external_id : String? = nil,
       metadata : Hash(String, String)? = nil,
+      access_type : String? = nil,
+      name : String? = nil,
+      external_user_onboarded_at : String? = nil,
     ) : BetaUserProfile
       body = {} of String => JSON::Any
       body["external_id"] = JSON::Any.new(external_id) if external_id
       body["metadata"] = JSON.parse(metadata.to_json) if metadata
+      body["access_type"] = JSON::Any.new(access_type) if access_type
+      body["name"] = JSON::Any.new(name) if name
+      if onboarded = external_user_onboarded_at
+        body["external_user_onboarded_at"] = JSON::Any.new(onboarded)
+      end
 
       response = @client.post("/v1/user_profiles/#{user_profile_id}?beta=true", body, beta_headers)
       BetaUserProfile.from_json(response.body)
@@ -138,14 +173,17 @@ module Anthropic
 
     # List user profiles with optional pagination.
     #
-    # `order` may be `"asc"` or `"desc"`.
+    # `order` may be `"asc"` or `"desc"`. `order_by` selects the sort key
+    # (e.g. `"name"`).
     def list(
       limit : Int32 = 20,
       order : String? = nil,
+      order_by : String? = nil,
       page : String? = nil,
     ) : BetaUserProfileListResponse
       path = "/v1/user_profiles?beta=true&limit=#{limit}"
       path += "&order=#{URI.encode_path_segment(order)}" if order
+      path += "&order_by=#{URI.encode_path_segment(order_by)}" if order_by
       path += "&page=#{URI.encode_path_segment(page)}" if page
 
       response = @client.get(path, nil, beta_headers)

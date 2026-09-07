@@ -2,7 +2,7 @@
 
 An unofficial Anthropic API client for Crystal. Access Claude AI models with idiomatic Crystal code.
 
-**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, Managed Agents API (agents, environments, sessions, deployments, memory stores, vaults, dreams, MCP tunnels), tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, HTTP middleware, server-side and client-side refusal fallbacks (including `fallbacks: "default"` and object-form credit tokens), and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Tracks the July 2026 release (Python 0.120 / Ruby 1.59 / TypeScript 0.115 — Sonnet 5 / Fable 5 / Mythos 5 / Opus 5) of the official SDKs. API design inspired by official Ruby SDK patterns.
+**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, Managed Agents API (agents, environments, sessions, deployments, memory stores, vaults, dreams, MCP tunnels), tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, HTTP middleware, server-side and client-side refusal fallbacks (including `fallbacks: "default"` and object-form credit tokens), and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Also includes the Organization Admin API, alternate providers (AWS gateway, Google Cloud gateway, Vertex AI), legacy Completions, thinking display modes, and workspace headers. Tracks the September 2026 release (Python 1.4.0 / Ruby 1.69.0 / TypeScript 0.124.0) of the official SDKs. API design inspired by official Ruby SDK patterns.
 
 > **Note:** A large portion of this library was written with the assistance of AI (Claude), including code, tests, and documentation.
 
@@ -38,7 +38,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **MCP Tunnels API** — Private MCP routing + certificates (`client.beta.tunnels`; `mcp-tunnels-2026-06-22`; management via WIF)
 - ✅ **Managed Agents Model Effort** — Agent `model` config with `effort` / `speed`; session `initial_events`; thread stream `event_deltas`
 - ✅ **Skills API** — Full CRUD for skills and skill versions (beta)
-- ✅ **User Profiles API** — Create / retrieve / update / list profiles + enrollment URLs; `user_profile_id:` sent as the `anthropic-user-profile-id` request header (beta: `user-profiles-2026-03-24`)
+- ✅ **User Profiles API** — Create / retrieve / update / list profiles + enrollment URLs; `access_type` / `name` / `external_user_onboarded_at` fields, `order_by` listing; `user_profile_id:` sent as the `anthropic-user-profile-id` request header (beta: `user-profiles-2026-03-24`)
 - ✅ **Token Task Budgets** — `BetaTokenTaskBudget` for session-wide token caps via `output_config.task_budget`
 - ✅ **Extended Tool Fields** — Beta `allowed_callers`, `defer_loading`, `input_examples`, `eager_input_streaming`
 - ✅ **Effort Control** — Control output effort level via `output_config` (`low` / `medium` / `high` / `xhigh` / `max`)
@@ -63,7 +63,11 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **Managed Agents Event Streaming** — `SessionEventStream` + `event_deltas:` opt-in + `accumulate_managed_agents_event` helper
 - ✅ **x-stainless-helper Telemetry** — Single-sourced helper header with append semantics
 - ✅ **Amazon Bedrock** — Runtime (`Bedrock::Client`, SigV4 + streaming) and Mantle (`Bedrock::MantleClient`); credentials via env, shared files, `aws login`, IAM Identity Center SSO, or IMDS
-- 🚧 Google Vertex support — planned
+- ✅ **Alternate Providers** — AWS gateway (`AWS::Client`, SigV4 or API key), Google Cloud gateway (`GoogleCloud::Client`, full API passthrough), and Vertex AI (`Vertex::Client`, publisher-model API); Google auth via access token, token provider, `authorized_user` ADC, or metadata server
+- ✅ **Organization Admin API** — `client.beta.organization` (org details, API keys, external keys, invites, users, workspaces + members, service accounts, federation issuers/rules, rate limits, compliance settings)
+- ✅ **Legacy Completions** — `client.completions` (`/v1/complete`, streaming + non-streaming)
+- ✅ **Workspace Headers** — First-class `workspace_id:` on Messages, Sessions, Dreams, and Completions; `APIError#workspace_id` reads the response header
+- ✅ **Thinking Display Modes** — `ThinkingConfig#display` (`summarized` / `omitted` / `updates`, auto-attaching `thinking-display-updates-2026-08-18`)
 
 ## Installation
 
@@ -79,7 +83,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 
 ## Beta Status
 
-Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (July 2026 / 0.120 · 1.59 · 0.115).
+Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (September 2026 / 1.4.0 · 1.69.0 · 0.124.0).
 
 Still beta upstream:
 - Files API via `client.beta.files`
@@ -91,7 +95,7 @@ Still beta upstream:
 - **Dreams API** via `client.beta.dreams` (`managed-agents-2026-04-01` + `dreaming-2026-04-21`; gated research preview)
 - **MCP Tunnels API** via `client.beta.tunnels` (`mcp-tunnels-2026-06-22`; management needs WIF `workspace:manage_tunnels`)
 - **Managed Agents API** via `client.beta.agents`, `client.beta.vaults`, `client.beta.sessions`, `client.beta.deployments`, `client.beta.deployment_runs`, `client.beta.environments`, `client.beta.memory_stores`, and secure webhook verification (`managed-agents-2026-04-01`); agent model config supports `effort` / `speed`
-- Full release notes: [CHANGELOG.md](CHANGELOG.md) (`0.9.0`)
+- Full release notes: [CHANGELOG.md](CHANGELOG.md) (`0.10.0`)
 - **Memory Stores** (`agent-memory-2026-07-22`)
 - Context management (`context_management`)
 - MCP server definitions (`mcp_servers`)
@@ -845,6 +849,10 @@ See the [examples/](./examples/) directory for complete working examples:
 - `43_dreams.cr` - Dreams API (memory consolidation, beta)
 - `44_tunnels.cr` - MCP Tunnels + certificates (research preview)
 - `45_bedrock.cr` - Amazon Bedrock Runtime (`Anthropic::Bedrock::Client`, SigV4)
+- `46_bedrock_mantle.cr` - Bedrock Mantle (`Anthropic::Bedrock::MantleClient`)
+- `47_completions.cr` - Legacy Text Completions (`client.completions`)
+- `48_organization.cr` - Organization Admin API (`client.beta.organization`)
+- `49_providers.cr` - AWS / Google Cloud / Vertex provider clients
 
 Run examples with:
 ```bash

@@ -61,6 +61,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : Message
@@ -94,9 +95,10 @@ module Anthropic
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id, thinking)
 
       merged = merge_user_profile_header(beta_headers, user_profile_id)
+      merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
       response = @client.post("/v1/messages", params, merged)
       Message.from_json(response.body)
@@ -138,6 +140,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       &
@@ -164,6 +167,7 @@ module Anthropic
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
         user_profile_id: user_profile_id,
+        workspace_id: workspace_id,
         extra_headers: extra_headers,
         diagnostics: diagnostics
       ) do |stream|
@@ -194,6 +198,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       &
@@ -225,8 +230,9 @@ module Anthropic
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id, thinking)
       merged = merge_user_profile_header(beta_headers, user_profile_id)
+      merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
 
       @client.post_stream("/v1/messages", params, merged) do |response|
@@ -263,6 +269,7 @@ module Anthropic
       output_config : OutputConfig? = nil,
       inference_geo : String? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : TokenCountResponse
       # Convert messages to typed MessageParam array
@@ -284,9 +291,9 @@ module Anthropic
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, user_profile_id: user_profile_id)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, user_profile_id: user_profile_id, thinking: thinking)
 
-      response = @client.post("/v1/messages/count_tokens", params, merge_user_profile_header(beta_headers, user_profile_id))
+      response = @client.post("/v1/messages/count_tokens", params, Anthropic.merge_workspace_header(merge_user_profile_header(beta_headers, user_profile_id), workspace_id))
       TokenCountResponse.from_json(response.body)
     end
 
@@ -330,6 +337,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      thinking : ThinkingConfig? = nil,
     ) : Hash(String, String)?
       betas = [] of String
 
@@ -348,7 +356,8 @@ module Anthropic
         server_tools: server_tools,
         cache_control: cache_control,
         diagnostics: diagnostics,
-        include_user_profiles: !user_profile_id.nil?
+        include_user_profiles: !user_profile_id.nil?,
+        thinking: thinking
       )
     end
 

@@ -38,6 +38,8 @@ module Anthropic
       inputs : Array(BetaDreamInput | Hash(String, JSON::Any)),
       model : String | BetaDreamModelConfig | Hash(String, JSON::Any),
       instructions : String? = nil,
+      output_behavior : BetaDreamOutputBehavior | Hash(String, JSON::Any)? = nil,
+      workspace_id : String? = nil,
       betas : Array(String) = [] of String,
     ) : BetaDream
       params = {} of String => JSON::Any
@@ -51,8 +53,10 @@ module Anthropic
                           JSON.parse(model.to_json)
                         end
       params["instructions"] = JSON::Any.new(instructions) if instructions
+      params["output_behavior"] = JSON.parse(output_behavior.to_json) if output_behavior
 
-      response = @client.post("/v1/dreams?beta=true", params, beta_headers(betas))
+      headers = Anthropic.merge_workspace_header(beta_headers(betas), workspace_id)
+      response = @client.post("/v1/dreams?beta=true", params, headers)
       BetaDream.from_json(response.body)
     end
 

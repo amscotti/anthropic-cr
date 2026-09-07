@@ -121,6 +121,16 @@ module Anthropic
       BetaDreams.new(@client)
     end
 
+    # Access the beta Organization Admin API.
+    #
+    # ```
+    # org = client.beta.organization.retrieve
+    # users = client.beta.organization.users.list
+    # ```
+    def organization : BetaOrganizations
+      BetaOrganizations.new(@client)
+    end
+
     # Access beta MCP Tunnels API (research preview).
     #
     # Auto-merges `mcp-tunnels-2026-06-22`. Tunnel *management* requires a
@@ -251,6 +261,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : Message
@@ -302,9 +313,11 @@ module Anthropic
         diagnostics: diagnostics,
         include_user_profiles_beta: !user_profile_id.nil?,
         fallbacks: fallbacks,
-        fallback_credit_token: fallback_credit_token
+        fallback_credit_token: fallback_credit_token,
+        thinking: thinking
       )
       merged = merge_user_profile_header(beta_headers, user_profile_id)
+      merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
       response = @client.post("/v1/messages", params, merged)
       Message.from_json(response.body)
@@ -351,6 +364,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       &
@@ -383,6 +397,7 @@ module Anthropic
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
         user_profile_id: user_profile_id,
+        workspace_id: workspace_id,
         extra_headers: extra_headers,
         diagnostics: diagnostics
       ) do |stream|
@@ -419,6 +434,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       &
@@ -465,10 +481,12 @@ module Anthropic
         diagnostics: diagnostics,
         include_user_profiles_beta: !user_profile_id.nil?,
         fallbacks: fallbacks,
-        fallback_credit_token: fallback_credit_token
+        fallback_credit_token: fallback_credit_token,
+        thinking: thinking
       )
 
       merged = merge_user_profile_header(beta_headers, user_profile_id)
+      merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
 
       @client.post_stream("/v1/messages", params, merged) do |response|
@@ -496,6 +514,7 @@ module Anthropic
       mcp_servers : Array(MCPServerDefinition)? = nil,
       speed : String? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : TokenCountResponse
       typed_messages = normalize_messages(messages)
@@ -529,10 +548,11 @@ module Anthropic
         cache_control,
         diagnostics: diagnostics,
         include_token_counting_beta: true,
-        include_user_profiles_beta: !user_profile_id.nil?
+        include_user_profiles_beta: !user_profile_id.nil?,
+        thinking: thinking
       )
 
-      response = @client.post("/v1/messages/count_tokens?beta=true", params, merge_user_profile_header(beta_headers, user_profile_id))
+      response = @client.post("/v1/messages/count_tokens?beta=true", params, Anthropic.merge_workspace_header(merge_user_profile_header(beta_headers, user_profile_id), workspace_id))
       TokenCountResponse.from_json(response.body)
     end
 
@@ -564,6 +584,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : ParsedMessage(T) forall T
@@ -595,6 +616,7 @@ module Anthropic
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
         user_profile_id: user_profile_id,
+        workspace_id: workspace_id,
         extra_headers: extra_headers,
         diagnostics: diagnostics
       )
@@ -630,6 +652,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
+      workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
     ) : ParsedMessage(JSON::Any)
@@ -661,6 +684,7 @@ module Anthropic
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
         user_profile_id: user_profile_id,
+        workspace_id: workspace_id,
         extra_headers: extra_headers,
         diagnostics: diagnostics
       )
@@ -725,6 +749,7 @@ module Anthropic
       include_user_profiles_beta : Bool = false,
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
+      thinking : ThinkingConfig? = nil,
     ) : Hash(String, String)?
       # Explicit chain / "default" and bare-string credit tokens auto-attach the
       # server-side fallback beta. Object-form credit tokens need the July 2026
@@ -745,7 +770,8 @@ module Anthropic
         output_format: output_format,
         output_config: output_config,
         include_token_counting: include_token_counting_beta,
-        include_user_profiles: include_user_profiles_beta
+        include_user_profiles: include_user_profiles_beta,
+        thinking: thinking
       )
     end
 
