@@ -51,6 +51,19 @@ module Anthropic
       Models.new(self)
     end
 
+    # [Legacy] Text Completions API.
+    #
+    # ```
+    # completion = client.completions.create(
+    #   model: "claude-haiku-4-5-20251001",
+    #   prompt: "\n\nHuman: Hello!\n\nAssistant:",
+    #   max_tokens_to_sample: 256
+    # )
+    # ```
+    def completions : Completions
+      Completions.new(self)
+    end
+
     # Beta namespace for beta features
     #
     # ```
@@ -487,5 +500,16 @@ module Anthropic
       # Clamp to max delay
       delay.clamp(0.0, @max_retry_delay).seconds
     end
+  end
+
+  # Request header selecting the Workspace a request runs under.
+  WORKSPACE_ID_HEADER = "anthropic-workspace-id"
+
+  # Merge an `anthropic-workspace-id` request header into an existing
+  # header hash. Centralized so every resource sets the header the same
+  # way; `nil` leaves the headers untouched.
+  def self.merge_workspace_header(headers : Hash(String, String)?, workspace_id : String?) : Hash(String, String)?
+    return headers if workspace_id.nil?
+    (headers || {} of String => String).merge({WORKSPACE_ID_HEADER => workspace_id})
   end
 end

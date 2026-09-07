@@ -5,14 +5,14 @@ This document provides comprehensive information for working with the anthropic-
 ## Library Metadata
 
 - **Library name:** `anthropic-cr`
-- **Current version:** 0.9.0
+- **Current version:** 0.10.0
 - **Anthropic API version:** `2023-06-01`
 - **Crystal requirement:** `>= 1.18.2`
 - **Repository:** https://github.com/amscotti/anthropic-cr
 - **License:** MIT
 - **Top-level module:** `Anthropic` (note: *not* `Anthropic::CR`)
 - **Entry point:** `src/anthropic-cr.cr`
-- **Tracks:** Late-July 2026 release of the official Python (0.120.0) / Ruby (1.59.0) / TypeScript (0.115.0) SDKs (Sonnet 5 / Fable 5 / Mythos 5 / Opus 5)
+- **Tracks:** September 2026 release of the official Python (1.4.0) / Ruby (1.69.0) / TypeScript (0.124.0) SDKs
 
 ### Terminology / Synonyms
 
@@ -26,6 +26,32 @@ The following terms are used interchangeably in this document and in the SDK. Us
 - "messages API" = "chat completions" (Anthropic's equivalent of chat completions)
 - "SSE" = "Server-Sent Events" = "streaming"
 - "task budget" = "token task budget" = "session budget"
+
+## What's New in 0.10.0 (September 2026)
+
+Tracks the September 2026 release of the official Python (1.4.0), Ruby (1.69.0), and TypeScript (0.124.0) SDKs.
+
+### Organization Admin API (beta)
+- `client.beta.organization` — `retrieve` plus `api_keys`, `external_keys`, `invites`, `users`, `workspaces` (nested `members`, `rate_limits`, `service_accounts`), `service_accounts` (nested `workspaces`), `federation` (`issuers` + `rules`), `rate_limits`, `compliance_settings`.
+- Delete/remove calls return typed confirmations (`BetaDeletedExternalKey`, `BetaDeletedInvite`, `BetaDeletedOrganizationUser`, `BetaDeletedWorkspaceMember`, `BetaDeletedServiceAccountWorkspaceMember`).
+
+### Alternate providers (non-Azure)
+- `Anthropic::Vertex::Client` — Vertex AI publisher-model API (`rawPredict` / `streamRawPredict` rewrite, `vertex-2023-10-16`); Batch API raises `NotImplementedError`.
+- `Anthropic::GoogleCloud::Client` — Google Cloud gateway, full API passthrough with invoke-prefix routing; `skip_auth` mode.
+- `Anthropic::AWS::Client` — AWS gateway (`aws-external-anthropic` SigV4, API-key mode, workspace header, `skip_auth`); explicit `api_key` beats platform args, env key applies only without them.
+- `Anthropic::GoogleAuth::Provider` — explicit token, token-provider proc, `authorized_user` ADC refresh, metadata server. Service-account key files are unsupported (no RS256 in Crystal stdlib).
+
+### Legacy Completions
+- `client.completions` — `create` / block `stream` for `/v1/complete` (mirrors official create/create_streaming guards).
+
+### API deltas
+- Models `CLAUDE_FABLE_5_1` / `CLAUDE_MYTHOS_5_1` (+ shorthands).
+- `ThinkingConfig#display` (`summarized` / `omitted` / `updates`); auto-attaches `thinking-display-updates-2026-08-18`.
+- First-class `workspace_id:` on Messages (GA + beta + `parse`), Sessions, Dreams, Completions (`Anthropic.merge_workspace_header`); `APIError#workspace_id`.
+- Sessions `budget:` (`BetaManagedAgentsBudgetLimit` + `BetaMonetaryAmount`).
+- Dreams `output_behavior:` on create; required `BetaDream#output_behavior`.
+- User profiles `access_type` / `name` / `external_user_onboarded_at` (+ `order_by` list).
+- New beta flags: thinking-binding-controls, mid-conversation tool-changes/output-config/system-clear-at, task-budgets, compact, computer-use-2025-11-24, ce-user-management, user-profiles-2026-08-18.
 
 ## What's New in 0.9.0 (July 2026)
 
@@ -160,7 +186,7 @@ Tracks the Opus 4.7 / April 2026 release of the official Python (0.96.0), Ruby (
 
 ## Overview
 
-The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the late-July 2026 release of the official Python (0.120.0), Ruby (1.59.0), and TypeScript (0.115.0) SDKs (Sonnet 5 / Fable 5 / Mythos 5 / Opus 5). Key features include:
+The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the September 2026 release of the official Python (1.4.0), Ruby (1.69.0), and TypeScript (0.124.0) SDKs. Key features include:
 
 - Full Messages API coverage (create and stream)
 - Tool use / function calling with Schema DSL and typed tools
@@ -206,7 +232,7 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - **Structured `stop_details`** — `RefusalStopDetails` plus `GenericStopDetails` fallback for future variants
 - Comprehensive error handling with automatic retries (408, 409, 429, 5xx, 529)
 
-**Status**: Feature complete for core functionality. Tracks July 2026 (Sonnet 5 / Fable 5 / Mythos 5).
+**Status**: Feature complete for core functionality. Tracks September 2026 (Python 1.4.0 / Ruby 1.69.0 / TypeScript 0.124.0).
 
 ---
 
@@ -2399,16 +2425,17 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.9.0 (July 2026)
+- **Current Version**: 0.10.0 (September 2026)
 - **API Version**: 2023-06-01
 - **Crystal Version**: >= 1.18.2
-- **Tracks**: Late-July 2026 release of the official Python (0.120.0), Ruby (1.59.0), and TypeScript (0.115.0) SDKs (Sonnet 5 / Fable 5 / Mythos 5 / Opus 5)
-- **Previous version**: 0.8.0 (July 2026 — Sonnet 5 / Fable 5 / Mythos 5, initial server-side fallbacks)
+- **Tracks**: September 2026 release of the official Python (1.4.0), Ruby (1.69.0), and TypeScript (0.124.0) SDKs
+- **Previous version**: 0.9.0 (July 2026 — Opus 5, Dreams + MCP Tunnels)
 
 ### Version History Highlights
 
 | Version | Release | Notable additions |
 |---------|---------|-------------------|
+| 0.10.0 | September 2026 | Organization Admin API; AWS / Google Cloud / Vertex providers; legacy Completions; thinking display modes; `workspace_id` headers; session budgets; dream `output_behavior`; user-profile fields; Fable/Mythos 5.1. |
 | 0.9.0 | July 2026 | Opus 5; Dreams + MCP Tunnels; `fallbacks: "default"` + object credit tokens; July fallback betas; tool_addition/removal; managed-agents effort/speed + session `initial_events`. |
 | 0.8.0 | July 2026 | Sonnet 5 / Fable 5 / Mythos 5; server-side fallbacks (June betas); HTTP middleware; deployments; new tool versions. |
 | 0.7.1 | May 2026 | Managed Agents API: Agents (`/v1/agents`) and Vaults (`/v1/vaults`) resources and models with automated `managed-agents-2026-04-01` header injection. |

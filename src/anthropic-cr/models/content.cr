@@ -1171,12 +1171,20 @@ module Anthropic
     @[JSON::Field(key: "budget_tokens")]
     getter budget_tokens : Int32?
 
-    def initialize(@type : String, @budget_tokens : Int32? = nil)
+    # Controls how thinking content appears in the response: `"summarized"`,
+    # `"omitted"`, or `"updates"`. Requires the
+    # `thinking-display-updates-2026-08-18` beta for `"updates"` (see
+    # `Anthropic::THINKING_DISPLAY_UPDATES_BETA`); the Messages resource
+    # methods attach it automatically when `display` is set.
+    @[JSON::Field(emit_null: false)]
+    getter display : String?
+
+    def initialize(@type : String, @budget_tokens : Int32? = nil, @display : String? = nil)
     end
 
     # Enable extended thinking with a token budget
-    def self.enabled(budget_tokens : Int32) : self
-      new(type: "enabled", budget_tokens: budget_tokens)
+    def self.enabled(budget_tokens : Int32, display : String? = nil) : self
+      new(type: "enabled", budget_tokens: budget_tokens, display: display)
     end
 
     # Disable extended thinking
@@ -1187,9 +1195,16 @@ module Anthropic
     # Adaptive thinking (Opus 4.6+)
     #
     # Lets the model decide how much thinking to use based on the task.
-    def self.adaptive : self
-      new(type: "adaptive")
+    def self.adaptive(display : String? = nil) : self
+      new(type: "adaptive", display: display)
     end
+  end
+
+  # Thinking display modes for `ThinkingConfig#display`.
+  module ThinkingDisplay
+    SUMMARIZED = "summarized"
+    OMITTED    = "omitted"
+    UPDATES    = "updates"
   end
 
   # Union type for all content blocks (including server tool content)

@@ -14,6 +14,12 @@ module Anthropic
     # Claude Sonnet 5 — High-performance model for coding and agents.
     CLAUDE_SONNET_5 = "claude-sonnet-5"
 
+    # Claude Fable 5.1 — Frontier intelligence for ambitious tasks.
+    CLAUDE_FABLE_5_1 = "claude-fable-5-1"
+
+    # Claude Mythos 5.1 — Most capable model for cybersecurity and biology research.
+    CLAUDE_MYTHOS_5_1 = "claude-mythos-5-1"
+
     # Claude Fable 5 — Next generation of intelligence for the hardest knowledge work and coding.
     CLAUDE_FABLE_5 = "claude-fable-5"
 
@@ -71,6 +77,8 @@ module Anthropic
     :sonnet_5   => Model::CLAUDE_SONNET_5,
     :fable      => Model::CLAUDE_FABLE_5,
     :fable_5    => Model::CLAUDE_FABLE_5,
+    :fable_5_1  => Model::CLAUDE_FABLE_5_1,
+    :mythos_5_1 => Model::CLAUDE_MYTHOS_5_1,
     :mythos     => Model::CLAUDE_MYTHOS_5,
     :mythos_5   => Model::CLAUDE_MYTHOS_5,
     :opus       => Model::CLAUDE_OPUS_5,

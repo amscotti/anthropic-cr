@@ -651,17 +651,15 @@ describe Anthropic::Bedrock::CredentialsResolver do
 
     it "mentions profile and sources in the error message" do
       with_clean_aws_env do
-        begin
+        ex = expect_raises(ArgumentError) do
           Anthropic::Bedrock::CredentialsResolver.resolve(
             aws_profile: "ghost",
             enable_imds: false,
             home: "/nonexistent-home-#{Random::Secure.hex(4)}",
           )
-          fail "expected ArgumentError"
-        rescue e : ArgumentError
-          e.message.not_nil!.should contain("ghost")
-          e.message.not_nil!.should match(/shared credentials|login cache|aws login|Identity Center|SSO/i)
         end
+        ex.message.not_nil!.should contain("ghost")
+        ex.message.not_nil!.should match(/shared credentials|login cache|aws login|Identity Center|SSO/i)
       end
     end
   end

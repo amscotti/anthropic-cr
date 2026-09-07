@@ -112,5 +112,13 @@ crystal run examples/01_basic_message.cr
 | `45_bedrock.cr` | Bedrock Runtime — SigV4, non-streaming + streaming (event-stream→SSE) |
 | `46_bedrock_mantle.cr` | Bedrock Mantle — native `/v1/messages`, SigV4 service `bedrock-mantle` |
 
+### Parity additions / September 2026 (0.10.0)
+
+| File | Description |
+|------|-------------|
+| `47_completions.cr` | Legacy Text Completions — `client.completions` create + streaming |
+| `48_organization.cr` | Organization Admin API — `client.beta.organization` overview |
+| `49_providers.cr` | Alternate providers — AWS / Google Cloud / Vertex clients |
+
 Prefer inference profile model IDs for Runtime (`us.anthropic.*` / `global.anthropic.*`). Credentials resolve from env, `~/.aws/credentials`, `aws login` cache, IAM Identity Center SSO (`aws sso login`), or IMDS. Mantle Anthropic models may need separate account entitlement beyond Runtime access.
 

@@ -69,6 +69,60 @@ module Anthropic
   # Alias matching Ruby/OpenAPI naming for the same memory-store output shape.
   alias BetaDreamMemoryStoreOutput = BetaDreamOutput
 
+  # Default destination for a dream job: create a new output memory store.
+  struct BetaDreamOutputBehaviorCreateNew
+    include JSON::Serializable
+
+    getter type : String = "create_new"
+
+    def initialize
+      @type = "create_new"
+    end
+  end
+
+  # Default destination for a dream job: update an existing memory store.
+  struct BetaDreamOutputBehaviorUpdateExisting
+    include JSON::Serializable
+
+    @[JSON::Field(key: "memory_store_id")]
+    getter memory_store_id : String
+
+    getter type : String = "update_existing"
+
+    def initialize(@memory_store_id : String)
+      @type = "update_existing"
+    end
+  end
+
+  # Discriminated union of dream output behaviors.
+  alias BetaDreamOutputBehavior = BetaDreamOutputBehaviorCreateNew | BetaDreamOutputBehaviorUpdateExisting
+
+  # Converter for a single BetaDreamOutputBehavior discriminated by `"type"`.
+  module BetaDreamOutputBehaviorConverter
+    def self.from_json(pull : JSON::PullParser) : BetaDreamOutputBehavior
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s)
+      raw = json.to_json
+
+      case type
+      when "create_new"
+        BetaDreamOutputBehaviorCreateNew.from_json(raw)
+      when "update_existing"
+        BetaDreamOutputBehaviorUpdateExisting.from_json(raw)
+      else
+        raise JSON::ParseException.new(
+          "Unknown BetaDreamOutputBehavior type: #{type.inspect}",
+          pull.line_number,
+          pull.column_number
+        )
+      end
+    end
+
+    def self.to_json(value : BetaDreamOutputBehavior, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
   # Cumulative token usage for the dream across every pipeline stage.
   struct BetaDreamUsage
     include JSON::Serializable
@@ -159,6 +213,11 @@ module Anthropic
     getter instructions : String?
 
     getter model : BetaDreamModelConfig
+
+    # Default destination: a new output store, or an existing store chosen
+    # via `output_behavior` on create.
+    @[JSON::Field(key: "output_behavior", converter: Anthropic::BetaDreamOutputBehaviorConverter)]
+    getter output_behavior : BetaDreamOutputBehavior
 
     getter outputs : Array(BetaDreamOutput)
 

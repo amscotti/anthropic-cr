@@ -45,6 +45,8 @@ module Anthropic
       resources : Enumerable(BetaManagedAgentsSessionResourceParam)? = nil,
       vault_ids : Array(String)? = nil,
       initial_events : Array(JSON::Any | Hash(String, JSON::Any))? = nil,
+      budget : BetaManagedAgentsBudgetLimit? = nil,
+      workspace_id : String? = nil,
       betas : Array(String) = [] of String,
     ) : BetaManagedAgentsSession
       params = {} of String => JSON::Any
@@ -55,14 +57,17 @@ module Anthropic
       params["resources"] = JSON.parse(resources.to_a.to_json) if resources
       params["vault_ids"] = JSON.parse(vault_ids.to_json) if vault_ids
       params["initial_events"] = JSON.parse(initial_events.to_json) if initial_events
+      params["budget"] = JSON.parse(budget.to_json) if budget
 
-      response = @client.post("/v1/sessions?beta=true", params, beta_headers(betas))
+      headers = Anthropic.merge_workspace_header(beta_headers(betas), workspace_id)
+      response = @client.post("/v1/sessions?beta=true", params, headers)
       BetaManagedAgentsSession.from_json(response.body)
     end
 
     # Retrieve a session
-    def retrieve(session_id : String, betas : Array(String) = [] of String) : BetaManagedAgentsSession
-      response = @client.get("/v1/sessions/#{session_id}?beta=true", nil, beta_headers(betas))
+    def retrieve(session_id : String, workspace_id : String? = nil, betas : Array(String) = [] of String) : BetaManagedAgentsSession
+      headers = Anthropic.merge_workspace_header(beta_headers(betas), workspace_id)
+      response = @client.get("/v1/sessions/#{session_id}?beta=true", nil, headers)
       BetaManagedAgentsSession.from_json(response.body)
     end
 
@@ -72,6 +77,8 @@ module Anthropic
       agent : BetaManagedAgentsAgentParamLike? = nil,
       title : String? = nil,
       metadata : Hash(String, String)? = nil,
+      budget : BetaManagedAgentsBudgetLimit? = nil,
+      workspace_id : String? = nil,
       betas : Array(String) = [] of String,
     ) : BetaManagedAgentsSession
       params = {} of String => JSON::Any
@@ -79,8 +86,10 @@ module Anthropic
       params["agent"] = JSON.parse(agent.to_json) if agent
       params["title"] = JSON::Any.new(title) if title
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
+      params["budget"] = JSON.parse(budget.to_json) if budget
 
-      response = @client.post("/v1/sessions/#{session_id}?beta=true", params, beta_headers(betas))
+      headers = Anthropic.merge_workspace_header(beta_headers(betas), workspace_id)
+      response = @client.post("/v1/sessions/#{session_id}?beta=true", params, headers)
       BetaManagedAgentsSession.from_json(response.body)
     end
 

@@ -13,6 +13,7 @@ describe Anthropic::BetaDreams do
     ],
     "instructions":"Consolidate project facts",
     "model":{"id":"claude-opus-4-7","speed":null},
+    "output_behavior":{"type":"create_new"},
     "outputs":[{"type":"memory_store","memory_store_id":"memstore_out"}],
     "session_id":"sess_dream_1",
     "status":"pending",

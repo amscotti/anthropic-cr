@@ -11,6 +11,12 @@ module Anthropic
     getter headers : HTTP::Headers?
     getter error_type : String?
 
+    # Workspace ID echoed by the API in the `anthropic-workspace-id`
+    # response header, when the request ran under a Workspace.
+    def workspace_id : String?
+      @headers.try(&.["anthropic-workspace-id"]?)
+    end
+
     def initialize(
       message : String,
       @status : Int32? = nil,

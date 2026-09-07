@@ -3,6 +3,40 @@
 All notable changes to `anthropic-cr` are documented here. The project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-09-07
+
+Tracks the September 2026 release of the official Python (1.4.0), Ruby (1.69.0), and TypeScript (0.124.0) SDKs. Adds the Organization Admin API, alternate provider clients (AWS gateway, Google Cloud gateway, Vertex AI), legacy Completions, and recent API deltas (thinking display modes, workspace headers, session budgets, dream output behavior, user-profile fields, new models and beta flags).
+
+### Added — Organization Admin API (beta)
+
+- `client.beta.organization` — `retrieve` plus sub-resources: `api_keys`, `external_keys`, `invites`, `users`, `workspaces` (with nested `members`, `rate_limits`, `service_accounts`), `service_accounts` (with nested `workspaces`), `federation` (`issuers` + `rules`), `rate_limits`, `compliance_settings`.
+- Types: `BetaOrganization`, `BetaAPIKey`, `BetaExternalKey` (+ deletion/validation shapes), `BetaOrganizationInvite`, `BetaOrganizationUser`, `BetaWorkspace` (+ member shapes), `BetaServiceAccount` (+ membership shapes), `BetaFederationIssuer`, `BetaFederationRule` (+ match/workspace shapes), `BetaOrganizationRateLimit`, `BetaComplianceSettings`, `BetaDataResidency`, role modules, and per-resource paginated list responses.
+- Example: `examples/48_organization.cr`.
+
+### Added — Alternate providers (non-Azure)
+
+- `Anthropic::Vertex::Client` — Vertex AI publisher-model API (`rawPredict` / `streamRawPredict` URL rewrite, `vertex-2023-10-16` version, Google OAuth Bearer auth, Batch API raises `NotImplementedError`).
+- `Anthropic::GoogleCloud::Client` — Claude API on the Google Cloud gateway (full first-party API passthrough with invoke-prefix routing, `token_provider` / access token / ADC, `skip_auth` mode).
+- `Anthropic::AWS::Client` — AWS gateway (`aws-external-anthropic` SigV4 via the shared Bedrock credential chain, API-key mode, workspace header, `skip_auth` mode).
+- `Anthropic::GoogleAuth::Provider` — shared Google credential resolution (explicit token, token-provider proc, `authorized_user` ADC refresh, GCE metadata server). Service-account key files raise an actionable error (Crystal stdlib has no RSA signer for the JWT-bearer grant).
+- Example: `examples/49_providers.cr`.
+
+### Added — Legacy Completions
+
+- `client.completions` — `create` and block-based `stream` for `/v1/complete` with `betas:` / `workspace_id:` header support (mirrors the official SDKs' create/create_streaming split, including the `ArgumentError` guards).
+- Type: `Anthropic::Completion`.
+- Example: `examples/47_completions.cr`.
+
+### Added — API deltas
+
+- Models: `CLAUDE_FABLE_5_1` (`claude-fable-5-1`), `CLAUDE_MYTHOS_5_1` (`claude-mythos-5-1`), `:fable_5_1` / `:mythos_5_1` shorthands.
+- Beta flags: `THINKING_DISPLAY_UPDATES_BETA`, `THINKING_BINDING_CONTROLS_BETA`, `MID_CONVERSATION_TOOL_CHANGES_BETA`, `MID_CONVERSATION_OUTPUT_CONFIG_BETA`, `MID_CONVERSATION_SYSTEM_CLEAR_AT_BETA`, `TASK_BUDGETS_BETA`, `COMPACT_BETA`, `COMPUTER_USE_2025_11_24_BETA`, `CE_USER_MANAGEMENT_BETA`, `USER_PROFILES_2026_08_18_BETA`.
+- Thinking: `ThinkingConfig#display` (`summarized` / `omitted` / `updates` via `Anthropic::ThinkingDisplay`); Messages methods auto-attach the display-updates beta when set.
+- Workspace: first-class `workspace_id:` on Messages (GA + beta + `parse`), Sessions, Dreams, and Completions via centralized `Anthropic.merge_workspace_header`; `APIError#workspace_id` reads the `anthropic-workspace-id` response header.
+- Sessions: `budget:` on create/update (`BetaManagedAgentsBudgetLimit` + `BetaMonetaryAmount`); `BetaManagedAgentsSession#budget`; `workspace_id:` on create/retrieve/update.
+- Dreams: `output_behavior:` on create (`BetaDreamOutputBehaviorCreateNew` / `BetaDreamOutputBehaviorUpdateExisting`); required `BetaDream#output_behavior` (current API responses always include it).
+- User profiles: `access_type` / `name` / `external_user_onboarded_at` on create/update and responses (`Anthropic::UserProfileAccessType`); `order_by` on list.
+
 ## [0.9.0] — 2026-07-24
 
 Tracks the late-July 2026 release of the official Python (0.120.0), Ruby (1.59.0), and TypeScript (0.115.0) SDKs (OpenAPI 131 endpoints).

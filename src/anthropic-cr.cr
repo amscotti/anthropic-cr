@@ -13,6 +13,7 @@ require "./anthropic-cr/refusal_fallback_middleware"
 
 # Models
 require "./anthropic-cr/models/role"
+require "./anthropic-cr/models/completion"
 require "./anthropic-cr/models/content"
 require "./anthropic-cr/models/usage"
 require "./anthropic-cr/models/message"
@@ -24,6 +25,7 @@ require "./anthropic-cr/models/sessions"
 require "./anthropic-cr/models/webhooks"
 require "./anthropic-cr/models/agents"
 require "./anthropic-cr/models/vaults"
+require "./anthropic-cr/models/organization"
 require "./anthropic-cr/models/fallbacks"
 require "./anthropic-cr/models/deployments"
 require "./anthropic-cr/models/dreams"
@@ -48,6 +50,7 @@ require "./anthropic-cr/models/params"
 
 # Resources
 require "./anthropic-cr/resources/file_upload"
+require "./anthropic-cr/resources/completions"
 require "./anthropic-cr/resources/messages"
 require "./anthropic-cr/resources/batches"
 require "./anthropic-cr/resources/models"
@@ -63,6 +66,7 @@ require "./anthropic-cr/resources/vaults"
 require "./anthropic-cr/resources/deployments"
 require "./anthropic-cr/resources/dreams"
 require "./anthropic-cr/resources/tunnels"
+require "./anthropic-cr/resources/organization"
 require "./anthropic-cr/resources/beta"
 
 # Client (must come after resources that define types used in Client methods)
@@ -73,6 +77,18 @@ require "./anthropic-cr/bedrock/credentials"
 require "./anthropic-cr/bedrock/sigv4"
 require "./anthropic-cr/bedrock/client"
 require "./anthropic-cr/bedrock/mantle_client"
+
+# Google Cloud auth (shared by Vertex and Google Cloud clients)
+require "./anthropic-cr/google/auth"
+
+# Google Cloud Vertex AI (publisher-model API)
+require "./anthropic-cr/vertex/client"
+
+# Claude API on the Google Cloud gateway (full first-party API)
+require "./anthropic-cr/google_cloud/client"
+
+# Anthropic models via the AWS gateway (SigV4 / API key)
+require "./anthropic-cr/aws/client"
 
 module Anthropic
 end

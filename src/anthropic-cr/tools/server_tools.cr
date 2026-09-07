@@ -58,8 +58,13 @@ module Anthropic
     output_config : OutputConfig? = nil,
     include_token_counting : Bool = false,
     include_user_profiles : Bool = false,
+    thinking : ThinkingConfig? = nil,
   ) : Hash(String, String)?
     merged = betas.dup
+
+    if thinking.try(&.display)
+      merged << THINKING_DISPLAY_UPDATES_BETA unless merged.includes?(THINKING_DISPLAY_UPDATES_BETA)
+    end
 
     if include_token_counting
       merged << TOKEN_COUNTING_BETA unless merged.includes?(TOKEN_COUNTING_BETA)
@@ -183,6 +188,38 @@ module Anthropic
 
   # Thinking token count in streaming deltas (optional display).
   THINKING_TOKEN_COUNT_BETA = "thinking-token-count-2026-05-13"
+
+  # Thinking display mode `updates` for enabled/adaptive thinking configs.
+  THINKING_DISPLAY_UPDATES_BETA = "thinking-display-updates-2026-08-18"
+
+  # Thinking binding controls beta header.
+  THINKING_BINDING_CONTROLS_BETA = "thinking-binding-controls-2026-08-01"
+
+  # Mid-conversation tool changes beta header.
+  MID_CONVERSATION_TOOL_CHANGES_BETA = "mid-conversation-tool-changes-2026-07-01"
+
+  # Mid-conversation output-config changes beta header.
+  MID_CONVERSATION_OUTPUT_CONFIG_BETA = "mid-conversation-output-config-2026-07-01"
+
+  # Mid-conversation system `clear_at` beta header.
+  MID_CONVERSATION_SYSTEM_CLEAR_AT_BETA = "mid-conversation-system-clear-at-2026-08-21"
+
+  # Task budgets beta header (session/task spend ceilings).
+  TASK_BUDGETS_BETA = "task-budgets-2026-03-13"
+
+  # Context compaction beta header.
+  COMPACT_BETA = "compact-2026-01-12"
+
+  # Computer-use toolset revision (November 2025).
+  COMPUTER_USE_2025_11_24_BETA = "computer-use-2025-11-24"
+
+  # User management (CE) beta header for Organization endpoints.
+  CE_USER_MANAGEMENT_BETA = "ce-user-management-2026-07-13"
+
+  # Latest user-profiles revision. Kept alongside `USER_PROFILES_BETA`
+  # (2026-03-24, still the resource default) for callers that pin newer
+  # behavior such as `order_by` listing support.
+  USER_PROFILES_2026_08_18_BETA = "user-profiles-2026-08-18"
 
   # Web search tool - allows Claude to search the internet
   #
