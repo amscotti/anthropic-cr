@@ -79,6 +79,42 @@ describe "HTTP Middleware" do
       stub_seen.should be_true
     end
   end
+
+  describe "scoped middleware copies" do
+    it "appends with with_middleware after existing middleware" do
+      OrderMiddleware.reset
+      stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+      client = Anthropic::Client.new(api_key: "sk-ant-test", middleware: [OrderMiddleware.new("outer")])
+
+      scoped = client.with_middleware(OrderMiddleware.new("inner"))
+      scoped.messages.create(
+        model: Anthropic::Model::CLAUDE_SONNET_5,
+        max_tokens: 64,
+        messages: [{role: "user", content: "hi"}]
+      )
+
+      OrderMiddleware.log.should eq(["-> outer", "-> inner", "<- inner", "<- outer"])
+      client.middleware.size.should eq(1)
+      scoped.middleware.size.should eq(2)
+    end
+
+    it "replaces the chain with with_options(middleware:)" do
+      OrderMiddleware.reset
+      stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
+      client = Anthropic::Client.new(api_key: "sk-ant-test", middleware: [OrderMiddleware.new("old")])
+
+      scoped = client.with_options(middleware: [OrderMiddleware.new("new")])
+      scoped.messages.create(
+        model: Anthropic::Model::CLAUDE_SONNET_5,
+        max_tokens: 64,
+        messages: [{role: "user", content: "hi"}]
+      )
+
+      OrderMiddleware.log.should eq(["-> new", "<- new"])
+      client.middleware.size.should eq(1)
+      scoped.middleware.size.should eq(1)
+    end
+  end
 end
 
 # --- Test middleware fixtures ---

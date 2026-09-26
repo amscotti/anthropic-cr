@@ -137,6 +137,99 @@ describe Anthropic::ToolRunner do
       runner.next_message
       runner.params[:iteration].should eq(1)
     end
+
+    it "resumes paused turns by sending them back unchanged" do
+      paused = %({"id":"msg_pause_01","type":"message","role":"assistant","content":[{"type":"text","text":"partial..."}],"model":"claude-sonnet-4-6","stop_reason":"pause_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}})
+      request_count = 0
+      bodies = [] of String
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |request|
+        request_count += 1
+        bodies << request.body.to_s
+
+        body = request_count == 1 ? paused : Fixtures::Responses::MESSAGE_BASIC
+        HTTP::Client::Response.new(200, body: body)
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = Anthropic::ToolRunner.new(
+        client: client,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: [create_dummy_tool] of Anthropic::Tool
+      )
+
+      messages = runner.run_until_finished
+      messages.size.should eq(2)
+      messages[0].stop_reason.should eq("pause_turn")
+      messages[1].stop_reason.should eq("end_turn")
+      runner.finished?.should be_true
+      request_count.should eq(2)
+
+      # The resumed request carries the paused assistant message back
+      resumed = JSON.parse(bodies[1])["messages"].as_a
+      resumed.size.should eq(2)
+      resumed[1]["role"].as_s.should eq("assistant")
+      resumed[1]["content"][0]["text"].as_s.should eq("partial...")
+    end
+
+    it "resumes compaction stop reasons the same way" do
+      paused = %({"id":"msg_pause_02","type":"message","role":"assistant","content":[{"type":"text","text":"compacted..."}],"model":"claude-sonnet-4-6","stop_reason":"compaction","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}})
+      request_count = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        request_count += 1
+        body = request_count == 1 ? paused : Fixtures::Responses::MESSAGE_BASIC
+        HTTP::Client::Response.new(200, body: body)
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = Anthropic::ToolRunner.new(
+        client: client,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: [create_dummy_tool] of Anthropic::Tool
+      )
+
+      messages = runner.run_until_finished
+      messages.size.should eq(2)
+      messages[0].stop_reason.should eq("compaction")
+      request_count.should eq(2)
+    end
+
+    it "defers compaction and holds tool changes while a turn is paused" do
+      paused = %({"id":"msg_pause_03","type":"message","role":"assistant","content":[{"type":"text","text":"partial..."}],"model":"claude-sonnet-4-6","stop_reason":"pause_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}})
+      bodies = [] of String
+      queue = [paused, Fixtures::Responses::MESSAGE_BASIC, Fixtures::Responses::MESSAGE_WITH_SIGNED_COMPACTION, Fixtures::Responses::MESSAGE_BASIC]
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |request|
+        bodies << request.body.to_s
+        HTTP::Client::Response.new(200, body: queue.shift)
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = client.beta.messages.tool_runner(
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: [create_dummy_tool] of Anthropic::Tool
+      )
+
+      runner.next_message
+      runner.compact_before_next_turn
+      runner.add_tools(create_dummy_tool("extra"))
+
+      # Resume request: unchanged history, no compaction, no tool changes
+      runner.next_message
+      resume = JSON.parse(bodies[1])
+      resume.as_h.has_key?("compaction").should be_false
+      roles = resume["messages"].as_a.map(&.["role"].as_s)
+      roles.should eq(["user", "assistant"])
+
+      # Following turn: the deferred compaction runs
+      runner.feed_messages([Anthropic::MessageParam.user("again")])
+      runner.next_message
+      JSON.parse(bodies[2]).as_h.has_key?("compaction").should be_true
+    end
   end
 
   describe "#feed_messages" do
@@ -337,6 +430,149 @@ describe Anthropic::ToolRunner do
       tool_result = blocks.first.as(Anthropic::ToolResultContent)
       tool_result.tool_use_id.should eq("toolu_stream_01")
       tool_result.content.should eq("result")
+    end
+
+    it "resumes paused turns when streaming" do
+      request_count = 0
+      bodies = [] of String
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |request|
+        request_count += 1
+        bodies << request.body.to_s
+
+        stop = request_count == 1 ? "pause_turn" : "end_turn"
+        text = request_count == 1 ? "partial..." : "Done"
+        body = [
+          streaming_event("message_start", %({"type":"message_start","message":{"id":"msg_s_0#{request_count}","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+          streaming_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}})),
+          streaming_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"#{text}"}})),
+          streaming_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+          streaming_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"#{stop}","stop_sequence":null},"usage":{"output_tokens":5}})),
+          streaming_event("message_stop", %({"type":"message_stop"})),
+        ].join("\n\n")
+
+        HTTP::Client::Response.new(
+          200,
+          headers: HTTP::Headers{"Content-Type" => "text/event-stream"},
+          body_io: IO::Memory.new(body)
+        )
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = Anthropic::ToolRunner.new(
+        client: client,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: [create_dummy_tool] of Anthropic::Tool
+      )
+
+      events = [] of Anthropic::AnyStreamEvent
+      runner.each_streaming { |event| events << event }
+
+      runner.finished?.should be_true
+      request_count.should eq(2)
+
+      resumed = JSON.parse(bodies[1])["messages"].as_a
+      resumed.size.should eq(2)
+      resumed[1]["content"][0]["text"].as_s.should eq("partial...")
+    end
+
+    it "preserves thinking blocks on streaming resume" do
+      request_count = 0
+      bodies = [] of String
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |request|
+        request_count += 1
+        bodies << request.body.to_s
+
+        events = if request_count == 1
+                   [
+                     streaming_event("message_start", %({"type":"message_start","message":{"id":"msg_t_01","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+                     streaming_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"ponder","signature":"sig_abc"}})),
+                     streaming_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+                     streaming_event("content_block_start", %({"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}})),
+                     streaming_event("content_block_delta", %({"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"partial..."}})),
+                     streaming_event("content_block_stop", %({"type":"content_block_stop","index":1})),
+                     streaming_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"pause_turn","stop_sequence":null},"usage":{"output_tokens":5}})),
+                     streaming_event("message_stop", %({"type":"message_stop"})),
+                   ]
+                 else
+                   [
+                     streaming_event("message_start", %({"type":"message_start","message":{"id":"msg_t_02","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+                     streaming_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}})),
+                     streaming_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done"}})),
+                     streaming_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+                     streaming_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}})),
+                     streaming_event("message_stop", %({"type":"message_stop"})),
+                   ]
+                 end
+
+        HTTP::Client::Response.new(
+          200,
+          headers: HTTP::Headers{"Content-Type" => "text/event-stream"},
+          body_io: IO::Memory.new(events.join("\n\n"))
+        )
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      runner = Anthropic::ToolRunner.new(
+        client: client,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: [create_dummy_tool] of Anthropic::Tool
+      )
+
+      runner.each_streaming { |_event| }
+
+      request_count.should eq(2)
+      resumed = JSON.parse(bodies[1])["messages"].as_a
+      content = resumed[1]["content"].as_a
+      content.size.should eq(2)
+      content[0]["type"].as_s.should eq("thinking")
+      content[0]["signature"].as_s.should eq("sig_abc")
+      content[1]["text"].as_s.should eq("partial...")
+    end
+
+    it "does not execute tools when streaming stops without tool_use" do
+      request_count = 0
+      tool_calls = 0
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |_request|
+        request_count += 1
+        body = [
+          streaming_event("message_start", %({"type":"message_start","message":{"id":"msg_nt_01","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+          streaming_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_orphan","name":"test","input":{}}})),
+          streaming_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+          streaming_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}})),
+          streaming_event("message_stop", %({"type":"message_stop"})),
+        ].join("\n\n")
+
+        HTTP::Client::Response.new(
+          200,
+          headers: HTTP::Headers{"Content-Type" => "text/event-stream"},
+          body_io: IO::Memory.new(body)
+        )
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      tool = Anthropic.tool(
+        name: "test",
+        description: "counts calls",
+        schema: {} of String => Anthropic::Schema::Property,
+        required: [] of String
+      ) { |_| tool_calls += 1; "result" }
+      runner = Anthropic::ToolRunner.new(
+        client: client,
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [Anthropic::MessageParam.user("Hi")],
+        tools: [tool] of Anthropic::Tool
+      )
+
+      runner.each_streaming { |_event| }
+
+      runner.finished?.should be_true
+      request_count.should eq(1)
+      tool_calls.should eq(0)
     end
   end
 

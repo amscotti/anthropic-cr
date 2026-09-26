@@ -3,6 +3,81 @@
 All notable changes to `anthropic-cr` are documented here. The project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-09-26
+
+Tracks the late-September 2026 release of the official Python (1.8.0), Ruby (1.73.0), and TypeScript (0.128.0) SDKs. Adds explicit compaction (summarize requests, signed blocks), mid-conversation tool changes on the runner, MCP tool-list pinning, response tools, input transformations, web-fetch URL sources, user external details, data-residency geos, rate-limit groups, and the September beta revisions.
+
+### Changed — Breaking renames (skills, files, user profiles)
+
+- Skills: `BetaSkills#create` takes `display_name:` (was `display_title:`); `SkillResponse#display_title` → `#display_name`, `#latest_version` → `#latest_version_id`, and `#source` is now a `SkillSource` struct (use `#source.type`) instead of a `String`. `SkillVersionResponse#version` / `#directory` are removed — versions are addressed by `#id` (`versions.retrieve` / `versions.delete` take the version id).
+- Pagination: files, skills, skill-versions, and user-profiles list responses now expose cursor pagination (`data` + `next_page`) only; `has_more?` / `first_id` / `last_id` are removed. (`BetaAgentListResponse` likewise uses `next_page`.)
+
+### Added — Explicit compaction
+
+- `Anthropic::SummarizeCompaction` (`type: "summarize"`, optional `instructions`) via the `CompactionParam` alias; accepted by beta `messages.create` / `stream` / `open_stream` / `count_tokens` and per-request beta batch params (`BetaBatchRequestParams#compaction`, matching upstream placement). The `compact-2026-09-04` beta attaches automatically.
+- `CompactionContent#signature` and `#tool_changes` (addition/removal blocks covering the compacted range); `CompactionCapability` on `ModelCapabilities` (`summarize` + `supported`); `:opus_5_5` shorthand and `CLAUDE_OPUS_5_5`.
+- Streaming: compaction deltas now assign the block's final value (a `null` content delta marks a failed compaction) and carry `encrypted_content`.
+
+### Added — Runner tool changes and explicit compaction turns
+
+- `ToolRunner#add_tools` (runnable `Tool` or raw `ToolDefinition`), `#remove_tools` (by tool or name), and `#compact_before_next_turn` (explicit server-side compaction before the next turn; requires `use_beta: true`). Tool changes flush as a trailing system message with the `inline-tools-2026-09-15` beta attached automatically; local dispatch follows the overrides immediately.
+- `Role::System` for system-role message params.
+
+### Added — API deltas
+
+- Beta flags: `USER_PROFILES_2026_09_04_BETA`, `COMPACT_2026_09_04_BETA`, `INLINE_TOOLS_2026_09_15_BETA`, `MCP_CLIENT_2026_09_15_BETA`.
+- Rate limits: `BetaOrganizationRateLimit#group` discriminated union (`BetaOrganizationRateLimitModelGroup` with `display_name`, plus batch/files/skills/token-count/web-search groups); `models` is now nilable (`nil` for non-model groups). Both match upstream, where `group` is required and `models` is `null` off model groups — readers must nil-check `models`.
+- Forward compatibility: unknown tool-change, input-transformation, and rate-limit-group variants parse into `GenericToolChange` / `GenericInputTransformation` / `BetaOrganizationRateLimitGenericGroup` (raw payload preserved) instead of raising, mirroring `GenericStopDetails`.
+- `BetaWorkspace#data_residency` is now typed (`BetaDataResidency?`) instead of `JSON::Any?`.
+- `ToolRunner#add_tools` / `#remove_tools` now require a beta runner (`use_beta: true`), raising `ArgumentError` otherwise; `ToolRemovalContent` only accepts reference (never by-value) tools.
+- MCP: `MCPToolListingContent` response block; `MCPToolset#tools` pins the server's listing (`MCPToolListingEntry`), auto-attaching `mcp-client-2026-09-15` in place of the older revision.
+- Response tools: `ResponseTool` (+ `from_definition`) and `ToolChangeToolDefinition` for inline tool definitions; server-tool definitions stay raw `JSON::Any`.
+- Input transformations: `Message#input_transformations` (`ThinkingDroppedInputTransformation` / `ThinkingMismatchAllowedInputTransformation` + `InputTransformationReason`); streaming replaces the `message_start` value with the serving model's entries from `message_delta`.
+- Web fetch: `url_sources` (`WebFetchURLSources` with all/none/only/except tool-result scopes and all/none user-input scope) on all four web-fetch tool versions.
+- User profiles: `external_user_details` (`BetaUserProfileExternalUserDetails`, all fields optional/nilable) on create/update and responses; the `user-profiles-2026-09-04` revision attaches automatically when details are sent.
+- Data residency: `BetaAllowedInferenceGeo` (`GLOBAL` / `US`), `allowed_inference_geos` accepts `"unrestricted"` (`BetaDataResidency#unrestricted?`), and `BetaDataResidencyCreateConfig` / `BetaDataResidencyUpdateConfig` for workspace create/update.
+- Example: `examples/50_compaction_and_tools.cr`.
+
+### Added — Sessions and environments (managed agents)
+
+- `BetaSessionEvents#send` with seven typed input events (`BetaSessionUserMessageEvent.message` / `.message` on system events, interrupt, tool confirmation, tool result, custom tool result, define-outcome with file/text rubrics); the send response mirrors upstream (`{data: [...]}`).
+- Typed session resources: `BetaSessionFileResource` / `BetaSessionGitHubRepositoryResource` (branch/commit `checkout`) / `BetaSessionMemoryStoreResource` behind `BetaSessionResourceConverter`, with `GenericSessionResource` preserving unknown future types. `resources.add_file` / `#retrieve` / `#list` now return typed values; new `#update` (authorization token, POST) and `#delete` (`BetaSessionResourceDeleted`).
+- Self-hosted environment work queue: `client.beta.environments.work` with `#retrieve` / `#update` (metadata merge patch) / `#list` / `#ack` / `#heartbeat` / `#poll` (nil when idle, `anthropic-worker-id` via `WORKER_ID_HEADER`) / `#stats` / `#stop`. Work payloads discriminate session vs healthcheck data (`BetaSessionWorkData` / `BetaHealthCheckWorkData`).
+- `workspace_id` now accepted on every sessions, session-events, session-resources, session-threads, and environments call (list/delete/archive included); `sessions#update` also takes `vault_ids` and nil-deleting metadata patches.
+- Breaking: `BetaSessionThreads#create` removed — no upstream thread-create endpoint exists (threads are created by the API); use `#retrieve` / `#list` / `#archive`.
+
+### Added — Structured-output parsing, federation workspaces, webhooks, workspace headers
+
+- GA `client.messages.parse` (typed `TypedOutputSchema(T)` → `ParsedMessage(T)` and untyped `OutputSchema` → `ParsedMessage(JSON::Any)` overloads), mirroring the beta helper; GA create/stream/count_tokens now auto-attach the structured-outputs beta when `output_config.format` is set.
+- Federation rule workspaces: `client.beta.organization.federation.rules.workspaces` with `#list` / `#add` / `#remove`; `BetaFederationRuleWorkspace#created_by_actor_id` / `#workspace_name` are now nilable per upstream.
+- `BetaFederationRule#attributes` / `#created_by_actor_id` / `#description` / `#issuer_name` / `#updated_by_actor_id` are now nilable per upstream (`attributes` is always null today) — readers must nil-check them.
+- Webhooks: `BetaWebhooks#parse_unverified`, `Client#webhook_key` (falls back to `ANTHROPIC_WEBHOOK_SIGNING_KEY`), full session/vault/vault-credential `EventType` vocabulary, and `BetaWebhookEvent#event_type` with fixed `*_event?` classification (delivery type is nested in `data`, not the `"event"` envelope).
+- `workspace_id` header sweep: accepted on every deployments, deployment-runs, memory-stores, memories, memory-versions, tunnels, certificates, user-profiles, vaults, credentials, and GA/beta models call; GA models and user-profiles calls also accept `betas` per upstream.
+
+### Fixed — Content parsing and agent toolsets
+
+- `Citation` now uses the upstream `start_char_index` / `end_char_index` keys (the old `start_char` / `end_char` keys never matched the API); deprecated `start_char` / `end_char` readers remain. Char, page, and content-block citations also expose `file_id`.
+- `WebSearchToolResultContent` carries the upstream `caller` (with `caller` / `caller_tool_id` helpers, including the `code_execution_20260120` variant) and parses error payloads (`WebSearchToolResultError` + `WebSearchToolResultErrorCode`) via `results` / `result_error`; `WebSearchResult` gained its `type` discriminator.
+- Images: `FileImageSource` (`ImageContent.file`), `ImageTransformations` (`oversized_image: downsize | error` via `OversizedImageBehavior`), and `transformations:` on all image factories.
+- Typed agent toolsets: `BetaAgent#tools` parses into `BetaManagedAgentsAgentToolset20260401` / `BetaManagedAgentsMCPToolset` / `BetaManagedAgentsCustomTool` (configs, default configs, permission policies, web-tool domains/locations); agents `#create` / `#update` take typed `BetaManagedAgentsToolsetParam` tools. Also fixed latent `.as_a` misuse when serializing agent `mcp_servers` / `skills` / `tools` request bodies.
+- `BetaAgentListResponse` uses cursor pagination (`next_page`) instead of `has_more`, matching upstream.
+
+### Added — Runner resume, session runner, MCP helpers, streaming parse
+
+- `ToolRunner` resumes paused turns: `pause_turn` / `compaction` stop reasons send the turn back unchanged instead of finishing, in both `#next_message` / `#run_until_finished` and `#each_streaming`. Pending compaction is deferred and queued tool changes are held while a turn is paused; streaming resumes replay full message content (thinking included) and tools run only on `tool_use` turns.
+- `SessionRunner` streams managed-agents session events, executes local `Tool`s for `agent.tool_use` / `agent.custom_tool_use` (event id doubles as the result id), sends results back, and returns the terminal event (`session.status_terminated`, `session.deleted`); calls for unregistered tools are skipped without posting a result, and `max_events` bounds a run. It reconnects dropped streams with jittered backoff (500ms→10s, permanent 4xx aborts, `max_reconnects` bounds the loop), re-reads history after each (re)connect (a terminal in history ends the run; a trailing `end_turn` idle re-arms the countdown), gates `ask` calls on `user.tool_confirmation` verdicts (fail closed; server `deny` wins), stops after `max_idle` (default 60s) past an `end_turn` idle, and reports per-call outcomes via `on_call` (`SessionRunner::ToolCall`, including executed-but-unposted sends). Failed sends abort the run rather than re-executing the tool; malformed stream lines trigger a reconnect and non-object payloads are skipped.
+- `Anthropic::MCP.content` / `.message` / `.messages` / `.resource_to_content` convert MCP payloads (text, image, embedded resources) into Anthropic content blocks without an MCP SDK dependency; unsupported or malformed values raise `MCP::UnsupportedMCPValueError`. Runnable-tool adapters (`mcpTool`) are out of scope — there is no Crystal MCP client to wrap.
+- `MessageStream#final_parsed_output_as` / `#final_parsed_output_as!` parse the streamed final message's structured output.
+
+### Added — Client internals (auth, scoped options, proxy, request IDs)
+
+- OAuth bearer auth: `Client.new(auth_token:)` (or `ANTHROPIC_AUTH_TOKEN`) sends `Authorization: Bearer` instead of `x-api-key`. An explicit credential argument disables environment lookup, matching Python/Ruby.
+- `Client#with_options` returns a scoped copy with overridden `timeout` / `max_retries` / `extra_headers` / `extra_query` / `middleware` / credentials / `base_url` / `proxy` — the Crystal equivalent of upstream per-request options. `Client#with_middleware` appends middleware to a copy.
+- HTTPS proxy support: explicit `proxy:` URL or `HTTPS_PROXY` / `https_proxy` with `NO_PROXY` / `no_proxy` bypass (wildcards, subdomains, leading dots), HTTPS `CONNECT` tunneling, and `Proxy-Authorization` from URL userinfo. Only `http://` proxies are accepted; plain-HTTP base URLs bypass the proxy.
+- Per-request query params win over client `default_query` instead of sending both; raw-download and multipart paths now raise typed `APITimeoutError` / `APIConnectionError` like every other path (including direct-path TLS failures).
+- `APIError#request_id` reads the `request-id` response header for support reports.
+- Retry loop also retries typed `APITimeoutError` / `APIConnectionError` from the proxy path, matching the middleware path.
+
 ## [0.10.0] — 2026-09-07
 
 Tracks the September 2026 release of the official Python (1.4.0), Ruby (1.69.0), and TypeScript (0.124.0) SDKs. Adds the Organization Admin API, alternate provider clients (AWS gateway, Google Cloud gateway, Vertex AI), legacy Completions, and recent API deltas (thinking display modes, workspace headers, session budgets, dream output behavior, user-profile fields, new models and beta flags).

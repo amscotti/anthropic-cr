@@ -4,10 +4,13 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
 
     # Serialize a model param (string, symbol, config object, or hash) for the API.
@@ -50,21 +53,22 @@ module Anthropic
       multiagent : JSON::Any? = nil,
       skills : Array(JSON::Any)? = nil,
       system : String? = nil,
-      tools : Array(JSON::Any)? = nil,
+      tools : Array(BetaManagedAgentsToolsetParam)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaAgent
       params = {} of String => JSON::Any
       params["model"] = serialize_model(model)
       params["name"] = JSON::Any.new(name)
       params["description"] = JSON::Any.new(description) if description
-      params["mcp_servers"] = JSON.parse(mcp_servers.to_json).as_a if mcp_servers
+      params["mcp_servers"] = JSON.parse(mcp_servers.to_json) if mcp_servers
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
       params["multiagent"] = multiagent if multiagent
-      params["skills"] = JSON.parse(skills.to_json).as_a if skills
+      params["skills"] = JSON.parse(skills.to_json) if skills
       params["system"] = JSON::Any.new(system) if system
-      params["tools"] = JSON.parse(tools.to_json).as_a if tools
+      params["tools"] = JSON.parse(tools.to_json) if tools
 
-      response = @client.post("/v1/agents?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/agents?beta=true", params, beta_headers(betas, workspace_id))
       BetaAgent.from_json(response.body)
     end
 
@@ -73,11 +77,12 @@ module Anthropic
       agent_id : String,
       version : Int32? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaAgent
       query = {} of String => String
       query["version"] = version.to_s if version
 
-      response = @client.get("/v1/agents/#{agent_id}?beta=true", query.empty? ? nil : query, beta_headers(betas))
+      response = @client.get("/v1/agents/#{agent_id}?beta=true", query.empty? ? nil : query, beta_headers(betas, workspace_id))
       BetaAgent.from_json(response.body)
     end
 
@@ -96,22 +101,23 @@ module Anthropic
       multiagent : JSON::Any? = nil,
       skills : Array(JSON::Any)? = nil,
       system : String? = nil,
-      tools : Array(JSON::Any)? = nil,
+      tools : Array(BetaManagedAgentsToolsetParam)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaAgent
       params = {} of String => JSON::Any
       params["version"] = JSON::Any.new(version.to_i64)
       params["model"] = serialize_model(model) if model
       params["name"] = JSON::Any.new(name) if name
       params["description"] = JSON::Any.new(description) if description
-      params["mcp_servers"] = JSON.parse(mcp_servers.to_json).as_a if mcp_servers
+      params["mcp_servers"] = JSON.parse(mcp_servers.to_json) if mcp_servers
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
       params["multiagent"] = multiagent if multiagent
-      params["skills"] = JSON.parse(skills.to_json).as_a if skills
+      params["skills"] = JSON.parse(skills.to_json) if skills
       params["system"] = JSON::Any.new(system) if system
-      params["tools"] = JSON.parse(tools.to_json).as_a if tools
+      params["tools"] = JSON.parse(tools.to_json) if tools
 
-      response = @client.post("/v1/agents/#{agent_id}?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/agents/#{agent_id}?beta=true", params, beta_headers(betas, workspace_id))
       BetaAgent.from_json(response.body)
     end
 
@@ -123,6 +129,7 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaAgentListResponse
       query = {"limit" => limit.to_s}
       query["created_at[gte]"] = created_at_gte if created_at_gte
@@ -130,7 +137,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/agents?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/agents?beta=true", query, beta_headers(betas, workspace_id))
       BetaAgentListResponse.from_json(response.body)
     end
 
@@ -138,9 +145,53 @@ module Anthropic
     def archive(
       agent_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaAgent
-      response = @client.post("/v1/agents/#{agent_id}/archive?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/agents/#{agent_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
       BetaAgent.from_json(response.body)
+    end
+
+    # Access agent versions sub-resource
+    def versions : BetaAgentVersions
+      BetaAgentVersions.new(@client)
+    end
+  end
+
+  # Agent Versions API for listing an agent's configuration versions (Beta)
+  #
+  # Each version is a full agent snapshot; access via
+  # `client.beta.agents.versions`.
+  class BetaAgentVersions
+    def initialize(@client : Client)
+    end
+
+    # List versions for an agent
+    #
+    # ```
+    # versions = client.beta.agents.versions.list("agent_abc123")
+    # versions.data.each { |v| puts v.version }
+    # ```
+    def list(
+      agent_id : String,
+      limit : Int32 = 20,
+      page : String? = nil,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : BetaAgentListResponse
+      query = {"limit" => limit.to_s}
+      query["page"] = page if page
+
+      response = @client.get("/v1/agents/#{agent_id}/versions?beta=true", query, beta_headers(betas, workspace_id))
+      BetaAgentListResponse.from_json(response.body)
+    end
+
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
+      merged_betas = betas.dup
+      merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
   end
 end

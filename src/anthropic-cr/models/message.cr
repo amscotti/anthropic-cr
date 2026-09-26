@@ -123,6 +123,90 @@ module Anthropic
   #   end
   # end
   # ```
+
+  # Binding reasons shared by input-transformation entries.
+  module InputTransformationReason
+    MODEL_BINDING_MISMATCH        = "model_binding_mismatch"
+    PREFIX_BINDING_MISMATCH       = "prefix_binding_mismatch"
+    ORGANIZATION_BINDING_MISMATCH = "organization_binding_mismatch"
+    END_USER_BINDING_MISMATCH     = "end_user_binding_mismatch"
+  end
+
+  # A thinking block the API dropped from the request input.
+  struct ThinkingDroppedInputTransformation
+    include JSON::Serializable
+
+    # JSON path of the dropped block.
+    getter path : String
+
+    getter reason : String
+
+    getter type : String = "thinking_dropped"
+  end
+
+  # A block that failed a binding check but was left unchanged.
+  struct ThinkingMismatchAllowedInputTransformation
+    include JSON::Serializable
+
+    # JSON path of the block.
+    getter path : String
+
+    getter reason : String
+
+    getter type : String = "thinking_mismatch_allowed"
+  end
+
+  # A future input-transformation entry type, preserved with its raw
+  # payload so unknown shapes don't break response parsing.
+  struct GenericInputTransformation
+    getter type : String
+    getter raw : JSON::Any
+
+    def initialize(@type : String, @raw : JSON::Any)
+    end
+
+    # Serialize back to the original JSON payload.
+    def to_json(builder : JSON::Builder) : Nil
+      raw.to_json(builder)
+    end
+  end
+
+  # Changes the API made to request input, one entry per block.
+  alias InputTransformation = ThinkingDroppedInputTransformation | ThinkingMismatchAllowedInputTransformation | GenericInputTransformation
+
+  # Array converter for input transformations discriminated by `"type"`.
+  module InputTransformationArrayConverter
+    def self.from_json(pull : JSON::PullParser) : Array(InputTransformation)?
+      return nil if pull.kind.null?
+
+      result = [] of InputTransformation
+      pull.read_array do
+        json = JSON::Any.new(pull)
+        type = json["type"]?.try(&.as_s?) || "unknown"
+        raw = json.to_json
+        case type
+        when "thinking_dropped"
+          result << ThinkingDroppedInputTransformation.from_json(raw)
+        when "thinking_mismatch_allowed"
+          result << ThinkingMismatchAllowedInputTransformation.from_json(raw)
+        else
+          result << GenericInputTransformation.new(type: type, raw: json)
+        end
+      end
+      result
+    end
+
+    def self.to_json(value : Array(InputTransformation)?, builder : JSON::Builder)
+      if value.nil?
+        builder.null
+      else
+        builder.array do
+          value.each &.to_json(builder)
+        end
+      end
+    end
+  end
+
   struct Message
     include JSON::Serializable
 
@@ -139,7 +223,7 @@ module Anthropic
     getter model : String
 
     @[JSON::Field(key: "stop_reason")]
-    getter stop_reason : String? # "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | "pause_turn" | "refusal" | "model_context_window_exceeded"
+    getter stop_reason : String? # "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | "pause_turn" | "compaction" | "refusal" | "model_context_window_exceeded"
 
     @[JSON::Field(key: "stop_details", converter: Anthropic::StopDetailsConverter, emit_null: false)]
     getter stop_details : StopDetails?
@@ -151,6 +235,11 @@ module Anthropic
     getter diagnostics : Diagnostics?
 
     getter usage : Usage
+
+    # Changes the API made to the request's input before showing it to
+    # the model, one entry per block in request order.
+    @[JSON::Field(key: "input_transformations", converter: Anthropic::InputTransformationArrayConverter, emit_null: false)]
+    getter input_transformations : Array(InputTransformation)?
 
     # Check if tool use is requested
     def tool_use? : Bool

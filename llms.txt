@@ -5,14 +5,14 @@ This document provides comprehensive information for working with the anthropic-
 ## Library Metadata
 
 - **Library name:** `anthropic-cr`
-- **Current version:** 0.10.0
+- **Current version:** 0.11.0
 - **Anthropic API version:** `2023-06-01`
 - **Crystal requirement:** `>= 1.18.2`
 - **Repository:** https://github.com/amscotti/anthropic-cr
 - **License:** MIT
 - **Top-level module:** `Anthropic` (note: *not* `Anthropic::CR`)
 - **Entry point:** `src/anthropic-cr.cr`
-- **Tracks:** September 2026 release of the official Python (1.4.0) / Ruby (1.69.0) / TypeScript (0.124.0) SDKs
+- **Tracks:** late-September 2026 release of the official Python (1.8.0) / Ruby (1.73.0) / TypeScript (0.128.0) SDKs
 
 ### Terminology / Synonyms
 
@@ -26,6 +26,28 @@ The following terms are used interchangeably in this document and in the SDK. Us
 - "messages API" = "chat completions" (Anthropic's equivalent of chat completions)
 - "SSE" = "Server-Sent Events" = "streaming"
 - "task budget" = "token task budget" = "session budget"
+
+## What's New in 0.11.0 (September 2026)
+
+Tracks the late-September 2026 release of the official Python (1.8.0), Ruby (1.73.0), and TypeScript (0.128.0) SDKs.
+
+### Explicit compaction
+- `Anthropic::SummarizeCompaction` (`type: "summarize"`, optional `instructions`) via `CompactionParam`; beta `messages.create` / `stream` / `open_stream` / `count_tokens` plus per-request beta batch params. Auto-attaches `compact-2026-09-04`.
+- `CompactionContent#signature` / `#tool_changes`; `CompactionCapability` on `ModelCapabilities`; `CLAUDE_OPUS_5_5` + `:opus_5_5`.
+- Streaming compaction deltas assign (null content = failed compaction) and carry `encrypted_content`.
+
+### Runner tool changes
+- `ToolRunner#add_tools` / `#remove_tools` / `#compact_before_next_turn` (`compact_before_next_turn` requires a beta runner); tool changes flush as a trailing system message with `inline-tools-2026-09-15` auto-attached. `Role::System` added.
+
+### API deltas
+- Beta flags: `user-profiles-2026-09-04`, `compact-2026-09-04`, `inline-tools-2026-09-15`, `mcp-client-2026-09-15`.
+- Rate-limit `group` union (model/batch/files/skills/token-count/web-search); nilable `models`.
+- `MCPToolListingContent`; `MCPToolset#tools` pinning (auto-attaches the new mcp-client revision).
+- `ResponseTool` + `ToolChangeToolDefinition` for inline tool definitions.
+- `Message#input_transformations` (+ streaming `message_delta` replacement); `InputTransformationReason`.
+- Web-fetch `url_sources` on all four tool versions.
+- User-profile `external_user_details` (+ auto-attached 09-04 revision).
+- Data-residency geos (`BetaAllowedInferenceGeo`, `"unrestricted"`, create/update configs).
 
 ## What's New in 0.10.0 (September 2026)
 
@@ -186,7 +208,7 @@ Tracks the Opus 4.7 / April 2026 release of the official Python (0.96.0), Ruby (
 
 ## Overview
 
-The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the September 2026 release of the official Python (1.4.0), Ruby (1.69.0), and TypeScript (0.124.0) SDKs. Key features include:
+The anthropic-cr library is an unofficial Anthropic API client for Crystal. It provides idiomatic Crystal code for accessing Claude AI models. The SDK tracks the late-September 2026 release of the official Python (1.8.0), Ruby (1.73.0), and TypeScript (0.128.0) SDKs. Key features include:
 
 - Full Messages API coverage (create and stream)
 - Tool use / function calling with Schema DSL and typed tools
@@ -232,7 +254,7 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - **Structured `stop_details`** — `RefusalStopDetails` plus `GenericStopDetails` fallback for future variants
 - Comprehensive error handling with automatic retries (408, 409, 429, 5xx, 529)
 
-**Status**: Feature complete for core functionality. Tracks September 2026 (Python 1.4.0 / Ruby 1.69.0 / TypeScript 0.124.0).
+**Status**: Feature complete for core functionality. Tracks late-September 2026 (Python 1.8.0 / Ruby 1.73.0 / TypeScript 0.128.0).
 
 ---
 
@@ -333,7 +355,7 @@ src/anthropic-cr/
 - `Anthropic.tool(name:, input: MyStruct) { |input| }` - TypedTool with struct input
 - `client.beta.messages.tool_runner(...)` - Automatic tool execution loop
 
-**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array). Available server tools include `WebSearchTool` (2025-03-05 + 2026-02-09), `BashTool`, `TextEditorTool` (2025-07-28 + intermediate 2025-01-24 / 2025-04-29 + 2024-10-22 legacy), `ComputerUseTool` (2025-01-24 + 2025-11-24 + 2024-10-22 legacy), `WebFetchTool` (2025-09-10 + 2026-02-09 + 2026-03-09), `MemoryTool`, `CodeExecutionTool` (2025-05-22 + 2025-08-25 + 2026-01-20), `AdvisorTool` (2026-03-01), `MCPTool`, `MCPToolset`, `ToolSearchBM25Tool`, `ToolSearchRegexTool`, `BashToolLegacy`.
+**Server Tools**: Uses separate `tools` and `server_tools` parameters for better type safety and automatic beta header management (differs from Ruby SDK which passes all tools in a single array). Available server tools include `WebSearchTool` (2025-03-05 + 2026-02-09 + 2026-03-18), `BashTool`, `TextEditorTool` (2025-07-28 + intermediate 2025-01-24 / 2025-04-29 + 2024-10-22 legacy), `ComputerUseTool` (2025-01-24 + 2025-11-24 + 2024-10-22 legacy), `WebFetchTool` (2025-09-10 + 2026-02-09 + 2026-03-09 + 2026-03-18), `MemoryTool`, `CodeExecutionTool` (2025-05-22 + 2025-08-25 + 2026-01-20 + 2026-05-21), `AdvisorTool` (2026-03-01), `MCPTool`, `MCPToolset`, `ToolSearchBM25Tool`, `ToolSearchRegexTool`, `BashToolLegacy`.
 
 ---
 
@@ -1185,7 +1207,7 @@ client.messages.open_stream(
 
     # Convenience: returns a Citation for char_location variants only
     if citation = event.citation
-      puts "[chars #{citation.start_char}-#{citation.end_char}] #{citation.cited_text}"
+      puts "[chars #{citation.start_char_index}-#{citation.end_char_index}] #{citation.cited_text}"
     end
 
     # Generic access to any citation variant via the underlying delta
@@ -1201,7 +1223,7 @@ Typed citation structs available in the union `Anthropic::CitationRef`:
 
 | Type | Struct | Fields |
 |------|--------|--------|
-| `char_location` | `Citation` | `start_char`, `end_char`, `document_title`, `document_index`, `cited_text` |
+| `char_location` | `Citation` | `start_char_index`, `end_char_index`, `document_title`, `document_index`, `cited_text`, `file_id` |
 | `page_location` | `CitationPageLocation` | `start_page_number`, `end_page_number`, ... |
 | `content_block_location` | `CitationContentBlockLocation` | `start_block_index`, `end_block_index`, ... |
 | `web_search_result_location` | `CitationWebSearchResultLocation` | `url`, `title`, `encrypted_index`, `cited_text` |
@@ -1474,12 +1496,12 @@ skill = client.beta.skills.create(
       content_type: "text/x-python"
     ),
   ],
-  display_title: "My Skill"
+  display_name: "My Skill"
 )
 
-puts skill.id              # => "skill_..."
-puts skill.display_title   # => "My Skill"
-puts skill.latest_version  # => version timestamp
+puts skill.id                # => "skill_..."
+puts skill.display_name     # => "My Skill"
+puts skill.latest_version_id # => "skill_version_..."
 ```
 
 **Note:** All files must share a common root directory in their filename path (e.g., "my-skill/SKILL.md", "my-skill/tool.py").
@@ -1515,13 +1537,12 @@ Anthropic::FileUpload.content_type_for(".py")  # => "text/x-python"
 skills = client.beta.skills.list(limit: 10)
 
 skills.data.each do |s|
-  puts "#{s.display_title} (#{s.id})"
-  puts "  Source: #{s.source}"
-  puts "  Latest version: #{s.latest_version}"
+  puts "#{s.display_name} (#{s.id})"
+  puts "  Source: #{s.source.type}"
+  puts "  Latest version: #{s.latest_version_id}"
 end
 
-puts "Has more: #{skills.has_more?}"
-puts "Next page: #{skills.next_page}"
+puts "Next page: #{skills.next_page.inspect}"
 ```
 
 ### Retrieve a Skill
@@ -1530,8 +1551,8 @@ puts "Next page: #{skills.next_page}"
 skill = client.beta.skills.retrieve("skill_abc123")
 
 puts skill.id
-puts skill.display_title
-puts skill.source  # "custom" | "anthropic"
+puts skill.display_name
+puts skill.source.type  # "custom" | "anthropic" | "anthropic_example" | "plugin"
 puts skill.created_at
 puts skill.updated_at
 ```
@@ -1549,9 +1570,8 @@ version = client.beta.skills.versions.create(
   ]
 )
 
-puts version.id      # => "skill_version_..."
-puts version.version # Unix timestamp
-puts version.name    # From SKILL.md
+puts version.id   # => "skill_version_..."
+puts version.name # From SKILL.md
 ```
 
 ### List Skill Versions
@@ -1563,8 +1583,7 @@ versions = client.beta.skills.versions.list(
 )
 
 versions.data.each do |v|
-  puts "Version #{v.version} from #{v.created_at}"
-  puts "  Name: #{v.name}"
+  puts "Version #{v.name} (#{v.id}) from #{v.created_at}"
   puts "  Description: #{v.description}"
 end
 ```
@@ -1574,13 +1593,12 @@ end
 ```crystal
 version = client.beta.skills.versions.retrieve(
   skill_id: "skill_abc123",
-  version: "1759178010641129"  # Unix timestamp
+  version: "skill_version_abc123"  # version id
 )
 
 puts version.id
-puts version.version
 puts version.name
-puts version.directory
+puts version.description
 ```
 
 ### Delete Skills and Versions
@@ -1595,7 +1613,7 @@ versions = client.beta.skills.versions.list(skill_id: skill_id)
 versions.data.each do |v|
   client.beta.skills.versions.delete(
     skill_id: skill_id,
-    version: v.version
+    version: v.id
   )
 end
 
@@ -1657,7 +1675,7 @@ profile = client.beta.user_profiles.update(
   metadata: {"plan" => "enterprise"}
 )
 
-# List (returns BetaUserProfileListResponse with has_more / first_id / last_id)
+# List (returns BetaUserProfileListResponse with data + next_page cursor)
 listing = client.beta.user_profiles.list(limit: 20, order: "desc")
 listing.data.each { |p| puts p.id }
 ```
@@ -2312,7 +2330,7 @@ client.beta.messages.tool_runner(
 ### Platform support
 
 - **Amazon Bedrock** — implemented: `Bedrock::Client` (Runtime, SigV4, event-stream streaming) and `Bedrock::MantleClient` (native `/v1/messages`, service `bedrock-mantle`). Credentials: explicit keys → env → shared credentials → `aws login` cache → IAM Identity Center SSO (`GetRoleCredentials`) → IMDS. Batches / count_tokens / Models raise `NotImplementedError` (same as official Bedrock SDKs). Mantle Anthropic models may require separate AWS account entitlement.
-- **Google Vertex / Google Cloud Support** — not implemented; official SDKs ship Vertex / Google Cloud packages.
+- **Google Vertex / Google Cloud Support** — implemented since 0.10.0 (`Anthropic::Vertex::Client`, `Anthropic::GoogleCloud::Client`, `Anthropic::AWS::Client`); service-account key files remain unsupported (no RS256 signer in Crystal stdlib).
 - **Azure / Foundry** — not implemented; official SDKs ship Foundry packages.
 
 ### Planned / Not Yet Implemented
@@ -2425,16 +2443,17 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.10.0 (September 2026)
+- **Current Version**: 0.11.0 (September 2026)
 - **API Version**: 2023-06-01
 - **Crystal Version**: >= 1.18.2
-- **Tracks**: September 2026 release of the official Python (1.4.0), Ruby (1.69.0), and TypeScript (0.124.0) SDKs
-- **Previous version**: 0.9.0 (July 2026 — Opus 5, Dreams + MCP Tunnels)
+- **Tracks**: late-September 2026 release of the official Python (1.8.0), Ruby (1.73.0), and TypeScript (0.128.0) SDKs
+- **Previous version**: 0.10.0 (September 2026 — Organization Admin API, alternate providers, Completions)
 
 ### Version History Highlights
 
 | Version | Release | Notable additions |
 |---------|---------|-------------------|
+| 0.11.0 | September 2026 | Explicit compaction; runner tool changes; MCP listing pinning; response tools; input transformations; web-fetch `url_sources`; user external details; data-residency geos; rate-limit groups; September betas. |
 | 0.10.0 | September 2026 | Organization Admin API; AWS / Google Cloud / Vertex providers; legacy Completions; thinking display modes; `workspace_id` headers; session budgets; dream `output_behavior`; user-profile fields; Fable/Mythos 5.1. |
 | 0.9.0 | July 2026 | Opus 5; Dreams + MCP Tunnels; `fallbacks: "default"` + object credit tokens; July fallback betas; tool_addition/removal; managed-agents effort/speed + session `initial_events`. |
 | 0.8.0 | July 2026 | Sonnet 5 / Fable 5 / Mythos 5; server-side fallbacks (June betas); HTTP middleware; deployments; new tool versions. |

@@ -219,6 +219,42 @@ describe Anthropic::MessageStream do
       message.usage.output_tokens.should eq(15)
     end
 
+    it "parses structured output from the final message" do
+      body = [
+        sse_event("message_start", %({"type":"message_start","message":{"id":"msg_stream_04","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+        sse_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}})),
+        sse_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\\"city\\":\\"Paris\\"}"}})),
+        sse_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+        sse_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":15}})),
+        sse_event("message_stop", %({"type":"message_stop"})),
+      ].join("\n\n")
+
+      stream = Anthropic::MessageStream.new(sse_response(body))
+      parsed = stream.final_parsed_output_as(JSON::Any)
+      parsed.should_not be_nil
+      parsed.not_nil!["city"].as_s.should eq("Paris")
+
+      expect_raises(Anthropic::StructuredOutputParseError) do
+        Anthropic::MessageStream.new(sse_response("")).final_parsed_output_as!(JSON::Any)
+      end
+    end
+
+    it "returns nil (non-bang) or raises (bang) on invalid JSON text" do
+      body = [
+        sse_event("message_start", %({"type":"message_start","message":{"id":"msg_stream_05","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),
+        sse_event("content_block_start", %({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}})),
+        sse_event("content_block_delta", %({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"not-json"}})),
+        sse_event("content_block_stop", %({"type":"content_block_stop","index":0})),
+        sse_event("message_delta", %({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":15}})),
+        sse_event("message_stop", %({"type":"message_stop"})),
+      ].join("\n\n")
+
+      Anthropic::MessageStream.new(sse_response(body)).final_parsed_output_as(JSON::Any).should be_nil
+      expect_raises(Anthropic::StructuredOutputParseError) do
+        Anthropic::MessageStream.new(sse_response(body)).final_parsed_output_as!(JSON::Any)
+      end
+    end
+
     it "reconstructs refusal stop details from message deltas" do
       body = [
         sse_event("message_start", %({"type":"message_start","message":{"id":"msg_stream_03b","type":"message","role":"assistant","content":[{"type":"text","text":"I can\u2019t help with that."}],"model":"claude-sonnet-4-6","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}})),

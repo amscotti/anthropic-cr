@@ -40,7 +40,7 @@ module Fixtures
     # File API responses
     FILE_METADATA = %({"id":"file_01abc123","type":"file","filename":"document.pdf","mime_type":"application/pdf","size_bytes":1024000,"created_at":"2025-01-01T00:00:00Z","downloadable":false})
 
-    FILE_LIST = %({"data":[{"id":"file_01abc123","type":"file","filename":"document.pdf","mime_type":"application/pdf","size_bytes":1024000,"created_at":"2025-01-01T00:00:00Z","downloadable":false},{"id":"file_02xyz456","type":"file","filename":"image.png","mime_type":"image/png","size_bytes":50000,"created_at":"2025-01-01T01:00:00Z","downloadable":false}],"has_more":false,"first_id":"file_01abc123","last_id":"file_02xyz456"})
+    FILE_LIST = %({"data":[{"id":"file_01abc123","type":"file","filename":"document.pdf","mime_type":"application/pdf","size_bytes":1024000,"created_at":"2025-01-01T00:00:00Z","downloadable":false},{"id":"file_02xyz456","type":"file","filename":"image.png","mime_type":"image/png","size_bytes":50000,"created_at":"2025-01-01T01:00:00Z","downloadable":false}],"next_page":null})
 
     FILE_DELETED = %({"id":"file_01abc123","type":"file_deleted"})
 
@@ -61,15 +61,15 @@ module Fixtures
     MESSAGE_WITH_COMPACTION = %({"id":"msg_compact_01","type":"message","role":"assistant","content":[{"type":"compaction","content":"Compacted conversation summary."}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":500,"output_tokens":100}})
 
     # Skills API responses
-    SKILL_RESPONSE = %({"id":"skill_01abc","type":"skill","created_at":"2025-10-01T00:00:00Z","updated_at":"2025-10-01T00:00:00Z","display_title":"My Skill","latest_version":"v1","source":"upload"})
+    SKILL_RESPONSE = %({"id":"skill_01abc","type":"skill","created_at":"2025-10-01T00:00:00Z","updated_at":"2025-10-01T00:00:00Z","display_name":"My Skill","latest_version_id":"sv_01abc","source":{"type":"custom"}})
 
-    SKILL_LIST = %({"data":[{"id":"skill_01abc","type":"skill","created_at":"2025-10-01T00:00:00Z","updated_at":"2025-10-01T00:00:00Z","display_title":"My Skill","latest_version":"v1","source":"upload"},{"id":"skill_02def","type":"skill","created_at":"2025-10-02T00:00:00Z","updated_at":"2025-10-02T00:00:00Z","display_title":"Another Skill","latest_version":"v2","source":"upload"}],"has_more":false,"next_page":null})
+    SKILL_LIST = %({"data":[{"id":"skill_01abc","type":"skill","created_at":"2025-10-01T00:00:00Z","updated_at":"2025-10-01T00:00:00Z","display_name":"My Skill","latest_version_id":"sv_01abc","source":{"type":"custom"}},{"id":"skill_02def","type":"skill","created_at":"2025-10-02T00:00:00Z","updated_at":"2025-10-02T00:00:00Z","display_name":"Another Skill","latest_version_id":"sv_02def","source":{"type":"anthropic"}}],"next_page":null})
 
     SKILL_DELETED = %({"id":"skill_01abc","type":"skill_deleted"})
 
-    SKILL_VERSION_RESPONSE = %({"id":"sv_01abc","type":"skill_version","created_at":"2025-10-01T00:00:00Z","description":"Initial version","directory":"/tools","name":"my_tool","skill_id":"skill_01abc","version":"v1"})
+    SKILL_VERSION_RESPONSE = %({"id":"sv_01abc","type":"skill_version","created_at":"2025-10-01T00:00:00Z","description":"Initial version","name":"my-skill","skill_id":"skill_01abc"})
 
-    SKILL_VERSION_LIST = %({"data":[{"id":"sv_01abc","type":"skill_version","created_at":"2025-10-01T00:00:00Z","description":"Initial version","directory":"/tools","name":"my_tool","skill_id":"skill_01abc","version":"v1"}],"has_more":false,"next_page":null})
+    SKILL_VERSION_LIST = %({"data":[{"id":"sv_01abc","type":"skill_version","created_at":"2025-10-01T00:00:00Z","description":"Initial version","name":"my-skill","skill_id":"skill_01abc"}],"next_page":null})
 
     SKILL_VERSION_DELETED = %({"id":"sv_01abc","type":"skill_version_deleted"})
 
@@ -111,7 +111,7 @@ module Fixtures
     # User Profiles API responses
     USER_PROFILE = %({"id":"uprof_01abc","type":"user_profile","created_at":"2026-04-16T00:00:00Z","updated_at":"2026-04-16T00:00:00Z","metadata":{"plan":"pro"},"trust_grants":{},"external_id":"ext-123"})
 
-    USER_PROFILE_LIST = %({"data":[{"id":"uprof_01abc","type":"user_profile","created_at":"2026-04-16T00:00:00Z","updated_at":"2026-04-16T00:00:00Z","metadata":{"plan":"pro"},"trust_grants":{"memory":{"status":"active"}},"external_id":"ext-123"}],"has_more":false,"first_id":"uprof_01abc","last_id":"uprof_01abc"})
+    USER_PROFILE_LIST = %({"data":[{"id":"uprof_01abc","type":"user_profile","created_at":"2026-04-16T00:00:00Z","updated_at":"2026-04-16T00:00:00Z","metadata":{"plan":"pro"},"trust_grants":{"memory":{"status":"active"}},"external_id":"ext-123"}],"next_page":null})
 
     USER_PROFILE_ENROLLMENT_URL = %({"type":"enrollment_url","url":"https://console.anthropic.com/enroll/uprof_01abc","expires_at":"2026-04-17T00:00:00Z"})
 
@@ -120,6 +120,27 @@ module Fixtures
 
     # Encrypted compaction
     MESSAGE_WITH_ENCRYPTED_COMPACTION = %({"id":"msg_ecomp_01","type":"message","role":"assistant","content":[{"type":"compaction","encrypted_content":"ENCRYPTED_SUMMARY_BLOB"}],"model":"claude-opus-4-7","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":10}})
+
+    # Signed compaction with tool changes (inline tool definition + removal)
+    MESSAGE_WITH_SIGNED_COMPACTION = %({"id":"msg_scomp_01","type":"message","role":"assistant","content":[{"type":"compaction","content":"Compacted summary.","signature":"sig_xyz","tool_changes":[{"type":"tool_addition","tool":{"type":"tool_definition","definition":{"name":"helper","description":"Helps out.","input_schema":{"type":"object"},"type":"custom"}}},{"type":"tool_removal","tool":{"type":"tool_reference","name":"legacy"}}]}],"model":"claude-opus-5-5","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":500,"output_tokens":100}})
+
+    # MCP tool listing block
+    MESSAGE_WITH_MCP_LISTING = %({"id":"msg_mcpl_01","type":"message","role":"assistant","content":[{"type":"mcp_tool_listing","mcp_server_name":"my-server","tools":[{"name":"get_data","description":"Fetch data.","input_schema":{"type":"object"}}]}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":10}})
+
+    # Input transformations reported on the message
+    MESSAGE_WITH_INPUT_TRANSFORMATIONS = %({"id":"msg_it_01","type":"message","role":"assistant","content":[{"type":"text","text":"Hi"}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":10},"input_transformations":[{"type":"thinking_dropped","path":"messages.2.content.0","reason":"model_binding_mismatch"},{"type":"thinking_mismatch_allowed","path":"messages.4.content.1","reason":"prefix_binding_mismatch"}]})
+
+    # Tool use calling the "test" tool (runner specs)
+    MESSAGE_WITH_TEST_TOOL_USE = %({"id":"msg_ttu_01","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_test1","name":"test","input":{}}],"model":"claude-sonnet-4-6","stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":20}})
+
+    # Tool use calling the "extra" tool (runner specs)
+    MESSAGE_WITH_EXTRA_TOOL_USE = %({"id":"msg_etu_01","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_extra1","name":"extra","input":{}}],"model":"claude-sonnet-4-6","stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":30,"output_tokens":20}})
+
+    # User profile with external user details
+    USER_PROFILE_WITH_DETAILS = %({"id":"uprof_01abc","type":"user_profile","created_at":"2026-04-16T00:00:00Z","updated_at":"2026-09-05T00:00:00Z","metadata":{},"trust_grants":{},"external_user_details":{"account_status":"active","country":"US","email_hash":"em4i1","entity_type":"business","name_hash":"n4m3","onboarded_at":"2026-09-01T00:00:00Z","reference_id":"ref-1"}})
+
+    # User profile with unset external user details (all null)
+    USER_PROFILE_WITH_NULL_DETAILS = %({"id":"uprof_01abc","type":"user_profile","created_at":"2026-04-16T00:00:00Z","updated_at":"2026-09-05T00:00:00Z","metadata":{},"trust_grants":{},"external_user_details":{"account_status":null,"country":null,"email_hash":null,"entity_type":null,"name_hash":null,"onboarded_at":null,"reference_id":null}})
 
     # Streaming event fixtures
     module Streaming

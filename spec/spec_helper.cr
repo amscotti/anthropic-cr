@@ -9,6 +9,13 @@ require "./fixtures/responses"
 # Configure WebMock
 Spec.before_each do
   WebMock.reset
+  # Hermetic proxy env: every request consults these, so ambient values
+  # would reroute stubbed specs through a real proxy. Specs needing
+  # proxy env set it explicitly (see with_saved_env).
+  ENV.delete("HTTPS_PROXY")
+  ENV.delete("https_proxy")
+  ENV.delete("NO_PROXY")
+  ENV.delete("no_proxy")
 end
 
 # Configure VCR

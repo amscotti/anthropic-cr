@@ -49,9 +49,9 @@ module Anthropic
     # Array of retrieved vaults
     getter data : Array(BetaVault)
 
-    # Whether there are more pages available
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # Credential stored securely inside a Vault (beta)
@@ -109,9 +109,9 @@ module Anthropic
     # Array of retrieved credentials
     getter data : Array(BetaCredential)
 
-    # Whether there are more pages available
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # Result of credential validation (e.g. OAuth validity)

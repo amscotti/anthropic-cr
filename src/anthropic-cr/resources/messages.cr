@@ -95,13 +95,146 @@ module Anthropic
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id, thinking)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id, thinking, output_config)
 
       merged = merge_user_profile_header(beta_headers, user_profile_id)
       merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
       response = @client.post("/v1/messages", params, merged)
       Message.from_json(response.body)
+    end
+
+    # Create a message and parse its structured output into `T`
+    #
+    # ```
+    # schema = Anthropic.output_schema(type: WeatherSummary, name: "weather")
+    # parsed = client.messages.parse(
+    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
+    #   max_tokens: 256,
+    #   output_schema: schema,
+    #   messages: [{role: "user", content: "Summarize the weather"}]
+    # )
+    # parsed.parsed_output.city # => "Paris"
+    # ```
+    #
+    # Raises `StructuredOutputParseError` when the response has no text
+    # content or the text does not parse as `T`.
+    def parse(
+      model : String,
+      max_tokens : Int32,
+      messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
+      output_schema : TypedOutputSchema(T),
+      system : String | Array(TextContent)? = nil,
+      temperature : Float64? = nil,
+      top_p : Float64? = nil,
+      top_k : Int32? = nil,
+      tools : Array(Tool)? = nil,
+      server_tools : Array(ServerTool)? = nil,
+      tool_choice : ToolChoice? = nil,
+      stop_sequences : Array(String)? = nil,
+      metadata : Metadata? = nil,
+      service_tier : String? = nil,
+      thinking : ThinkingConfig? = nil,
+      cache_control : CacheControl? = nil,
+      container : String? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
+      user_profile_id : String? = nil,
+      workspace_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
+      diagnostics : DiagnosticsParam? = nil,
+    ) : ParsedMessage(T) forall T
+      message = create(
+        model: model,
+        max_tokens: max_tokens,
+        messages: messages,
+        system: system,
+        temperature: temperature,
+        top_p: top_p,
+        top_k: top_k,
+        tools: tools,
+        server_tools: server_tools,
+        tool_choice: tool_choice,
+        stop_sequences: stop_sequences,
+        metadata: metadata,
+        service_tier: service_tier,
+        thinking: thinking,
+        cache_control: cache_control,
+        container: container,
+        output_config: merge_parse_output_config(output_config, output_schema),
+        inference_geo: inference_geo,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
+        user_profile_id: user_profile_id,
+        workspace_id: workspace_id,
+        extra_headers: extra_headers,
+        diagnostics: diagnostics
+      )
+
+      ParsedMessage(T).new(message, message.parsed_output_as!(T))
+    end
+
+    # Create a message and parse its structured output as JSON
+    #
+    # Same as the typed overload, but returns the raw `JSON::Any` payload
+    # instead of deserializing into a struct.
+    def parse(
+      model : String,
+      max_tokens : Int32,
+      messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
+      output_schema : OutputSchema,
+      system : String | Array(TextContent)? = nil,
+      temperature : Float64? = nil,
+      top_p : Float64? = nil,
+      top_k : Int32? = nil,
+      tools : Array(Tool)? = nil,
+      server_tools : Array(ServerTool)? = nil,
+      tool_choice : ToolChoice? = nil,
+      stop_sequences : Array(String)? = nil,
+      metadata : Metadata? = nil,
+      service_tier : String? = nil,
+      thinking : ThinkingConfig? = nil,
+      cache_control : CacheControl? = nil,
+      container : String? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
+      user_profile_id : String? = nil,
+      workspace_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
+      diagnostics : DiagnosticsParam? = nil,
+    ) : ParsedMessage(JSON::Any)
+      message = create(
+        model: model,
+        max_tokens: max_tokens,
+        messages: messages,
+        system: system,
+        temperature: temperature,
+        top_p: top_p,
+        top_k: top_k,
+        tools: tools,
+        server_tools: server_tools,
+        tool_choice: tool_choice,
+        stop_sequences: stop_sequences,
+        metadata: metadata,
+        service_tier: service_tier,
+        thinking: thinking,
+        cache_control: cache_control,
+        container: container,
+        output_config: merge_parse_output_config(output_config, output_schema),
+        inference_geo: inference_geo,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
+        user_profile_id: user_profile_id,
+        workspace_id: workspace_id,
+        extra_headers: extra_headers,
+        diagnostics: diagnostics
+      )
+
+      ParsedMessage(JSON::Any).new(message, message.parsed_output_as!(JSON::Any))
     end
 
     # Stream a message with individual events
@@ -230,7 +363,7 @@ module Anthropic
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id, thinking)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, fallbacks, fallback_credit_token, user_profile_id, thinking, output_config)
       merged = merge_user_profile_header(beta_headers, user_profile_id)
       merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
@@ -291,7 +424,7 @@ module Anthropic
         diagnostics: diagnostics
       )
 
-      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, user_profile_id: user_profile_id, thinking: thinking)
+      beta_headers = build_beta_headers(server_tools, cache_control, diagnostics, user_profile_id: user_profile_id, thinking: thinking, output_config: output_config)
 
       response = @client.post("/v1/messages/count_tokens", params, Anthropic.merge_workspace_header(merge_user_profile_header(beta_headers, user_profile_id), workspace_id))
       TokenCountResponse.from_json(response.body)
@@ -329,6 +462,20 @@ module Anthropic
       result.empty? ? nil : result
     end
 
+    # Merge an output schema's format into an explicit output config,
+    # preserving caller-set effort/format/task_budget. Explicit `format`
+    # wins; `effort` and `task_budget` pass through untouched.
+    private def merge_parse_output_config(
+      output_config : OutputConfig?,
+      output_schema : BaseOutputSchema,
+    ) : OutputConfig
+      OutputConfig.new(
+        effort: output_config.try(&.effort),
+        format: output_config.try(&.format) || OutputFormat.from_output_schema(output_schema),
+        task_budget: output_config.try(&.task_budget)
+      )
+    end
+
     # Build beta headers based on server tools used
     private def build_beta_headers(
       server_tools : Array(ServerTool)?,
@@ -338,6 +485,7 @@ module Anthropic
       fallback_credit_token : FallbackCreditToken? = nil,
       user_profile_id : String? = nil,
       thinking : ThinkingConfig? = nil,
+      output_config : OutputConfig? = nil,
     ) : Hash(String, String)?
       betas = [] of String
 
@@ -356,6 +504,7 @@ module Anthropic
         server_tools: server_tools,
         cache_control: cache_control,
         diagnostics: diagnostics,
+        output_config: output_config,
         include_user_profiles: !user_profile_id.nil?,
         thinking: thinking
       )

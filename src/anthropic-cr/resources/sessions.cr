@@ -4,10 +4,13 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
 
     def events : BetaSessionEvents
@@ -33,7 +36,7 @@ module Anthropic
     #   environment_id: env.id,
     #   agent: agent.id,
     #   initial_events: [
-    #     {"type" => "user.message", "content" => [{"type" => "text", "text" => "Hello"}]},
+    #     JSON.parse(%({"type":"user.message","content":[{"type":"text","text":"Hello"}]})),
     #   ],
     # )
     # ```
@@ -59,25 +62,29 @@ module Anthropic
       params["initial_events"] = JSON.parse(initial_events.to_json) if initial_events
       params["budget"] = JSON.parse(budget.to_json) if budget
 
-      headers = Anthropic.merge_workspace_header(beta_headers(betas), workspace_id)
+      headers = beta_headers(betas, workspace_id)
       response = @client.post("/v1/sessions?beta=true", params, headers)
       BetaManagedAgentsSession.from_json(response.body)
     end
 
     # Retrieve a session
     def retrieve(session_id : String, workspace_id : String? = nil, betas : Array(String) = [] of String) : BetaManagedAgentsSession
-      headers = Anthropic.merge_workspace_header(beta_headers(betas), workspace_id)
+      headers = beta_headers(betas, workspace_id)
       response = @client.get("/v1/sessions/#{session_id}?beta=true", nil, headers)
       BetaManagedAgentsSession.from_json(response.body)
     end
 
     # Update a session
+    #
+    # `metadata` is a patch: set a key to a string to upsert it, or to
+    # `nil` to delete it. Omit it to leave metadata untouched.
     def update(
       session_id : String,
       agent : BetaManagedAgentsAgentParamLike? = nil,
       title : String? = nil,
-      metadata : Hash(String, String)? = nil,
+      metadata : Hash(String, String) | Hash(String, String?)? = nil,
       budget : BetaManagedAgentsBudgetLimit? = nil,
+      vault_ids : Array(String)? = nil,
       workspace_id : String? = nil,
       betas : Array(String) = [] of String,
     ) : BetaManagedAgentsSession
@@ -87,8 +94,9 @@ module Anthropic
       params["title"] = JSON::Any.new(title) if title
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
       params["budget"] = JSON.parse(budget.to_json) if budget
+      params["vault_ids"] = JSON.parse(vault_ids.to_json) if vault_ids
 
-      headers = Anthropic.merge_workspace_header(beta_headers(betas), workspace_id)
+      headers = beta_headers(betas, workspace_id)
       response = @client.post("/v1/sessions/#{session_id}?beta=true", params, headers)
       BetaManagedAgentsSession.from_json(response.body)
     end
@@ -99,24 +107,36 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaSessionListResponse
       query = {"limit" => limit.to_s}
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/sessions?beta=true", query, beta_headers(betas))
+      headers = beta_headers(betas, workspace_id)
+      response = @client.get("/v1/sessions?beta=true", query, headers)
       BetaSessionListResponse.from_json(response.body)
     end
 
     # Delete a session
-    def delete(session_id : String, betas : Array(String) = [] of String) : BetaManagedAgentsDeletedSession
-      response = @client.delete("/v1/sessions/#{session_id}?beta=true", beta_headers(betas))
+    def delete(
+      session_id : String,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : BetaManagedAgentsDeletedSession
+      headers = beta_headers(betas, workspace_id)
+      response = @client.delete("/v1/sessions/#{session_id}?beta=true", headers)
       BetaManagedAgentsDeletedSession.from_json(response.body)
     end
 
     # Archive a session
-    def archive(session_id : String, betas : Array(String) = [] of String) : BetaManagedAgentsSession
-      response = @client.post("/v1/sessions/#{session_id}/archive?beta=true", nil, beta_headers(betas))
+    def archive(
+      session_id : String,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : BetaManagedAgentsSession
+      headers = beta_headers(betas, workspace_id)
+      response = @client.post("/v1/sessions/#{session_id}/archive?beta=true", nil, headers)
       BetaManagedAgentsSession.from_json(response.body)
     end
   end
@@ -126,10 +146,13 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
 
     # List session events
@@ -144,6 +167,7 @@ module Anthropic
       page : String? = nil,
       types : Array(String)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : JSON::Any
       query = {} of String => String | Array(String)
       query["created_at[gt]"] = created_at_gt if created_at_gt
@@ -155,7 +179,26 @@ module Anthropic
       query["page"] = page if page
       query["types"] = types if types
 
-      response = @client.get("/v1/sessions/#{session_id}/events?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/sessions/#{session_id}/events?beta=true", query, beta_headers(betas, workspace_id))
+      JSON.parse(response.body)
+    end
+
+    # Send events to a session
+    #
+    # ```
+    # client.beta.sessions.events.send(
+    #   "sess_123",
+    #   [Anthropic::BetaSessionUserMessageEvent.message("Where is my order?")]
+    # )
+    # ```
+    def send(
+      session_id : String,
+      events : Array(BetaSessionInputEvent),
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : JSON::Any
+      body = {"events" => JSON.parse(events.to_json)}
+      response = @client.post("/v1/sessions/#{session_id}/events?beta=true", body, beta_headers(betas, workspace_id))
       JSON.parse(response.body)
     end
 
@@ -170,6 +213,7 @@ module Anthropic
       session_id : String,
       event_deltas : Array(String)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
       & : JSON::Any -> _
     )
       path = "/v1/sessions/#{session_id}/events/stream?beta=true"
@@ -179,7 +223,7 @@ module Anthropic
         path = "#{path}&#{params}"
       end
 
-      @client.get_stream(path, beta_headers(betas)) do |response|
+      @client.get_stream(path, beta_headers(betas, workspace_id)) do |response|
         SessionEventStream.new(response).each { |event| yield event }
       end
     end
@@ -190,31 +234,54 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
 
-    # Retrieve a specific resource
+    # Attach a file to a session
     def add_file(
       session_id : String,
       file_id : String,
       mount_path : String? = nil,
       betas : Array(String) = [] of String,
-    ) : JSON::Any
+      workspace_id : String? = nil,
+    ) : BetaSessionResource
       resource = BetaManagedAgentsFileResourceParam.new(file_id: file_id, mount_path: mount_path)
-      response = @client.post("/v1/sessions/#{session_id}/resources?beta=true", resource, beta_headers(betas))
-      JSON.parse(response.body)
+      response = @client.post("/v1/sessions/#{session_id}/resources?beta=true", resource, beta_headers(betas, workspace_id))
+      BetaSessionResourceConverter.from_json(JSON::PullParser.new(response.body))
     end
 
+    # Retrieve a specific resource
     def retrieve(
       session_id : String,
       resource_id : String,
       betas : Array(String) = [] of String,
-    ) : JSON::Any
-      response = @client.get("/v1/sessions/#{session_id}/resources/#{resource_id}?beta=true", nil, beta_headers(betas))
-      JSON.parse(response.body)
+      workspace_id : String? = nil,
+    ) : BetaSessionResource
+      response = @client.get("/v1/sessions/#{session_id}/resources/#{resource_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      BetaSessionResourceConverter.from_json(JSON::PullParser.new(response.body))
+    end
+
+    # Update a resource's authorization token
+    def update(
+      session_id : String,
+      resource_id : String,
+      authorization_token : String,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : BetaSessionResource
+      body = {"authorization_token" => authorization_token}
+      response = @client.post(
+        "/v1/sessions/#{session_id}/resources/#{resource_id}?beta=true",
+        body,
+        beta_headers(betas, workspace_id)
+      )
+      BetaSessionResourceConverter.from_json(JSON::PullParser.new(response.body))
     end
 
     # List resources in a session
@@ -223,12 +290,27 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
-    ) : JSON::Any
+      workspace_id : String? = nil,
+    ) : BetaSessionResourceListResponse
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/sessions/#{session_id}/resources?beta=true", query, beta_headers(betas))
-      JSON.parse(response.body)
+      response = @client.get("/v1/sessions/#{session_id}/resources?beta=true", query, beta_headers(betas, workspace_id))
+      BetaSessionResourceListResponse.from_json(response.body)
+    end
+
+    # Remove a resource from a session
+    def delete(
+      session_id : String,
+      resource_id : String,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : BetaSessionResourceDeleted
+      response = @client.delete(
+        "/v1/sessions/#{session_id}/resources/#{resource_id}?beta=true",
+        beta_headers(betas, workspace_id)
+      )
+      BetaSessionResourceDeleted.from_json(response.body)
     end
   end
 
@@ -237,29 +319,17 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
 
     def events : BetaSessionThreadEvents
       BetaSessionThreadEvents.new(@client)
-    end
-
-    # Create a thread under a session
-    def create(
-      session_id : String,
-      agent : BetaManagedAgentsAgentParamLike,
-      parent_thread_id : String? = nil,
-      betas : Array(String) = [] of String,
-    ) : BetaManagedAgentsSessionThread
-      params = {} of String => JSON::Any
-      params["agent"] = JSON.parse(agent.to_json)
-      params["parent_thread_id"] = JSON::Any.new(parent_thread_id) if parent_thread_id
-
-      response = @client.post("/v1/sessions/#{session_id}/threads?beta=true", params, beta_headers(betas))
-      BetaManagedAgentsSessionThread.from_json(response.body)
     end
 
     # Retrieve a thread
@@ -267,8 +337,9 @@ module Anthropic
       session_id : String,
       thread_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsSessionThread
-      response = @client.get("/v1/sessions/#{session_id}/threads/#{thread_id}?beta=true", nil, beta_headers(betas))
+      response = @client.get("/v1/sessions/#{session_id}/threads/#{thread_id}?beta=true", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsSessionThread.from_json(response.body)
     end
 
@@ -278,11 +349,12 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaSessionThreadListResponse
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/sessions/#{session_id}/threads?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/sessions/#{session_id}/threads?beta=true", query, beta_headers(betas, workspace_id))
       BetaSessionThreadListResponse.from_json(response.body)
     end
 
@@ -291,8 +363,9 @@ module Anthropic
       session_id : String,
       thread_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsSessionThread
-      response = @client.post("/v1/sessions/#{session_id}/threads/#{thread_id}/archive?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/sessions/#{session_id}/threads/#{thread_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsSessionThread.from_json(response.body)
     end
   end
@@ -302,10 +375,13 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
 
     # List thread events
@@ -315,11 +391,12 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : JSON::Any
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/sessions/#{session_id}/threads/#{thread_id}/events?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/sessions/#{session_id}/threads/#{thread_id}/events?beta=true", query, beta_headers(betas, workspace_id))
       JSON.parse(response.body)
     end
 
@@ -336,6 +413,7 @@ module Anthropic
       thread_id : String,
       event_deltas : Array(String)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
       & : JSON::Any -> _
     )
       path = "/v1/sessions/#{session_id}/threads/#{thread_id}/stream?beta=true"
@@ -345,7 +423,7 @@ module Anthropic
         path = "#{path}&#{params}"
       end
 
-      @client.get_stream(path, beta_headers(betas)) do |response|
+      @client.get_stream(path, beta_headers(betas, workspace_id)) do |response|
         SessionEventStream.new(response).each { |event| yield event }
       end
     end

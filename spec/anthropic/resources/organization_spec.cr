@@ -109,13 +109,19 @@ describe Anthropic::BetaOrganizations do
   end
 
   it "lists rate limits and reads compliance settings" do
-    limits = %({"data":[{"id":"rl_1","group_type":"sessions","limits":{"output_tokens_per_minute":{"type":"limit","value":100000}},"models":["claude-sonnet-5"],"type":"rate_limit"}],"has_more":false,"first_id":"rl_1","last_id":"rl_1"})
+    limits = %({"data":[{"id":"rl_1","group":{"id":"mg_1","display_name":"Sonnet","type":"model_group"},"group_type":"sessions","limits":{"output_tokens_per_minute":{"type":"limit","value":100000}},"models":["claude-sonnet-5"],"type":"rate_limit"},{"id":"rl_2","group":{"id":"bg_1","type":"batch"},"group_type":"batches","limits":{},"models":null,"type":"rate_limit"}],"next_page":null})
     stub_and_capture(:get, "https://api.anthropic.com/v1/organizations/rate_limits?beta=true&limit=20", limits)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     listed = client.beta.organization.rate_limits.list
-    listed.data.size.should eq(1)
+    listed.data.size.should eq(2)
     listed.data.first.group_type.should eq("sessions")
+    group = listed.data.first.group
+    group.should be_a(Anthropic::BetaOrganizationRateLimitModelGroup)
+    group.as(Anthropic::BetaOrganizationRateLimitModelGroup).display_name.should eq("Sonnet")
+    listed.data.first.models.should eq(["claude-sonnet-5"])
+    listed.data[1].group.should be_a(Anthropic::BetaOrganizationRateLimitBatchGroup)
+    listed.data[1].models.should be_nil
 
     settings = %({"state":{"type":"disabled"},"type":"compliance_settings"})
     stub_and_capture(:get, "https://api.anthropic.com/v1/organizations/compliance_settings?beta=true", settings)
@@ -148,7 +154,7 @@ describe Anthropic::BetaOrganizations do
     created_issuer.issuer_url.should eq("https://issuer.test")
     created_issuer.poll_status.consecutive_failures.should eq(0)
 
-    rule = %({"id":"rule_1","applies_to_all_workspaces":true,"archived_at":null,"archived_by_actor_id":null,"attributes":{},"created_at":"2026-01-01T00:00:00Z","created_by_actor_id":"user_1","description":"ci","issuer_id":"iss_1","issuer_name":"main","match":{"audience":"ci"},"name":"ci-rule","oauth_scope":"ci:run","target":{"type":"service_account","service_account_id":"sa_1"},"token_lifetime_seconds":3600,"type":"federation_rule","updated_at":"2026-01-01T00:00:00Z","updated_by_actor_id":"user_1","workspace_id":null,"workspace_ids":[]})
+    rule = %({"id":"rule_1","applies_to_all_workspaces":true,"archived_at":null,"archived_by_actor_id":null,"attributes":null,"created_at":"2026-01-01T00:00:00Z","created_by_actor_id":null,"description":null,"issuer_id":"iss_1","issuer_name":null,"match":{"audience":"ci"},"name":"ci-rule","oauth_scope":"ci:run","target":{"type":"service_account","service_account_id":"sa_1"},"token_lifetime_seconds":3600,"type":"federation_rule","updated_at":"2026-01-01T00:00:00Z","updated_by_actor_id":null,"workspace_id":null,"workspace_ids":[]})
     capture = stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/federation_rules?beta=true", rule)
 
     created_rule = client.beta.organization.federation.rules.create(
@@ -160,6 +166,50 @@ describe Anthropic::BetaOrganizations do
     )
     created_rule.name.should eq("ci-rule")
     created_rule.match.audience.should eq("ci")
+    created_rule.attributes.should be_nil
+    created_rule.description.should be_nil
     JSON.parse(capture.body.not_nil!)["oauth_scope"].as_s.should eq("ci:run")
+  end
+
+  it "manages federation rule workspaces" do
+    ws = %({"created_at":"2026-01-01T00:00:00Z","created_by_actor_id":null,"federation_rule_id":"rule_1","type":"federation_rule_workspace","workspace_id":"ws_1","workspace_name":"prod"})
+    list_json = %({"data":[#{ws}],"next_page":null})
+    del_json = %({"federation_rule_id":"rule_1","type":"federation_rule_workspace_deleted","workspace_id":"ws_1"})
+
+    stub_and_capture(:get, "https://api.anthropic.com/v1/organizations/federation_rules/rule_1/workspaces?beta=true&limit=20", list_json)
+    add_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/federation_rules/rule_1/workspaces?beta=true", ws)
+    stub_and_capture(:delete, "https://api.anthropic.com/v1/organizations/federation_rules/rule_1/workspaces/ws_1?beta=true", del_json)
+
+    client = Anthropic::Client.new(api_key: "sk-ant-test")
+    workspaces = client.beta.organization.federation.rules.workspaces
+
+    list = workspaces.list(federation_rule_id: "rule_1")
+    list.data.size.should eq(1)
+    list.data[0].workspace_id.should eq("ws_1")
+    list.data[0].workspace_name.should eq("prod")
+    list.data[0].created_by_actor_id.should be_nil
+
+    added = workspaces.add(federation_rule_id: "rule_1", workspace_id: "ws_1")
+    added.type.should eq("federation_rule_workspace")
+    JSON.parse(add_capture.body.not_nil!)["workspace_id"].as_s.should eq("ws_1")
+
+    removed = workspaces.remove(federation_rule_id: "rule_1", workspace_id: "ws_1")
+    removed.type.should eq("federation_rule_workspace_deleted")
+    removed.workspace_id.should eq("ws_1")
+  end
+
+  it "sends betas headers on federation rule workspace calls" do
+    ws = %({"created_at":"2026-01-01T00:00:00Z","created_by_actor_id":null,"federation_rule_id":"rule_1","type":"federation_rule_workspace","workspace_id":"ws_1","workspace_name":"prod"})
+    list_json = %({"data":[#{ws}],"next_page":null})
+
+    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/organizations/federation_rules/rule_1/workspaces?beta=true&limit=20", list_json)
+
+    client = Anthropic::Client.new(api_key: "sk-ant-test")
+    client.beta.organization.federation.rules.workspaces.list(
+      federation_rule_id: "rule_1",
+      betas: ["workspace-beta"]
+    )
+
+    capture.headers.not_nil!["anthropic-beta"].should eq("workspace-beta")
   end
 end

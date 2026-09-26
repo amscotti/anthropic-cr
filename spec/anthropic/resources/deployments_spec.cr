@@ -42,14 +42,14 @@ describe "Managed Agents Deployments" do
     end
 
     it "lists deployments with query params" do
-      list_json = %({"data":[],"has_more":false,"first_id":null,"last_id":null})
+      list_json = %({"data":[],"next_page":null})
       WebMock.stub(:get, "https://api.anthropic.com/v1/deployments?beta=true&limit=20&status=active")
         .to_return(body: list_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       response = client.beta.deployments.list(status: "active")
       response.data.size.should eq(0)
-      response.has_more?.should be_false
+      response.next_page.should be_nil
     end
 
     it "archives / pauses / unpauses a deployment" do
@@ -94,7 +94,7 @@ describe "Managed Agents Deployments" do
     end
 
     it "lists deployment runs filtering by deployment_id" do
-      list_json = %({"data":[],"has_more":false,"first_id":null,"last_id":null})
+      list_json = %({"data":[],"next_page":null})
       WebMock.stub(:get, "https://api.anthropic.com/v1/deployment_runs?beta=true&limit=20&deployment_id=dep_1")
         .to_return(body: list_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")

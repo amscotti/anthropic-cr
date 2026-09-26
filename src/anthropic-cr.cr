@@ -1,6 +1,7 @@
 require "json"
 require "http/client"
 require "json-schema"
+require "log"
 require "uuid"
 
 # Core modules
@@ -43,7 +44,9 @@ require "./anthropic-cr/sessions"
 require "./anthropic-cr/tools/tool_choice"
 require "./anthropic-cr/tools/tool"
 require "./anthropic-cr/tools/server_tools"
+require "./anthropic-cr/tools/mcp"
 require "./anthropic-cr/tools/runner"
+require "./anthropic-cr/tools/session_runner"
 
 # Request params (typed structs for API requests)
 require "./anthropic-cr/models/params"

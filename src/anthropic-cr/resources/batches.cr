@@ -189,6 +189,10 @@ module Anthropic
           merged_betas << STRUCTURED_OUTPUT_BETA unless merged_betas.includes?(STRUCTURED_OUTPUT_BETA)
         end
 
+        if params.compaction
+          merged_betas << COMPACT_2026_09_04_BETA unless merged_betas.includes?(COMPACT_2026_09_04_BETA)
+        end
+
         Anthropic.beta_headers_for_tools(params.tools).each do |beta|
           merged_betas << beta unless merged_betas.includes?(beta)
         end
@@ -405,6 +409,9 @@ module Anthropic
     @[JSON::Field(key: "mcp_servers", emit_null: false)]
     getter mcp_servers : Array(MCPServerDefinition)?
 
+    @[JSON::Field(emit_null: false)]
+    getter compaction : CompactionParam?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
@@ -426,6 +433,7 @@ module Anthropic
       @context_management : ContextManagementConfig? = nil,
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
+      @compaction : CompactionParam? = nil,
     )
     end
 
@@ -451,6 +459,7 @@ module Anthropic
       context_management : ContextManagementConfig? = nil,
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
+      compaction : CompactionParam? = nil,
     ) : self
       tool_definitions = [] of ToolDefinition | ServerTool
       tools.each { |tool| tool_definitions << tool.to_definition }
@@ -476,7 +485,8 @@ module Anthropic
         inference_geo: inference_geo,
         context_management: context_management,
         container: container,
-        mcp_servers: mcp_servers
+        mcp_servers: mcp_servers,
+        compaction: compaction
       )
     end
   end

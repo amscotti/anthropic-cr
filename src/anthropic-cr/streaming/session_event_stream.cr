@@ -50,7 +50,7 @@ module Anthropic
         end
       rescue ex : IO::TimeoutError
         raise APITimeoutError.new("Stream read timed out", cause: ex)
-      rescue ex : IO::Error | Socket::Error
+      rescue ex : IO::Error | Socket::Error | OpenSSL::Error
         raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
       end
 

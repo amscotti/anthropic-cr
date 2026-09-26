@@ -33,7 +33,13 @@ module Anthropic
       when MCPTool
         betas << MCP_CONNECTOR_BETA unless betas.includes?(MCP_CONNECTOR_BETA)
       when MCPToolset
-        betas << MCP_CLIENT_BETA unless betas.includes?(MCP_CLIENT_BETA)
+        # Pinned tool listings need the newer mcp-client revision, which
+        # supersedes the older one; unpinned toolsets keep the old header.
+        if tool.tools
+          betas << MCP_CLIENT_2026_09_15_BETA unless betas.includes?(MCP_CLIENT_2026_09_15_BETA)
+        else
+          betas << MCP_CLIENT_BETA unless betas.includes?(MCP_CLIENT_BETA)
+        end
       when ToolSearchBM25Tool, ToolSearchRegexTool
         betas << ADVANCED_TOOL_USE_BETA unless betas.includes?(ADVANCED_TOOL_USE_BETA)
       when BashToolLegacy, TextEditorToolLegacy, ComputerUseToolLegacy, TextEditorTool20250124, TextEditorTool20250429
@@ -59,11 +65,16 @@ module Anthropic
     include_token_counting : Bool = false,
     include_user_profiles : Bool = false,
     thinking : ThinkingConfig? = nil,
+    compaction : CompactionParam? = nil,
   ) : Hash(String, String)?
     merged = betas.dup
 
     if thinking.try(&.display)
       merged << THINKING_DISPLAY_UPDATES_BETA unless merged.includes?(THINKING_DISPLAY_UPDATES_BETA)
+    end
+
+    if compaction
+      merged << COMPACT_2026_09_04_BETA unless merged.includes?(COMPACT_2026_09_04_BETA)
     end
 
     if include_token_counting
@@ -220,6 +231,18 @@ module Anthropic
   # (2026-03-24, still the resource default) for callers that pin newer
   # behavior such as `order_by` listing support.
   USER_PROFILES_2026_08_18_BETA = "user-profiles-2026-08-18"
+
+  # User-profiles revision with `external_user_details` support.
+  USER_PROFILES_2026_09_04_BETA = "user-profiles-2026-09-04"
+
+  # Context compaction revision (signed compaction blocks).
+  COMPACT_2026_09_04_BETA = "compact-2026-09-04"
+
+  # Inline tool definitions beta header.
+  INLINE_TOOLS_2026_09_15_BETA = "inline-tools-2026-09-15"
+
+  # MCP client revision with tool-list pinning.
+  MCP_CLIENT_2026_09_15_BETA = "mcp-client-2026-09-15"
 
   # Web search tool - allows Claude to search the internet
   #
@@ -739,6 +762,152 @@ module Anthropic
   #   messages: [{role: "user", content: "Read the content at https://example.com"}]
   # )
   # ```
+  # Reference to a tool by name for web-fetch URL-source scoping.
+  struct WebFetchURLSourceToolReference
+    include JSON::Serializable
+
+    getter name : String
+    getter type : String = "tool_reference"
+
+    def initialize(@name : String)
+    end
+  end
+
+  # Allow URLs from all sources in a category.
+  struct WebFetchURLSourceAll
+    include JSON::Serializable
+
+    getter type : String = "all"
+
+    def initialize
+    end
+  end
+
+  # Allow no URLs from a category.
+  struct WebFetchURLSourceNone
+    include JSON::Serializable
+
+    getter type : String = "none"
+
+    def initialize
+    end
+  end
+
+  # Allow URLs only from the listed tools.
+  struct WebFetchURLSourceOnly
+    include JSON::Serializable
+
+    getter tools : Array(WebFetchURLSourceToolReference)
+    getter type : String = "only"
+
+    def initialize(@tools : Array(WebFetchURLSourceToolReference))
+    end
+
+    # Convenience for tool names.
+    def self.tools(*names : String) : self
+      new(names.map { |name| WebFetchURLSourceToolReference.new(name) }.to_a)
+    end
+  end
+
+  # Allow URLs from all tools except the listed ones.
+  struct WebFetchURLSourceExcept
+    include JSON::Serializable
+
+    getter tools : Array(WebFetchURLSourceToolReference)
+    getter type : String = "except"
+
+    def initialize(@tools : Array(WebFetchURLSourceToolReference))
+    end
+
+    # Convenience for tool names.
+    def self.tools(*names : String) : self
+      new(names.map { |name| WebFetchURLSourceToolReference.new(name) }.to_a)
+    end
+  end
+
+  # URL-source scope for client/server tool results.
+  alias WebFetchURLSourceScope = WebFetchURLSourceAll | WebFetchURLSourceNone | WebFetchURLSourceOnly | WebFetchURLSourceExcept
+
+  # Converter for a URL-source scope discriminated by `"type"`.
+  module WebFetchURLSourceScopeConverter
+    def self.from_json(pull : JSON::PullParser) : WebFetchURLSourceScope
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s?)
+      raw = json.to_json
+
+      case type
+      when "all"
+        WebFetchURLSourceAll.from_json(raw)
+      when "none"
+        WebFetchURLSourceNone.from_json(raw)
+      when "only"
+        WebFetchURLSourceOnly.from_json(raw)
+      when "except"
+        WebFetchURLSourceExcept.from_json(raw)
+      else
+        raise JSON::ParseException.new(
+          "Unknown web-fetch URL source scope type: #{type.inspect}",
+          pull.line_number,
+          pull.column_number
+        )
+      end
+    end
+
+    def self.to_json(value : WebFetchURLSourceScope, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  # URL-source scope for direct user input (`all` or `none`).
+  alias WebFetchUserInputScope = WebFetchURLSourceAll | WebFetchURLSourceNone
+
+  # Converter for a user-input scope discriminated by `"type"`.
+  module WebFetchUserInputScopeConverter
+    def self.from_json(pull : JSON::PullParser) : WebFetchUserInputScope
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s?)
+      raw = json.to_json
+
+      case type
+      when "all"
+        WebFetchURLSourceAll.from_json(raw)
+      when "none"
+        WebFetchURLSourceNone.from_json(raw)
+      else
+        raise JSON::ParseException.new(
+          "Unknown web-fetch user-input scope type: #{type.inspect}",
+          pull.line_number,
+          pull.column_number
+        )
+      end
+    end
+
+    def self.to_json(value : WebFetchUserInputScope, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  # Controls which URLs the web-fetch tool may fetch, by source category.
+  struct WebFetchURLSources
+    include JSON::Serializable
+
+    @[JSON::Field(key: "client_tool_results", converter: Anthropic::WebFetchURLSourceScopeConverter, emit_null: false)]
+    getter client_tool_results : WebFetchURLSourceScope?
+
+    @[JSON::Field(key: "server_tool_results", converter: Anthropic::WebFetchURLSourceScopeConverter, emit_null: false)]
+    getter server_tool_results : WebFetchURLSourceScope?
+
+    @[JSON::Field(key: "user_input", converter: Anthropic::WebFetchUserInputScopeConverter, emit_null: false)]
+    getter user_input : WebFetchUserInputScope?
+
+    def initialize(
+      @client_tool_results : WebFetchURLSourceScope? = nil,
+      @server_tool_results : WebFetchURLSourceScope? = nil,
+      @user_input : WebFetchUserInputScope? = nil,
+    )
+    end
+  end
+
   struct WebFetchTool < ServerTool
     include JSON::Serializable
 
@@ -777,6 +946,9 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter citations : CitationConfig?
 
+    @[JSON::Field(key: "url_sources", emit_null: false)]
+    getter url_sources : WebFetchURLSources?
+
     def initialize(
       @allowed_callers : Array(String)? = nil,
       @cache_control : CacheControl? = nil,
@@ -787,6 +959,7 @@ module Anthropic
       @blocked_domains : Array(String)? = nil,
       @max_content_tokens : Int32? = nil,
       @citations : CitationConfig? = nil,
+      @url_sources : WebFetchURLSources? = nil,
     )
     end
 
@@ -822,6 +995,9 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter citations : CitationConfig?
 
+    @[JSON::Field(key: "url_sources", emit_null: false)]
+    getter url_sources : WebFetchURLSources?
+
     @[JSON::Field(key: "defer_loading", emit_null: false)]
     getter defer_loading : Bool?
 
@@ -840,6 +1016,7 @@ module Anthropic
       @blocked_domains : Array(String)? = nil,
       @cache_control : CacheControl? = nil,
       @citations : CitationConfig? = nil,
+      @url_sources : WebFetchURLSources? = nil,
       @defer_loading : Bool? = nil,
       @max_content_tokens : Int32? = nil,
       @max_uses : Int32? = nil,
@@ -869,6 +1046,9 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter citations : CitationConfig?
 
+    @[JSON::Field(key: "url_sources", emit_null: false)]
+    getter url_sources : WebFetchURLSources?
+
     @[JSON::Field(key: "defer_loading", emit_null: false)]
     getter defer_loading : Bool?
 
@@ -890,6 +1070,7 @@ module Anthropic
       @blocked_domains : Array(String)? = nil,
       @cache_control : CacheControl? = nil,
       @citations : CitationConfig? = nil,
+      @url_sources : WebFetchURLSources? = nil,
       @defer_loading : Bool? = nil,
       @max_content_tokens : Int32? = nil,
       @max_uses : Int32? = nil,
@@ -926,6 +1107,9 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter citations : CitationConfig?
 
+    @[JSON::Field(key: "url_sources", emit_null: false)]
+    getter url_sources : WebFetchURLSources?
+
     @[JSON::Field(key: "defer_loading", emit_null: false)]
     getter defer_loading : Bool?
 
@@ -950,6 +1134,7 @@ module Anthropic
       @blocked_domains : Array(String)? = nil,
       @cache_control : CacheControl? = nil,
       @citations : CitationConfig? = nil,
+      @url_sources : WebFetchURLSources? = nil,
       @defer_loading : Bool? = nil,
       @max_content_tokens : Int32? = nil,
       @max_uses : Int32? = nil,
@@ -1261,6 +1446,14 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter configs : Hash(String, MCPToolsetConfig)?
 
+    # The server's tool listing, pinned: when present, the server is not
+    # asked for its tools before sampling and exactly these entries, with
+    # `default_config` and `configs` applied, are the toolset's tools. Copy
+    # it from the `mcp_tool_listing` block of an earlier response. Requires
+    # the `mcp-client-2026-09-15` beta (attached automatically when set).
+    @[JSON::Field(emit_null: false)]
+    getter tools : Array(MCPToolListingEntry)?
+
     @[JSON::Field(key: "cache_control", emit_null: false)]
     getter cache_control : CacheControl?
 
@@ -1268,6 +1461,7 @@ module Anthropic
       @mcp_server_name : String,
       @default_config : MCPToolsetConfig? = nil,
       @configs : Hash(String, MCPToolsetConfig)? = nil,
+      @tools : Array(MCPToolListingEntry)? = nil,
       @cache_control : CacheControl? = nil,
     )
     end
@@ -1291,12 +1485,15 @@ module Anthropic
 
     getter url : String
     getter title : String
-    getter snippet : String?
+    getter type : String = "web_search_result"
 
-    @[JSON::Field(key: "encrypted_content")]
+    @[JSON::Field(emit_null: false)]
+    @snippet : String?
+
+    @[JSON::Field(key: "encrypted_content", emit_null: false)]
     getter encrypted_content : String?
 
-    @[JSON::Field(key: "page_age")]
+    @[JSON::Field(key: "page_age", emit_null: false)]
     getter page_age : String?
 
     def initialize(
@@ -1306,6 +1503,56 @@ module Anthropic
       @encrypted_content : String? = nil,
       @page_age : String? = nil,
     )
+      @type = "web_search_result"
+    end
+
+    # Non-upstream leftover: the API result block has no `snippet`.
+    # Kept for backwards compatibility; always nil on API responses.
+    @[Deprecated("WebSearchResult has no snippet upstream")]
+    def snippet : String?
+      @snippet
+    end
+  end
+
+  # Error payload returned instead of results when a web search fails.
+  struct WebSearchToolResultError
+    include JSON::Serializable
+
+    @[JSON::Field(key: "error_code")]
+    getter error_code : String
+
+    getter type : String = "web_search_tool_result_error"
+
+    def initialize(@error_code : String)
+      @type = "web_search_tool_result_error"
+    end
+  end
+
+  # Error codes for failed web searches.
+  module WebSearchToolResultErrorCode
+    INVALID_TOOL_INPUT = "invalid_tool_input"
+    UNAVAILABLE        = "unavailable"
+    MAX_USES_EXCEEDED  = "max_uses_exceeded"
+    TOO_MANY_REQUESTS  = "too_many_requests"
+    QUERY_TOO_LONG     = "query_too_long"
+    REQUEST_TOO_LARGE  = "request_too_large"
+  end
+
+  # Content of a web search tool result: an error or the result list.
+  alias WebSearchToolResultContentData = WebSearchToolResultError | Array(WebSearchResult)
+
+  # Converter for web search result content (object or array).
+  module WebSearchToolResultContentConverter
+    def self.from_json(pull : JSON::PullParser) : WebSearchToolResultContentData
+      if pull.kind.begin_array?
+        Array(WebSearchResult).new(pull)
+      else
+        WebSearchToolResultError.new(pull)
+      end
+    end
+
+    def self.to_json(value : WebSearchToolResultContentData, builder : JSON::Builder)
+      value.to_json(builder)
     end
   end
 
@@ -1626,6 +1873,38 @@ module Anthropic
     end
   end
 
+  # A single tool entry in a pinned MCP tool listing.
+  struct MCPToolListingEntry
+    include JSON::Serializable
+
+    @[JSON::Field(key: "input_schema")]
+    getter input_schema : JSON::Any
+
+    getter name : String
+
+    @[JSON::Field(emit_null: false)]
+    getter description : String?
+
+    def initialize(@input_schema : JSON::Any, @name : String, @description : String? = nil)
+    end
+  end
+
+  # MCP tool-listing content block: pins the tool list served by one MCP
+  # server at request time. Requires the `mcp-client-2026-09-15` beta.
+  struct MCPToolListingContent
+    include JSON::Serializable
+
+    getter type : String = "mcp_tool_listing"
+
+    @[JSON::Field(key: "mcp_server_name")]
+    getter mcp_server_name : String
+
+    getter tools : Array(MCPToolListingEntry)
+
+    def initialize(@mcp_server_name : String, @tools : Array(MCPToolListingEntry))
+    end
+  end
+
   # Web search tool result content block
   struct WebSearchToolResultContent
     include JSON::Serializable
@@ -1635,9 +1914,37 @@ module Anthropic
     @[JSON::Field(key: "tool_use_id")]
     getter tool_use_id : String
 
-    getter content : Array(WebSearchResult)
+    @[JSON::Field(converter: Anthropic::WebSearchToolResultContentConverter)]
+    getter content : WebSearchToolResultContentData
 
-    def initialize(@tool_use_id : String, @content : Array(WebSearchResult))
+    @[JSON::Field(key: "caller", converter: Anthropic::ToolCallerConverter, emit_null: false)]
+    getter caller_info : ToolCaller?
+
+    def initialize(
+      @tool_use_id : String,
+      @content : WebSearchToolResultContentData,
+      @caller_info : ToolCaller? = nil,
+    )
+    end
+
+    # Short caller type (`"direct"`, `"code_execution"`, ...), if present.
+    def caller : String?
+      @caller_info.try(&.type)
+    end
+
+    # Tool id of a server-side caller, if present.
+    def caller_tool_id : String?
+      @caller_info.try(&.tool_id)
+    end
+
+    # Results when the search succeeded, else `nil`.
+    def results : Array(WebSearchResult)?
+      content.as?(Array(WebSearchResult))
+    end
+
+    # Error payload when the search failed, else `nil`.
+    def result_error : WebSearchToolResultError?
+      content.as?(WebSearchToolResultError)
     end
   end
 

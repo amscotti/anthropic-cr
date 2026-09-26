@@ -106,7 +106,42 @@ module Anthropic
     end
   end
 
-  alias ImageSource = Base64ImageSource | URLImageSource
+  # Image sourced from a previously uploaded file.
+  struct FileImageSource
+    include JSON::Serializable
+
+    getter type : String = "file"
+
+    @[JSON::Field(key: "file_id")]
+    getter file_id : String
+
+    def initialize(@file_id : String)
+      @type = "file"
+    end
+  end
+
+  alias ImageSource = Base64ImageSource | URLImageSource | FileImageSource
+
+  # Transformations the server applies to an image before the model observes
+  # it. Omitted keys keep their default behavior.
+  struct ImageTransformations
+    include JSON::Serializable
+
+    # What the server does when the image exceeds the model's maximum size:
+    # `"downsize"` (default) scales it down silently, `"error"` rejects the
+    # request with a 400 naming the offending dimensions.
+    @[JSON::Field(key: "oversized_image", emit_null: false)]
+    getter oversized_image : String?
+
+    def initialize(@oversized_image : String? = nil)
+    end
+  end
+
+  # Values for `ImageTransformations#oversized_image`.
+  module OversizedImageBehavior
+    DOWNSIZE = "downsize"
+    ERROR    = "error"
+  end
 
   # Image content block
   struct ImageContent
@@ -118,23 +153,54 @@ module Anthropic
     @[JSON::Field(key: "cache_control")]
     getter cache_control : CacheControl?
 
-    def initialize(@source : ImageSource, @cache_control : CacheControl? = nil)
+    @[JSON::Field(emit_null: false)]
+    getter transformations : ImageTransformations?
+
+    def initialize(
+      @source : ImageSource,
+      @cache_control : CacheControl? = nil,
+      @transformations : ImageTransformations? = nil,
+    )
       @type = "image"
     end
 
     # Factory method for base64 images
-    def self.base64(media_type : String, data : String, cache_control : CacheControl? = nil) : self
+    def self.base64(
+      media_type : String,
+      data : String,
+      cache_control : CacheControl? = nil,
+      transformations : ImageTransformations? = nil,
+    ) : self
       new(
         source: Base64ImageSource.new(media_type: media_type, data: data),
-        cache_control: cache_control
+        cache_control: cache_control,
+        transformations: transformations
       )
     end
 
     # Factory method for URL images
-    def self.url(url : String, cache_control : CacheControl? = nil) : self
+    def self.url(
+      url : String,
+      cache_control : CacheControl? = nil,
+      transformations : ImageTransformations? = nil,
+    ) : self
       new(
         source: URLImageSource.new(url: url),
-        cache_control: cache_control
+        cache_control: cache_control,
+        transformations: transformations
+      )
+    end
+
+    # Factory method for images backed by an uploaded file
+    def self.file(
+      file_id : String,
+      cache_control : CacheControl? = nil,
+      transformations : ImageTransformations? = nil,
+    ) : self
+      new(
+        source: FileImageSource.new(file_id: file_id),
+        cache_control: cache_control,
+        transformations: transformations
       )
     end
   end
@@ -390,14 +456,116 @@ module Anthropic
     end
   end
 
+  # A custom tool definition echoed back by the API (inline tool
+  # definitions). An echo of a request `ToolDefinition` with the input
+  # schema kept as `JSON::Any` (response echoes may vary) and
+  # `cache_control` omitted.
+  struct ResponseTool
+    include JSON::Serializable
+
+    @[JSON::Field(key: "input_schema")]
+    getter input_schema : JSON::Any
+
+    getter name : String
+
+    @[JSON::Field(key: "allowed_callers", emit_null: false)]
+    getter allowed_callers : Array(String)?
+
+    @[JSON::Field(key: "defer_loading", emit_null: false)]
+    getter? defer_loading : Bool?
+
+    @[JSON::Field(emit_null: false)]
+    getter description : String?
+
+    @[JSON::Field(key: "eager_input_streaming", emit_null: false)]
+    getter eager_input_streaming : Bool?
+
+    @[JSON::Field(key: "input_examples", emit_null: false)]
+    getter input_examples : Array(JSON::Any)?
+
+    @[JSON::Field(emit_null: false)]
+    getter strict : Bool?
+
+    # Tool kind. Always `"custom"` when present.
+    @[JSON::Field(emit_null: false)]
+    getter type : String?
+
+    def initialize(
+      @input_schema : JSON::Any,
+      @name : String,
+      @allowed_callers : Array(String)? = nil,
+      @defer_loading : Bool? = nil,
+      @description : String? = nil,
+      @eager_input_streaming : Bool? = nil,
+      @input_examples : Array(JSON::Any)? = nil,
+      @strict : Bool? = nil,
+      @type : String? = nil,
+    )
+    end
+
+    # Build a response tool from a request tool definition.
+    def self.from_definition(definition : ToolDefinition) : self
+      new(
+        input_schema: JSON.parse(definition.input_schema.to_json),
+        name: definition.name,
+        allowed_callers: definition.allowed_callers,
+        defer_loading: definition.defer_loading?,
+        description: definition.description,
+        eager_input_streaming: definition.eager_input_streaming,
+        input_examples: definition.input_examples,
+        strict: definition.strict,
+        type: definition.type
+      )
+    end
+  end
+
+  # Converter for a tool-change definition payload: parses custom tools as
+  # `ResponseTool`, keeps anything else (server-tool definitions, or
+  # request-side definitions carrying `cache_control`) as raw JSON.
+  module ToolChangeDefinitionConverter
+    def self.from_json(pull : JSON::PullParser) : ResponseTool | JSON::Any
+      json = JSON::Any.new(pull)
+      raw = json.to_json
+
+      # Response echoes never carry `cache_control`; its presence marks a
+      # request-side definition, which stays raw to preserve every key.
+      if json["input_schema"]? && json["name"]? && !json["cache_control"]?
+        begin
+          return ResponseTool.from_json(raw)
+        rescue JSON::ParseException
+        end
+      end
+      json
+    end
+
+    def self.to_json(value : ResponseTool | JSON::Any, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  # A full inline tool definition carried by a tool-change block (as
+  # opposed to a reference to a request-declared tool).
+  struct ToolChangeToolDefinition
+    include JSON::Serializable
+
+    @[JSON::Field(converter: Anthropic::ToolChangeDefinitionConverter)]
+    getter definition : ResponseTool | JSON::Any
+
+    getter type : String = "tool_definition"
+
+    def initialize(@definition : ResponseTool | JSON::Any)
+      @type = "tool_definition"
+    end
+  end
+
   # Union of tool-change reference types for addition/removal blocks.
-  alias ToolChangeReference = ToolChangeToolReference | ToolChangeMCPToolReference | ToolChangeMCPToolsetReference
+  alias ToolChangeReference = ToolChangeToolReference | ToolChangeMCPToolReference | ToolChangeMCPToolsetReference | ToolChangeToolDefinition
 
   # Discriminated-union converter for tool-change references.
   module ToolChangeReferenceConverter
     def self.from_json(pull : JSON::PullParser) : ToolChangeReference
       json = JSON::Any.new(pull)
-      type = json["type"]?.try(&.as_s)
+      type = json["type"]?.try(&.as_s?)
       raw = json.to_json
 
       case type
@@ -407,10 +575,12 @@ module Anthropic
         ToolChangeMCPToolReference.from_json(raw)
       when "mcp_toolset_reference"
         ToolChangeMCPToolsetReference.from_json(raw)
+      when "tool_definition"
+        ToolChangeToolDefinition.from_json(raw)
       else
         # Forward-compatible fallback: treat unknown shapes as a named tool_reference
         # when a `name` is present so callers can still inspect the payload.
-        if name = json["name"]?.try(&.as_s)
+        if name = json["name"]?.try(&.as_s?)
           ToolChangeToolReference.new(name: name)
         else
           raise JSON::ParseException.new("Unknown tool change reference type: #{type.inspect}", 0, 0)
@@ -419,6 +589,46 @@ module Anthropic
     end
 
     def self.to_json(value : ToolChangeReference, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  # Union of tool-change reference types for removal blocks. Unlike
+  # additions, removals only reference tools — never define them by value.
+  alias ToolRemovalReference = ToolChangeToolReference | ToolChangeMCPToolReference | ToolChangeMCPToolsetReference
+
+  # Discriminated-union converter for removal references.
+  module ToolRemovalReferenceConverter
+    def self.from_json(pull : JSON::PullParser) : ToolRemovalReference
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s?)
+      raw = json.to_json
+
+      case type
+      when "tool_reference"
+        ToolChangeToolReference.from_json(raw)
+      when "mcp_tool_reference"
+        ToolChangeMCPToolReference.from_json(raw)
+      when "mcp_toolset_reference"
+        ToolChangeMCPToolsetReference.from_json(raw)
+      when "tool_definition"
+        raise JSON::ParseException.new(
+          "tool_definition is not valid in a tool_removal block",
+          pull.line_number,
+          pull.column_number
+        )
+      else
+        # Forward-compatible fallback: treat unknown shapes as a named tool_reference
+        # when a `name` is present so callers can still inspect the payload.
+        if name = json["name"]?.try(&.as_s?)
+          ToolChangeToolReference.new(name: name)
+        else
+          raise JSON::ParseException.new("Unknown tool removal reference type: #{type.inspect}", 0, 0)
+        end
+      end
+    end
+
+    def self.to_json(value : ToolRemovalReference, builder : JSON::Builder)
       value.to_json(builder)
     end
   end
@@ -459,13 +669,13 @@ module Anthropic
 
     getter type : String = "tool_removal"
 
-    @[JSON::Field(converter: Anthropic::ToolChangeReferenceConverter)]
-    getter tool : ToolChangeReference
+    @[JSON::Field(converter: Anthropic::ToolRemovalReferenceConverter)]
+    getter tool : ToolRemovalReference
 
     @[JSON::Field(key: "cache_control", emit_null: false)]
     getter cache_control : CacheControl?
 
-    def initialize(@tool : ToolChangeReference, @cache_control : CacheControl? = nil)
+    def initialize(@tool : ToolRemovalReference, @cache_control : CacheControl? = nil)
       @type = "tool_removal"
     end
 
@@ -929,6 +1139,57 @@ module Anthropic
     end
   end
 
+  # A future tool-change block type, preserved with its raw payload so
+  # unknown shapes don't break response parsing.
+  struct GenericToolChange
+    getter type : String
+    getter raw : JSON::Any
+
+    def initialize(@type : String, @raw : JSON::Any)
+    end
+
+    # Serialize back to the original JSON payload.
+    def to_json(builder : JSON::Builder) : Nil
+      raw.to_json(builder)
+    end
+  end
+
+  # A mid-conversation tool change: an addition or removal block.
+  alias ToolChange = ToolAdditionContent | ToolRemovalContent | GenericToolChange
+
+  # Array converter for tool-change blocks discriminated by `"type"`.
+  module ToolChangeArrayConverter
+    def self.from_json(pull : JSON::PullParser) : Array(ToolChange)?
+      return nil if pull.kind.null?
+
+      result = [] of ToolChange
+      pull.read_array do
+        json = JSON::Any.new(pull)
+        type = json["type"]?.try(&.as_s?) || "unknown"
+        raw = json.to_json
+        case type
+        when "tool_addition"
+          result << ToolAdditionContent.from_json(raw)
+        when "tool_removal"
+          result << ToolRemovalContent.from_json(raw)
+        else
+          result << GenericToolChange.new(type: type, raw: json)
+        end
+      end
+      result
+    end
+
+    def self.to_json(value : Array(ToolChange)?, builder : JSON::Builder)
+      if value.nil?
+        builder.null
+      else
+        builder.array do
+          value.each &.to_json(builder)
+        end
+      end
+    end
+  end
+
   # Compaction content block
   #
   # Returned during auto-compaction of conversation history.
@@ -945,7 +1206,24 @@ module Anthropic
     @[JSON::Field(key: "encrypted_content", emit_null: false)]
     getter encrypted_content : String?
 
-    def initialize(@content : String? = nil, @encrypted_content : String? = nil)
+    # Signature for server-signed compaction blocks. Send the block back
+    # unchanged, including the signature.
+    @[JSON::Field(emit_null: false)]
+    getter signature : String?
+
+    # Tool changes of the compacted range: the `tool_addition` and
+    # `tool_removal` blocks that take the request's `tools` to the tool
+    # set in effect at the end of the range, or `[]` when the range
+    # changed no tool. Absent when the server did not compute them.
+    @[JSON::Field(key: "tool_changes", converter: Anthropic::ToolChangeArrayConverter, emit_null: false)]
+    getter tool_changes : Array(ToolChange)?
+
+    def initialize(
+      @content : String? = nil,
+      @encrypted_content : String? = nil,
+      @signature : String? = nil,
+      @tool_changes : Array(ToolChange)? = nil,
+    )
     end
   end
 
@@ -966,9 +1244,9 @@ module Anthropic
   # Citation for a character range within a cited document.
   #
   # This is the legacy char-location citation struct. It remains the canonical
-  # representation for `start_char`/`end_char` citations. For other location
-  # types (page, content block, web search result, search result), see the
-  # dedicated citation structs and the `CitationRef` union.
+  # representation for `start_char_index`/`end_char_index` citations. For other
+  # location types (page, content block, web search result, search result), see
+  # the dedicated citation structs and the `CitationRef` union.
   struct Citation
     include JSON::Serializable
 
@@ -980,23 +1258,37 @@ module Anthropic
     @[JSON::Field(key: "document_index")]
     getter document_index : Int32?
 
-    @[JSON::Field(key: "start_char")]
-    getter start_char : Int32
+    @[JSON::Field(key: "start_char_index")]
+    getter start_char_index : Int32
 
-    @[JSON::Field(key: "end_char")]
-    getter end_char : Int32
+    @[JSON::Field(key: "end_char_index")]
+    getter end_char_index : Int32
 
     @[JSON::Field(key: "cited_text")]
     getter cited_text : String?
 
+    @[JSON::Field(key: "file_id")]
+    getter file_id : String?
+
     def initialize(
-      @start_char : Int32,
-      @end_char : Int32,
+      @start_char_index : Int32,
+      @end_char_index : Int32,
       @document_title : String? = nil,
       @document_index : Int32? = nil,
       @cited_text : String? = nil,
+      @file_id : String? = nil,
     )
       @type = "char_location"
+    end
+
+    @[Deprecated("Use #start_char_index instead")]
+    def start_char : Int32
+      start_char_index
+    end
+
+    @[Deprecated("Use #end_char_index instead")]
+    def end_char : Int32
+      end_char_index
     end
   end
 
@@ -1020,6 +1312,20 @@ module Anthropic
 
     @[JSON::Field(key: "cited_text")]
     getter cited_text : String?
+
+    @[JSON::Field(key: "file_id")]
+    getter file_id : String?
+
+    def initialize(
+      @start_page_number : Int32,
+      @end_page_number : Int32,
+      @document_title : String? = nil,
+      @document_index : Int32? = nil,
+      @cited_text : String? = nil,
+      @file_id : String? = nil,
+    )
+      @type = "page_location"
+    end
   end
 
   # Citation for a content-block range within a cited document.
@@ -1042,6 +1348,20 @@ module Anthropic
 
     @[JSON::Field(key: "cited_text")]
     getter cited_text : String?
+
+    @[JSON::Field(key: "file_id")]
+    getter file_id : String?
+
+    def initialize(
+      @start_block_index : Int32,
+      @end_block_index : Int32,
+      @document_title : String? = nil,
+      @document_index : Int32? = nil,
+      @cited_text : String? = nil,
+      @file_id : String? = nil,
+    )
+      @type = "content_block_location"
+    end
   end
 
   # Citation sourced from a web search result (server-side web_search).
@@ -1095,8 +1415,8 @@ module Anthropic
   # Discriminated-union converter for citation objects.
   #
   # Dispatches based on the `type` field. For backwards compatibility, objects
-  # without an explicit `type` but with `start_char`/`end_char` are treated as
-  # `char_location`.
+  # without an explicit `type` but with `start_char_index`/`end_char_index`
+  # are treated as `char_location`.
   module CitationConverter
     def self.from_json(pull : JSON::PullParser) : CitationRef
       json = JSON::Any.new(pull)
@@ -1110,8 +1430,9 @@ module Anthropic
       when "web_search_result_location" then CitationWebSearchResultLocation.from_json(raw)
       when "search_result_location"     then CitationSearchResultLocation.from_json(raw)
       else
-        # Backwards compatibility: untagged objects with start_char/end_char
-        # are parsed as the legacy char-location Citation.
+        # Backwards compatibility: untagged objects with
+        # start_char_index/end_char_index are parsed as the legacy
+        # char-location Citation.
         Citation.from_json(raw)
       end
     end
@@ -1217,7 +1538,7 @@ module Anthropic
                        WebFetchToolResultContent | ToolSearchToolResultContent |
                        BashCodeExecutionToolResultContent | TextEditorCodeExecutionToolResultContent |
                        MCPToolUseContent | MCPToolResultContent | AdvisorToolResultContent |
-                       FallbackContent
+                       MCPToolListingContent | FallbackContent
 
   # JSON converter for discriminated union parsing of content blocks
   #
@@ -1264,6 +1585,7 @@ module Anthropic
       when "tool_search_tool_result"                then ToolSearchToolResultContent.from_json(raw)
       when "mcp_tool_use"                           then MCPToolUseContent.from_json(raw)
       when "mcp_tool_result"                        then MCPToolResultContent.from_json(raw)
+      when "mcp_tool_listing"                       then MCPToolListingContent.from_json(raw)
       when "advisor_tool_result"                    then AdvisorToolResultContent.from_json(raw)
       end
     end

@@ -130,14 +130,9 @@ module Anthropic
 
     getter data : Array(BetaExternalKey)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # Confirmation returned when an external key is deleted.
@@ -273,18 +268,136 @@ module Anthropic
     getter value : Int64
   end
 
+  # A rate-limit group applying to a model.
+  struct BetaOrganizationRateLimitModelGroup
+    include JSON::Serializable
+
+    getter id : String
+
+    @[JSON::Field(key: "display_name")]
+    getter display_name : String
+
+    # Group type. Always `"model_group"`.
+    getter type : String = "model_group"
+  end
+
+  # A rate-limit group applying to batches.
+  struct BetaOrganizationRateLimitBatchGroup
+    include JSON::Serializable
+
+    getter id : String
+
+    # Group type. Always `"batch"`.
+    getter type : String = "batch"
+  end
+
+  # A rate-limit group applying to files.
+  struct BetaOrganizationRateLimitFilesGroup
+    include JSON::Serializable
+
+    getter id : String
+
+    # Group type. Always `"files"`.
+    getter type : String = "files"
+  end
+
+  # A rate-limit group applying to skills.
+  struct BetaOrganizationRateLimitSkillsGroup
+    include JSON::Serializable
+
+    getter id : String
+
+    # Group type. Always `"skills"`.
+    getter type : String = "skills"
+  end
+
+  # A rate-limit group applying to token counting.
+  struct BetaOrganizationRateLimitTokenCountGroup
+    include JSON::Serializable
+
+    getter id : String
+
+    # Group type. Always `"token_count"`.
+    getter type : String = "token_count"
+  end
+
+  # A rate-limit group applying to web search.
+  struct BetaOrganizationRateLimitWebSearchGroup
+    include JSON::Serializable
+
+    getter id : String
+
+    # Group type. Always `"web_search"`.
+    getter type : String = "web_search"
+  end
+
+  # A future rate-limit group type, preserved with its raw payload so
+  # unknown shapes don't break response parsing.
+  struct BetaOrganizationRateLimitGenericGroup
+    getter type : String
+    getter raw : JSON::Any
+
+    def initialize(@type : String, @raw : JSON::Any)
+    end
+
+    # Serialize back to the original JSON payload.
+    def to_json(builder : JSON::Builder) : Nil
+      raw.to_json(builder)
+    end
+  end
+
+  # Discriminated union of rate-limit group variants.
+  alias BetaOrganizationRateLimitGroup = BetaOrganizationRateLimitModelGroup | BetaOrganizationRateLimitBatchGroup | BetaOrganizationRateLimitFilesGroup | BetaOrganizationRateLimitSkillsGroup | BetaOrganizationRateLimitTokenCountGroup | BetaOrganizationRateLimitWebSearchGroup | BetaOrganizationRateLimitGenericGroup
+
+  # Converter for a single BetaOrganizationRateLimitGroup discriminated by `"type"`.
+  module BetaOrganizationRateLimitGroupConverter
+    def self.from_json(pull : JSON::PullParser) : BetaOrganizationRateLimitGroup
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s?) || "unknown"
+      raw = json.to_json
+
+      case type
+      when "model_group"
+        BetaOrganizationRateLimitModelGroup.from_json(raw)
+      when "batch"
+        BetaOrganizationRateLimitBatchGroup.from_json(raw)
+      when "files"
+        BetaOrganizationRateLimitFilesGroup.from_json(raw)
+      when "skills"
+        BetaOrganizationRateLimitSkillsGroup.from_json(raw)
+      when "token_count"
+        BetaOrganizationRateLimitTokenCountGroup.from_json(raw)
+      when "web_search"
+        BetaOrganizationRateLimitWebSearchGroup.from_json(raw)
+      else
+        BetaOrganizationRateLimitGenericGroup.new(type: type, raw: json)
+      end
+    end
+
+    def self.to_json(value : BetaOrganizationRateLimitGroup, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
   # A rate limit applying to a model/group combination.
   struct BetaOrganizationRateLimit
     include JSON::Serializable
 
     getter id : String
 
+    # The group this limit applies to (carries `display_name` on model groups).
+    @[JSON::Field(converter: Anthropic::BetaOrganizationRateLimitGroupConverter)]
+    getter group : BetaOrganizationRateLimitGroup
+
+    # Deprecated in favor of `group`; still returned by the API.
     @[JSON::Field(key: "group_type")]
     getter group_type : String
 
     getter limits : JSON::Any
 
-    getter models : Array(String)
+    # Models covered by this limit (`nil` for non-model groups).
+    @[JSON::Field(emit_null: false)]
+    getter models : Array(String)?
 
     # Object type. Always `"rate_limit"`.
     getter type : String = "rate_limit"
@@ -296,14 +409,9 @@ module Anthropic
 
     getter data : Array(BetaOrganizationRateLimit)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # Organization compliance settings state.
@@ -319,12 +427,25 @@ module Anthropic
     getter type : String = "compliance_settings"
   end
 
+  # Allowed inference geographies for beta data-residency configuration.
+  module BetaAllowedInferenceGeo
+    GLOBAL = "global"
+    US     = "us"
+  end
+
   # Data-residency configuration for a workspace.
+  #
+  # `allowed_inference_geos` is either a list of
+  # `BetaAllowedInferenceGeo` values or the string `"unrestricted"`,
+  # which allows all geos.
   struct BetaDataResidency
     include JSON::Serializable
 
+    # Sentinel meaning all inference geos are allowed.
+    UNRESTRICTED = "unrestricted"
+
     @[JSON::Field(key: "allowed_inference_geos")]
-    getter allowed_inference_geos : Array(String)
+    getter allowed_inference_geos : Array(String) | String
 
     @[JSON::Field(key: "default_inference_geo")]
     getter default_inference_geo : String
@@ -333,9 +454,56 @@ module Anthropic
     getter workspace_geo : String
 
     def initialize(
-      @allowed_inference_geos : Array(String),
+      @allowed_inference_geos : Array(String) | String,
       @default_inference_geo : String,
       @workspace_geo : String,
+    )
+    end
+
+    # Whether all inference geos are allowed.
+    def unrestricted? : Bool
+      allowed_inference_geos == UNRESTRICTED
+    end
+  end
+
+  # Data-residency configuration accepted when creating a workspace.
+  #
+  # Omitted fields fall back to API defaults (`allowed_inference_geos`
+  # defaults to `"unrestricted"`, `default_inference_geo` to `"global"`,
+  # and `workspace_geo` to `"us"`).
+  struct BetaDataResidencyCreateConfig
+    include JSON::Serializable
+
+    @[JSON::Field(key: "allowed_inference_geos", emit_null: false)]
+    getter allowed_inference_geos : Array(String) | String?
+
+    @[JSON::Field(key: "default_inference_geo", emit_null: false)]
+    getter default_inference_geo : String?
+
+    @[JSON::Field(key: "workspace_geo", emit_null: false)]
+    getter workspace_geo : String?
+
+    def initialize(
+      @allowed_inference_geos : Array(String) | String? = nil,
+      @default_inference_geo : String? = nil,
+      @workspace_geo : String? = nil,
+    )
+    end
+  end
+
+  # Data-residency configuration accepted when updating a workspace.
+  struct BetaDataResidencyUpdateConfig
+    include JSON::Serializable
+
+    @[JSON::Field(key: "allowed_inference_geos", emit_null: false)]
+    getter allowed_inference_geos : Array(String) | String?
+
+    @[JSON::Field(key: "default_inference_geo", emit_null: false)]
+    getter default_inference_geo : String?
+
+    def initialize(
+      @allowed_inference_geos : Array(String) | String? = nil,
+      @default_inference_geo : String? = nil,
     )
     end
   end
@@ -356,7 +524,7 @@ module Anthropic
     getter created_at : String
 
     @[JSON::Field(key: "data_residency", emit_null: false)]
-    getter data_residency : JSON::Any?
+    getter data_residency : BetaDataResidency?
 
     @[JSON::Field(key: "display_color")]
     getter display_color : String
@@ -476,14 +644,9 @@ module Anthropic
 
     getter data : Array(BetaServiceAccount)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # A service account's membership in a workspace.
@@ -514,14 +677,9 @@ module Anthropic
 
     getter data : Array(BetaServiceAccountWorkspaceMember)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # Confirmation returned when a service account is removed from a workspace.
@@ -608,14 +766,9 @@ module Anthropic
 
     getter data : Array(BetaFederationIssuer)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # JWT match conditions for a federation rule.
@@ -658,21 +811,22 @@ module Anthropic
     @[JSON::Field(key: "archived_by_actor_id", emit_null: false)]
     getter archived_by_actor_id : String?
 
-    getter attributes : Hash(String, String)
+    # Not yet supported; always null.
+    getter attributes : Hash(String, String)?
 
     @[JSON::Field(key: "created_at")]
     getter created_at : String
 
     @[JSON::Field(key: "created_by_actor_id")]
-    getter created_by_actor_id : String
+    getter created_by_actor_id : String?
 
-    getter description : String
+    getter description : String?
 
     @[JSON::Field(key: "issuer_id")]
     getter issuer_id : String
 
     @[JSON::Field(key: "issuer_name")]
-    getter issuer_name : String
+    getter issuer_name : String?
 
     getter match : BetaFederationRuleMatch
 
@@ -694,7 +848,7 @@ module Anthropic
     getter updated_at : String
 
     @[JSON::Field(key: "updated_by_actor_id")]
-    getter updated_by_actor_id : String
+    getter updated_by_actor_id : String?
 
     @[JSON::Field(key: "workspace_id", emit_null: false)]
     getter workspace_id : String?
@@ -709,14 +863,9 @@ module Anthropic
 
     getter data : Array(BetaFederationRule)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # A workspace attached to a federation rule.
@@ -727,7 +876,7 @@ module Anthropic
     getter created_at : String
 
     @[JSON::Field(key: "created_by_actor_id")]
-    getter created_by_actor_id : String
+    getter created_by_actor_id : String?
 
     @[JSON::Field(key: "federation_rule_id")]
     getter federation_rule_id : String
@@ -739,6 +888,30 @@ module Anthropic
     getter workspace_id : String
 
     @[JSON::Field(key: "workspace_name")]
-    getter workspace_name : String
+    getter workspace_name : String?
+  end
+
+  # Paginated list of workspaces a federation rule is enabled for.
+  struct BetaFederationRuleWorkspaceListResponse
+    include JSON::Serializable
+
+    getter data : Array(BetaFederationRuleWorkspace)
+
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
+  end
+
+  # Confirmation returned when a federation rule is disabled for a workspace.
+  struct BetaDeletedFederationRuleWorkspace
+    include JSON::Serializable
+
+    @[JSON::Field(key: "federation_rule_id")]
+    getter federation_rule_id : String
+
+    getter type : String = "federation_rule_workspace_deleted"
+
+    @[JSON::Field(key: "workspace_id")]
+    getter workspace_id : String
   end
 end

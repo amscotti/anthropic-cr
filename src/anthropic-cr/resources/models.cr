@@ -14,12 +14,18 @@ module Anthropic
     #   puts "#{model.display_name} (#{model.id})"
     # end
     # ```
-    def list(after_id : String? = nil, before_id : String? = nil, limit : Int32 = 20) : ModelListResponse
+    def list(
+      after_id : String? = nil,
+      before_id : String? = nil,
+      limit : Int32 = 20,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : ModelListResponse
       params = {"limit" => limit.to_s}
       params["after_id"] = after_id if after_id
       params["before_id"] = before_id if before_id
 
-      response = @client.get("/v1/models", params.empty? ? nil : params)
+      response = @client.get("/v1/models", params.empty? ? nil : params, request_headers(betas, workspace_id))
       ModelListResponse.from_json(response.body)
     end
 
@@ -32,9 +38,18 @@ module Anthropic
     # model = client.models.retrieve("claude-sonnet-4-6")
     # puts model.display_name
     # ```
-    def retrieve(model_id : String) : ModelInfo
-      response = @client.get("/v1/models/#{model_id}")
+    def retrieve(
+      model_id : String,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : ModelInfo
+      response = @client.get("/v1/models/#{model_id}", nil, request_headers(betas, workspace_id))
       ModelInfo.from_json(response.body)
+    end
+
+    private def request_headers(betas : Array(String), workspace_id : String?) : Hash(String, String)?
+      base = betas.empty? ? nil : {"anthropic-beta" => betas.join(",")}
+      Anthropic.merge_workspace_header(base, workspace_id)
     end
   end
 
@@ -47,24 +62,28 @@ module Anthropic
       before_id : String? = nil,
       limit : Int32 = 20,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaModelListResponse
       params = {"limit" => limit.to_s}
       params["after_id"] = after_id if after_id
       params["before_id"] = before_id if before_id
 
-      response = @client.get("/v1/models?beta=true", params, beta_headers(betas))
+      response = @client.get("/v1/models?beta=true", params, beta_headers(betas, workspace_id))
       BetaModelListResponse.from_json(response.body)
     end
 
-    def retrieve(model_id : String, betas : Array(String) = [] of String) : ModelInfo
-      response = @client.get("/v1/models/#{model_id}?beta=true", nil, beta_headers(betas))
+    def retrieve(
+      model_id : String,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : ModelInfo
+      response = @client.get("/v1/models/#{model_id}?beta=true", nil, beta_headers(betas, workspace_id))
       ModelInfo.from_json(response.body)
     end
 
-    private def beta_headers(betas : Array(String)) : Hash(String, String)?
-      return nil if betas.empty?
-
-      {"anthropic-beta" => betas.join(",")}
+    private def beta_headers(betas : Array(String), workspace_id : String? = nil) : Hash(String, String)?
+      base = betas.empty? ? nil : {"anthropic-beta" => betas.join(",")}
+      Anthropic.merge_workspace_header(base, workspace_id)
     end
   end
 

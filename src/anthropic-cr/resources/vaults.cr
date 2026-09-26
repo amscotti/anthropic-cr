@@ -50,10 +50,13 @@ module Anthropic
       @credentials = BetaVaultsCredentials.new(@client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
 
     # Create a new Vault
@@ -61,12 +64,13 @@ module Anthropic
       display_name : String,
       metadata : Hash(String, String)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaVault
       params = {} of String => JSON::Any
       params["display_name"] = JSON::Any.new(display_name)
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
 
-      response = @client.post("/v1/vaults?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/vaults?beta=true", params, beta_headers(betas, workspace_id))
       BetaVault.from_json(response.body)
     end
 
@@ -74,8 +78,9 @@ module Anthropic
     def retrieve(
       vault_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaVault
-      response = @client.get("/v1/vaults/#{vault_id}?beta=true", nil, beta_headers(betas))
+      response = @client.get("/v1/vaults/#{vault_id}?beta=true", nil, beta_headers(betas, workspace_id))
       BetaVault.from_json(response.body)
     end
 
@@ -85,12 +90,13 @@ module Anthropic
       display_name : String? = nil,
       metadata : Hash(String, String)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaVault
       params = {} of String => JSON::Any
       params["display_name"] = JSON::Any.new(display_name) if display_name
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
 
-      response = @client.post("/v1/vaults/#{vault_id}?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/vaults/#{vault_id}?beta=true", params, beta_headers(betas, workspace_id))
       BetaVault.from_json(response.body)
     end
 
@@ -100,12 +106,13 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaVaultListResponse
       query = {"limit" => limit.to_s}
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/vaults?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/vaults?beta=true", query, beta_headers(betas, workspace_id))
       BetaVaultListResponse.from_json(response.body)
     end
 
@@ -113,8 +120,9 @@ module Anthropic
     def delete(
       vault_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaVaultDeleteResponse
-      response = @client.delete("/v1/vaults/#{vault_id}?beta=true", beta_headers(betas))
+      response = @client.delete("/v1/vaults/#{vault_id}?beta=true", beta_headers(betas, workspace_id))
       BetaVaultDeleteResponse.from_json(response.body)
     end
 
@@ -122,8 +130,9 @@ module Anthropic
     def archive(
       vault_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaVault
-      response = @client.post("/v1/vaults/#{vault_id}/archive?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/vaults/#{vault_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
       BetaVault.from_json(response.body)
     end
   end
@@ -133,10 +142,13 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged_betas = betas.dup
       merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged_betas.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
 
     # Create a Credential inside a Vault.
@@ -152,6 +164,7 @@ module Anthropic
       injection_location : InjectionLocation? = nil,
       networking : CredentialNetworking? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaCredential
       params = {} of String => JSON::Any
       params["auth"] = JSON.parse(auth.to_json)
@@ -160,7 +173,7 @@ module Anthropic
       params["injection_location"] = JSON.parse(injection_location.to_json) if injection_location
       params["networking"] = JSON.parse(networking.to_json) if networking
 
-      response = @client.post("/v1/vaults/#{vault_id}/credentials?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/vaults/#{vault_id}/credentials?beta=true", params, beta_headers(betas, workspace_id))
       BetaCredential.from_json(response.body)
     end
 
@@ -169,8 +182,9 @@ module Anthropic
       vault_id : String,
       credential_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaCredential
-      response = @client.get("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", nil, beta_headers(betas))
+      response = @client.get("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", nil, beta_headers(betas, workspace_id))
       BetaCredential.from_json(response.body)
     end
 
@@ -184,6 +198,7 @@ module Anthropic
       injection_location : InjectionLocation? = nil,
       networking : CredentialNetworking? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaCredential
       params = {} of String => JSON::Any
       params["auth"] = JSON.parse(auth.to_json) if auth
@@ -192,7 +207,7 @@ module Anthropic
       params["injection_location"] = JSON.parse(injection_location.to_json) if injection_location
       params["networking"] = JSON.parse(networking.to_json) if networking
 
-      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", params, beta_headers(betas, workspace_id))
       BetaCredential.from_json(response.body)
     end
 
@@ -203,12 +218,13 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaCredentialListResponse
       query = {"limit" => limit.to_s}
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/vaults/#{vault_id}/credentials?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/vaults/#{vault_id}/credentials?beta=true", query, beta_headers(betas, workspace_id))
       BetaCredentialListResponse.from_json(response.body)
     end
 
@@ -217,8 +233,9 @@ module Anthropic
       vault_id : String,
       credential_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaCredentialDeleteResponse
-      response = @client.delete("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", beta_headers(betas))
+      response = @client.delete("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", beta_headers(betas, workspace_id))
       BetaCredentialDeleteResponse.from_json(response.body)
     end
 
@@ -227,8 +244,9 @@ module Anthropic
       vault_id : String,
       credential_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaCredential
-      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}/archive?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
       BetaCredential.from_json(response.body)
     end
 
@@ -237,8 +255,9 @@ module Anthropic
       vault_id : String,
       credential_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaCredentialValidation
-      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}/mcp_oauth_validate?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}/mcp_oauth_validate?beta=true", nil, beta_headers(betas, workspace_id))
       BetaCredentialValidation.from_json(response.body)
     end
   end

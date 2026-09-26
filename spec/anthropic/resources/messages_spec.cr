@@ -1,6 +1,106 @@
 require "../../spec_helper"
 
+private struct ParsedCitySummary
+  include JSON::Serializable
+
+  getter city : String
+  getter temperature_c : Int32
+end
+
 describe Anthropic::Messages do
+  describe "#parse" do
+    it "returns a typed parsed message for typed output schemas" do
+      payload = %({"city":"Paris","temperature_c":21}).to_json
+      response = %({"id":"msg_parse_01","type":"message","role":"assistant","content":[{"type":"text","text":#{payload}}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":12}})
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", response)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      schema = Anthropic.output_schema(type: ParsedCitySummary, name: "city_summary")
+
+      parsed = client.messages.parse(
+        model: "claude-sonnet-4-6",
+        max_tokens: 256,
+        output_schema: schema,
+        messages: [{role: "user", content: "Summarize the weather"}]
+      )
+
+      parsed.text.should eq(%({"city":"Paris","temperature_c":21}))
+      parsed.parsed_output.city.should eq("Paris")
+      parsed.parsed_output.temperature_c.should eq(21)
+      parsed.message.should be_a(Anthropic::Message)
+      capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::STRUCTURED_OUTPUT_BETA)
+
+      body = JSON.parse(capture.body.not_nil!)
+      body["output_config"]["format"]["type"].as_s.should eq("json_schema")
+    end
+
+    it "returns raw JSON for untyped output schemas" do
+      payload = %({"city":"Paris"}).to_json
+      response = %({"id":"msg_parse_02","type":"message","role":"assistant","content":[{"type":"text","text":#{payload}}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":12}})
+      stub_and_capture(:post, "https://api.anthropic.com/v1/messages", response)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      schema = Anthropic.output_schema(
+        name: "city_summary",
+        schema: {"city" => Anthropic::Schema.string("City")},
+        required: ["city"]
+      )
+
+      parsed = client.messages.parse(
+        model: "claude-sonnet-4-6",
+        max_tokens: 256,
+        output_schema: schema,
+        messages: [{role: "user", content: "Name a city"}]
+      )
+
+      parsed.parsed_output["city"].as_s.should eq("Paris")
+    end
+
+    it "raises a structured output parse error when the response is invalid JSON" do
+      response = %({"id":"msg_parse_03","type":"message","role":"assistant","content":[{"type":"text","text":"not-json"}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":12}})
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages")
+        .to_return(body: response)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      schema = Anthropic.output_schema(type: ParsedCitySummary, name: "city_summary")
+
+      expect_raises(Anthropic::StructuredOutputParseError) do
+        client.messages.parse(
+          model: "claude-sonnet-4-6",
+          max_tokens: 256,
+          output_schema: schema,
+          messages: [{role: "user", content: "Summarize the weather"}]
+        )
+      end
+    end
+
+    it "keeps an explicit output_config format and effort" do
+      payload = %({"city":"Paris","temperature_c":21}).to_json
+      response = %({"id":"msg_parse_04","type":"message","role":"assistant","content":[{"type":"text","text":#{payload}}],"model":"claude-sonnet-4-6","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":12}})
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", response)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      schema = Anthropic.output_schema(type: ParsedCitySummary, name: "city_summary")
+      explicit = Anthropic::OutputConfig.new(
+        effort: "high",
+        format: Anthropic::OutputFormat.new(JSON.parse(%({"type":"object","title":"explicit"})))
+      )
+
+      parsed = client.messages.parse(
+        model: "claude-sonnet-4-6",
+        max_tokens: 256,
+        output_schema: schema,
+        output_config: explicit,
+        messages: [{role: "user", content: "Name a city"}]
+      )
+
+      parsed.parsed_output.city.should eq("Paris")
+      body = JSON.parse(capture.body.not_nil!)
+      body["output_config"]["effort"].as_s.should eq("high")
+      body["output_config"]["format"]["schema"]["title"].as_s.should eq("explicit")
+    end
+  end
+
   describe "#create" do
     it "sends correct request body" do
       capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)

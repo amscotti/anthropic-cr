@@ -28,14 +28,9 @@ module Anthropic
     include JSON::Serializable
     getter data : Array(BetaManagedAgentsMemoryStore)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool?
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   struct BetaManagedAgentsMemory
@@ -75,14 +70,9 @@ module Anthropic
     include JSON::Serializable
     getter data : Array(BetaManagedAgentsMemory)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool?
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   struct BetaManagedAgentsActor
@@ -129,13 +119,8 @@ module Anthropic
     include JSON::Serializable
     getter data : Array(BetaManagedAgentsMemoryVersion)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool?
-
-    @[JSON::Field(key: "first_id")]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id")]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 end

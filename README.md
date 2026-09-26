@@ -2,7 +2,7 @@
 
 An unofficial Anthropic API client for Crystal. Access Claude AI models with idiomatic Crystal code.
 
-**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, Managed Agents API (agents, environments, sessions, deployments, memory stores, vaults, dreams, MCP tunnels), tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, HTTP middleware, server-side and client-side refusal fallbacks (including `fallbacks: "default"` and object-form credit tokens), and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Also includes the Organization Admin API, alternate providers (AWS gateway, Google Cloud gateway, Vertex AI), legacy Completions, thinking display modes, and workspace headers. Tracks the September 2026 release (Python 1.4.0 / Ruby 1.69.0 / TypeScript 0.124.0) of the official SDKs. API design inspired by official Ruby SDK patterns.
+**Status:** Feature Complete — Full Messages API, Batches API, Models API, User Profiles API, Managed Agents API (agents, environments, sessions, deployments, memory stores, vaults, dreams, MCP tunnels), tool runner, web search, advisor tool, extended thinking (including adaptive and `xhigh` effort), structured outputs, citations (char, page, content block, web search result, search result location variants), prompt caching, Schema DSL, HTTP middleware, server-side and client-side refusal fallbacks (including `fallbacks: "default"` and object-form credit tokens), and Anthropic-hosted beta features such as Files API, Skills API, MCP servers, context management, encrypted compaction, session-wide token budgets, and skill-loading containers. Also includes the Organization Admin API, alternate providers (AWS gateway, Google Cloud gateway, Vertex AI), legacy Completions, thinking display modes, and workspace headers. Tracks the late-September 2026 release (Python 1.8.0 / Ruby 1.73.0 / TypeScript 0.128.0) of the official SDKs. API design inspired by official Ruby SDK patterns.
 
 > **Note:** A large portion of this library was written with the assistance of AI (Claude), including code, tests, and documentation.
 
@@ -68,6 +68,14 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 - ✅ **Legacy Completions** — `client.completions` (`/v1/complete`, streaming + non-streaming)
 - ✅ **Workspace Headers** — First-class `workspace_id:` on Messages, Sessions, Dreams, and Completions; `APIError#workspace_id` reads the response header
 - ✅ **Thinking Display Modes** — `ThinkingConfig#display` (`summarized` / `omitted` / `updates`, auto-attaching `thinking-display-updates-2026-08-18`)
+- ✅ **Explicit Compaction** — `SummarizeCompaction` on beta messages / count-tokens / batch requests (auto-attaching `compact-2026-09-04`); signed blocks with `signature` + `tool_changes`; `ToolRunner#compact_before_next_turn`
+- ✅ **Runner Tool Changes** — `ToolRunner#add_tools` / `#remove_tools` with `inline-tools-2026-09-15` auto-attached; local dispatch follows overrides immediately
+- ✅ **MCP Tool-List Pinning** — `MCPToolListingContent` blocks; `MCPToolset#tools` pins listings (auto-attaching `mcp-client-2026-09-15`)
+- ✅ **Input Transformations** — `Message#input_transformations` parsed from responses, with streaming `message_delta` replacement
+- ✅ **Web-Fetch URL Sources** — `url_sources` scoping (all/none/only/except) on all web-fetch tool versions
+- ✅ **User External Details** — `external_user_details` on profiles (auto-attaching `user-profiles-2026-09-04`)
+- ✅ **Data-Residency Geos** — `BetaAllowedInferenceGeo`, `"unrestricted"` residency, create/update configs
+- ✅ **Rate-Limit Groups** — Discriminated `group` union with model-group display names
 
 ## Installation
 
@@ -83,7 +91,7 @@ An unofficial Anthropic API client for Crystal. Access Claude AI models with idi
 
 ## Beta Status
 
-Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (September 2026 / 1.4.0 · 1.69.0 · 0.124.0).
+Beta-only surfaces in this Crystal SDK were re-checked against the current Python, Ruby, and TypeScript SDKs (late-September 2026 / 1.8.0 · 1.73.0 · 0.128.0).
 
 Still beta upstream:
 - Files API via `client.beta.files`
@@ -95,7 +103,7 @@ Still beta upstream:
 - **Dreams API** via `client.beta.dreams` (`managed-agents-2026-04-01` + `dreaming-2026-04-21`; gated research preview)
 - **MCP Tunnels API** via `client.beta.tunnels` (`mcp-tunnels-2026-06-22`; management needs WIF `workspace:manage_tunnels`)
 - **Managed Agents API** via `client.beta.agents`, `client.beta.vaults`, `client.beta.sessions`, `client.beta.deployments`, `client.beta.deployment_runs`, `client.beta.environments`, `client.beta.memory_stores`, and secure webhook verification (`managed-agents-2026-04-01`); agent model config supports `effort` / `speed`
-- Full release notes: [CHANGELOG.md](CHANGELOG.md) (`0.10.0`)
+- Full release notes: [CHANGELOG.md](CHANGELOG.md) (`0.11.0`)
 - **Memory Stores** (`agent-memory-2026-07-22`)
 - Context management (`context_management`)
 - MCP server definitions (`mcp_servers`)
@@ -510,6 +518,14 @@ final = runner.final_message
 puts final.text
 ```
 
+Mid-conversation, offer or withdraw tools and compact explicitly:
+
+```crystal
+runner.add_tools(notes_tool)   # tool_addition on the next request
+runner.remove_tools("legacy")  # tool_removal on the next request
+runner.compact_before_next_turn # server-side summary replaces the history
+```
+
 ### Skills API (Beta)
 
 Manage reusable skills that can be attached to containers for agentic workflows:
@@ -529,12 +545,12 @@ skill = client.beta.skills.create(
       content_type: "text/x-python"
     ),
   ],
-  display_title: "My Skill"
+  display_name: "My Skill"
 )
 
 # List skills
 skills = client.beta.skills.list(limit: 10)
-skills.data.each { |s| puts "#{s.display_title} (#{s.id})" }
+skills.data.each { |s| puts "#{s.display_name} (#{s.id})" }
 
 # Retrieve a skill
 skill = client.beta.skills.retrieve("skill_abc123")
@@ -552,11 +568,11 @@ client.beta.skills.versions.create(
 
 # List versions
 versions = client.beta.skills.versions.list(skill_id: skill.id)
-versions.data.each { |v| puts "Version #{v.version} from #{v.created_at}" }
+versions.data.each { |v| puts "Version #{v.name} (#{v.id}) from #{v.created_at}" }
 
 # Delete (must delete all versions first)
 versions.data.each do |v|
-  client.beta.skills.versions.delete(skill_id: skill.id, version: v.version)
+  client.beta.skills.versions.delete(skill_id: skill.id, version: v.id)
 end
 client.beta.skills.delete(skill.id)
 ```
@@ -755,6 +771,26 @@ end
 
 `nxt.call` returns an `APIResponse` for **every** status (4xx/5xx do not raise inside the chain); connection errors do raise. Middleware may call `nxt` multiple times to implement custom retry logic. **Limitation:** only buffered JSON requests run through the chain — streaming, raw downloads, and multipart uploads bypass middleware.
 
+### Scoped Options & HTTPS Proxy
+
+`with_options` returns a copy of the client with per-request overrides (the equivalent of upstream `requestOptions`), without mutating the original:
+
+```crystal
+scoped = client.with_options(
+  timeout: 30.seconds,
+  max_retries: 0,
+  extra_headers: {"X-Tenant" => "acme"},
+  api_key: "sk-ant-tenant", # per-tenant credentials, base_url, proxy, middleware
+)
+scoped.messages.create(model: "...", max_tokens: 64, messages: [...])
+```
+
+HTTPS destinations can tunnel through an explicit `proxy:` URL or the `HTTPS_PROXY` / `https_proxy` environment (with `NO_PROXY` / `no_proxy` bypass, including `*` wildcards and leading-dot domains). Proxy credentials in the URL become a `Proxy-Authorization` header. Only `http://` proxies are supported, and plain-HTTP base URLs bypass the proxy:
+
+```crystal
+client = Anthropic::Client.new(proxy: "http://user:pass@proxy.example.com:8080")
+```
+
 ## Model Constants
 
 ```crystal
@@ -853,6 +889,7 @@ See the [examples/](./examples/) directory for complete working examples:
 - `47_completions.cr` - Legacy Text Completions (`client.completions`)
 - `48_organization.cr` - Organization Admin API (`client.beta.organization`)
 - `49_providers.cr` - AWS / Google Cloud / Vertex provider clients
+- `50_compaction_and_tools.cr` - Explicit compaction + runner tool changes
 
 Run examples with:
 ```bash

@@ -32,21 +32,25 @@ module Anthropic
       @certificates = BetaTunnelCertificates.new(@client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged = betas.dup
       merged << MCP_TUNNELS_BETA unless merged.includes?(MCP_TUNNELS_BETA)
-      {"anthropic-beta" => merged.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged.join(",")}, workspace_id) || {} of String => String
     end
 
     # Create a tunnel. Not idempotent; allocates a fresh hostname.
     def create(
       display_name : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnel
       params = {} of String => JSON::Any
       params["display_name"] = JSON::Any.new(display_name) if display_name
 
-      response = @client.post("/v1/tunnels?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/tunnels?beta=true", params, beta_headers(betas, workspace_id))
       BetaTunnel.from_json(response.body)
     end
 
@@ -54,8 +58,9 @@ module Anthropic
     def retrieve(
       tunnel_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnel
-      response = @client.get("/v1/tunnels/#{tunnel_id}?beta=true", nil, beta_headers(betas))
+      response = @client.get("/v1/tunnels/#{tunnel_id}?beta=true", nil, beta_headers(betas, workspace_id))
       BetaTunnel.from_json(response.body)
     end
 
@@ -66,12 +71,13 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnelListResponse
       query = {"limit" => limit.to_s}
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/tunnels?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/tunnels?beta=true", query, beta_headers(betas, workspace_id))
       BetaTunnelListResponse.from_json(response.body)
     end
 
@@ -80,8 +86,9 @@ module Anthropic
     def archive(
       tunnel_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnel
-      response = @client.post("/v1/tunnels/#{tunnel_id}/archive?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/tunnels/#{tunnel_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
       BetaTunnel.from_json(response.body)
     end
 
@@ -90,8 +97,9 @@ module Anthropic
     def reveal_token(
       tunnel_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnelToken
-      response = @client.post("/v1/tunnels/#{tunnel_id}/reveal_token?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/tunnels/#{tunnel_id}/reveal_token?beta=true", nil, beta_headers(betas, workspace_id))
       BetaTunnelToken.from_json(response.body)
     end
 
@@ -101,11 +109,12 @@ module Anthropic
       tunnel_id : String,
       reason : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnelToken
       params = {} of String => JSON::Any
       params["reason"] = JSON::Any.new(reason) if reason
 
-      response = @client.post("/v1/tunnels/#{tunnel_id}/rotate_token?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/tunnels/#{tunnel_id}/rotate_token?beta=true", params, beta_headers(betas, workspace_id))
       BetaTunnelToken.from_json(response.body)
     end
   end
@@ -120,10 +129,13 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged = betas.dup
       merged << MCP_TUNNELS_BETA unless merged.includes?(MCP_TUNNELS_BETA)
-      {"anthropic-beta" => merged.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged.join(",")}, workspace_id) || {} of String => String
     end
 
     # Register a public CA certificate on a tunnel.
@@ -135,13 +147,14 @@ module Anthropic
       tunnel_id : String,
       ca_certificate_pem : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnelCertificate
       params = {"ca_certificate_pem" => ca_certificate_pem}
 
       response = @client.post(
         "/v1/tunnels/#{tunnel_id}/certificates?beta=true",
         params,
-        beta_headers(betas)
+        beta_headers(betas, workspace_id)
       )
       BetaTunnelCertificate.from_json(response.body)
     end
@@ -151,11 +164,12 @@ module Anthropic
       tunnel_id : String,
       certificate_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnelCertificate
       response = @client.get(
         "/v1/tunnels/#{tunnel_id}/certificates/#{certificate_id}?beta=true",
         nil,
-        beta_headers(betas)
+        beta_headers(betas, workspace_id)
       )
       BetaTunnelCertificate.from_json(response.body)
     end
@@ -167,6 +181,7 @@ module Anthropic
       limit : Int32 = 20,
       page : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnelCertificateListResponse
       query = {"limit" => limit.to_s}
       query["include_archived"] = include_archived.to_s if include_archived != nil
@@ -175,7 +190,7 @@ module Anthropic
       response = @client.get(
         "/v1/tunnels/#{tunnel_id}/certificates?beta=true",
         query,
-        beta_headers(betas)
+        beta_headers(betas, workspace_id)
       )
       BetaTunnelCertificateListResponse.from_json(response.body)
     end
@@ -185,11 +200,12 @@ module Anthropic
       tunnel_id : String,
       certificate_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaTunnelCertificate
       response = @client.post(
         "/v1/tunnels/#{tunnel_id}/certificates/#{certificate_id}/archive?beta=true",
         nil,
-        beta_headers(betas)
+        beta_headers(betas, workspace_id)
       )
       BetaTunnelCertificate.from_json(response.body)
     end

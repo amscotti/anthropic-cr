@@ -362,7 +362,34 @@ module Anthropic
     end
   end
 
-  # Beta message create params - extends MessageCreateParams with output_schema
+  # Request a server-side compaction summary instead of a sampled reply.
+  #
+  # Sending `compaction` compacts the whole conversation and returns a
+  # signed `compaction` block, alone, that a later request sends back first
+  # in `messages` in place of the messages it summarizes. There is no
+  # trigger and no pause flag: sending the parameter compacts, and nothing
+  # is sampled after the block. Requires the `compact-2026-09-04` beta
+  # (see `Anthropic::COMPACT_2026_09_04_BETA`); the beta Messages methods
+  # attach it automatically when `compaction` is set.
+  struct SummarizeCompaction
+    include JSON::Serializable
+
+    getter type : String = "summarize"
+
+    # Replaces the server's summarization prompt for this request. Empty
+    # or whitespace-only values count as absent.
+    @[JSON::Field(emit_null: false)]
+    getter instructions : String?
+
+    def initialize(@instructions : String? = nil)
+      @type = "summarize"
+    end
+  end
+
+  # Compaction request union (currently only the summarize variant).
+  alias CompactionParam = SummarizeCompaction
+
+  # Beta message create params - extends MessageCreateParams.
   struct BetaMessageCreateParams
     include JSON::Serializable
 
@@ -443,6 +470,9 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter diagnostics : DiagnosticsParam?
 
+    @[JSON::Field(emit_null: false)]
+    getter compaction : CompactionParam?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
@@ -469,6 +499,7 @@ module Anthropic
       @fallbacks : FallbacksParam? = nil,
       @fallback_credit_token : FallbackCreditToken? = nil,
       @diagnostics : DiagnosticsParam? = nil,
+      @compaction : CompactionParam? = nil,
     )
     end
   end
@@ -519,6 +550,9 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter diagnostics : DiagnosticsParam?
 
+    @[JSON::Field(emit_null: false)]
+    getter compaction : CompactionParam?
+
     def initialize(
       @model : String,
       @messages : Array(MessageParam),
@@ -535,6 +569,7 @@ module Anthropic
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
       @diagnostics : DiagnosticsParam? = nil,
+      @compaction : CompactionParam? = nil,
     )
     end
   end
