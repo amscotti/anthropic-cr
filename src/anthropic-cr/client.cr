@@ -207,17 +207,15 @@ module Anthropic
       path = apply_default_query(path)
 
       with_http_client(uri) do |client|
-        begin
-          body_str = body.nil? ? "{}" : body.to_json
-          client.post(path, headers: headers(extra_headers, method: "POST"), body: body_str) do |response|
-            handle_error(response) unless response.success?
-            yield response
-          end
-        rescue ex : IO::TimeoutError
-          raise APITimeoutError.new("Stream read timed out", cause: ex)
-        rescue ex : IO::Error | Socket::Error | OpenSSL::Error
-          raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
+        body_str = body.nil? ? "{}" : body.to_json
+        client.post(path, headers: headers(extra_headers, method: "POST"), body: body_str) do |response|
+          handle_error(response) unless response.success?
+          yield response
         end
+      rescue ex : IO::TimeoutError
+        raise APITimeoutError.new("Stream read timed out", cause: ex)
+      rescue ex : IO::Error | Socket::Error | OpenSSL::Error
+        raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
       end
     end
 
@@ -226,16 +224,14 @@ module Anthropic
       path = apply_default_query(path)
 
       with_http_client(uri) do |client|
-        begin
-          client.get(path, headers: headers(extra_headers, method: "GET")) do |response|
-            handle_error(response) unless response.success?
-            yield response
-          end
-        rescue ex : IO::TimeoutError
-          raise APITimeoutError.new("Stream read timed out", cause: ex)
-        rescue ex : IO::Error | Socket::Error | OpenSSL::Error
-          raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
+        client.get(path, headers: headers(extra_headers, method: "GET")) do |response|
+          handle_error(response) unless response.success?
+          yield response
         end
+      rescue ex : IO::TimeoutError
+        raise APITimeoutError.new("Stream read timed out", cause: ex)
+      rescue ex : IO::Error | Socket::Error | OpenSSL::Error
+        raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
       end
     end
 

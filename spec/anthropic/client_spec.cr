@@ -25,21 +25,19 @@ private def with_fake_proxy(& : Int32, Channel(String) -> _)
   port = server.local_address.port
   received = Channel(String).new
   spawn do
-    begin
-      sock = server.accept
-      lines = [] of String
-      while (line = sock.gets) && line != "\r\n" && !line.empty?
-        lines << line
-      end
-      sock << "HTTP/1.1 200 Connection established\r\n\r\n"
-      sock.flush
-      received.send(lines.join)
-    rescue ex
-      received.send("FIBER-ERROR: #{ex.message}")
-    ensure
-      sock.close if sock
-      server.close
+    sock = server.accept
+    lines = [] of String
+    while (line = sock.gets) && line != "\r\n" && !line.empty?
+      lines << line
     end
+    sock << "HTTP/1.1 200 Connection established\r\n\r\n"
+    sock.flush
+    received.send(lines.join)
+  rescue ex
+    received.send("FIBER-ERROR: #{ex.message}")
+  ensure
+    sock.close if sock
+    server.close
   end
 
   prior_allow_net_connect = WebMock.allows_net_connect?
