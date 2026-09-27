@@ -1,3 +1,9 @@
+require "base64"
+require "http/client"
+require "openssl"
+require "socket"
+require "uri"
+
 module Anthropic
   class Client
     DEFAULT_BASE_URL      = "https://api.anthropic.com"
@@ -6,36 +12,120 @@ module Anthropic
     DEFAULT_INITIAL_DELAY = 0.5 # seconds
     DEFAULT_MAX_DELAY     = 8.0 # seconds
 
-    @api_key : String
+    @api_key : String?
+    @auth_token : String?
     @base_url : String
     @timeout : Time::Span
     @max_retries : Int32
     @initial_retry_delay : Float64
     @max_retry_delay : Float64
     @default_headers : Hash(String, String)
+    @default_query : Hash(String, String)
     @middleware : Array(Middleware)
+    @proxy : String?
 
     def initialize(
       api_key : String? = nil,
-      base_url : String = DEFAULT_BASE_URL,
+      auth_token : String? = nil,
+      base_url : String? = nil,
       timeout : Time::Span = 600.seconds,
       max_retries : Int32 = DEFAULT_MAX_RETRIES,
       initial_retry_delay : Float64 = DEFAULT_INITIAL_DELAY,
       max_retry_delay : Float64 = DEFAULT_MAX_DELAY,
       default_headers : Hash(String, String) = {} of String => String,
-      middleware : Array = [] of Middleware,
+      default_query : Hash(String, String) = {} of String => String,
+      middleware : Array(Middleware) = [] of Middleware,
+      webhook_key : String? = nil,
+      proxy : String? = nil,
     )
-      @api_key = api_key || ENV["ANTHROPIC_API_KEY"]? || raise ArgumentError.new(
-        "API key required. Set ANTHROPIC_API_KEY environment variable or pass api_key parameter."
-      )
-      @base_url = base_url.rstrip('/')
+      # An explicit credential argument disables env-var lookup, matching
+      # the Python and Ruby SDKs: pass one credential and no other source
+      # is consulted. (TypeScript falls back per field instead.)
+      if api_key || auth_token
+        @api_key = api_key
+        @auth_token = auth_token
+      else
+        @api_key = ENV["ANTHROPIC_API_KEY"]?
+        @auth_token = ENV["ANTHROPIC_AUTH_TOKEN"]?
+      end
+      unless @api_key || @auth_token
+        raise ArgumentError.new(
+          "API key or auth token required. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variables, or pass api_key/auth_token parameters."
+        )
+      end
+      @base_url = (base_url || ENV["ANTHROPIC_BASE_URL"]? || DEFAULT_BASE_URL).rstrip('/')
       @timeout = timeout
       @max_retries = max_retries
       @initial_retry_delay = initial_retry_delay
       @max_retry_delay = max_retry_delay
-      @default_headers = default_headers
+      @default_headers = default_headers.dup
+      @default_query = default_query.dup
+      # Normalize to Array(Middleware): argument matching accepts
+      # Array(Subtype) but ivar assignment is invariant.
       @middleware = middleware.map(&.as(Middleware))
+      @webhook_key = webhook_key || ENV["ANTHROPIC_WEBHOOK_SIGNING_KEY"]?
+      @proxy = proxy
     end
+
+    # Webhook signing key for `BetaWebhooks#unwrap`. Explicit argument wins,
+    # falling back to `ANTHROPIC_WEBHOOK_SIGNING_KEY`.
+    getter webhook_key : String?
+
+    # Returns a copy of this client with per-request overrides applied.
+    #
+    # Upstream SDKs take `requestOptions` on every call; the Crystal
+    # equivalent is a scoped copy, so every resource through it picks the
+    # overrides up. `middleware` replaces the chain; credentials, base
+    # URL, and proxy override the copy's connection settings (handy for
+    # per-tenant scoping):
+    #
+    # ```
+    # scoped = client.with_options(timeout: 30.seconds, max_retries: 0)
+    # scoped.messages.create(model: "...", max_tokens: 64, messages: [...])
+    # ```
+    def with_options(
+      timeout : Time::Span? = nil,
+      max_retries : Int32? = nil,
+      extra_headers : Hash(String, String)? = nil,
+      extra_query : Hash(String, String)? = nil,
+      middleware : Array(Middleware)? = nil,
+      api_key : String? = nil,
+      auth_token : String? = nil,
+      base_url : String? = nil,
+      proxy : String? = nil,
+    ) : Client
+      copy = dup
+      copy.middleware = middleware ? middleware.map(&.as(Middleware)) : @middleware.dup
+      copy.timeout = timeout if timeout
+      copy.max_retries = max_retries if max_retries
+      copy.default_headers = @default_headers.merge(extra_headers || {} of String => String)
+      copy.default_query = @default_query.merge(extra_query || {} of String => String)
+      copy.api_key = api_key if api_key
+      copy.auth_token = auth_token if auth_token
+      copy.base_url = base_url.rstrip('/') if base_url
+      copy.proxy = proxy if proxy
+      copy
+    end
+
+    # Returns a copy of this client with *middleware* appended after the
+    # client's existing middleware (which stays outermost).
+    #
+    # ```
+    # scoped = client.with_middleware(LoggingMiddleware.new)
+    # ```
+    def with_middleware(*middleware : Middleware) : Client
+      with_options(middleware: @middleware + middleware.to_a)
+    end
+
+    protected setter timeout : Time::Span
+    protected setter max_retries : Int32
+    protected setter default_headers : Hash(String, String)
+    protected setter default_query : Hash(String, String)
+    protected setter middleware : Array(Middleware)
+    protected setter api_key : String?
+    protected setter auth_token : String?
+    protected setter base_url : String
+    protected setter proxy : String?
 
     # The configured middleware chain (outermost first).
     def middleware : Array(Middleware)
@@ -49,6 +139,24 @@ module Anthropic
 
     def models : Models
       Models.new(self)
+    end
+
+    # Files API for uploading and managing files.
+    #
+    # ```
+    # file = client.files.upload(Path["document.pdf"])
+    # ```
+    def files : Files
+      Files.new(self)
+    end
+
+    # Skills API for managing skills.
+    #
+    # ```
+    # skills = client.skills.list
+    # ```
+    def skills : Skills
+      Skills.new(self)
     end
 
     # [Legacy] Text Completions API.
@@ -80,13 +188,7 @@ module Anthropic
     alias QueryParams = Hash(String, String) | Hash(String, String | Array(String))
 
     def get(path : String, params : QueryParams? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
-      full_path = if params && !params.empty?
-                    separator = path.includes?('?') ? '&' : '?'
-                    "#{path}#{separator}#{encode_query_params(params)}"
-                  else
-                    path
-                  end
-      request("GET", full_path, nil, extra_headers)
+      request("GET", path, nil, extra_headers, query: params)
     end
 
     # POST with any JSON::Serializable body
@@ -102,54 +204,44 @@ module Anthropic
     # POST with streaming response
     def post_stream(path : String, body, extra_headers : Hash(String, String)? = nil, &)
       uri = URI.parse(@base_url)
+      path = apply_default_query(path)
 
-      HTTP::Client.new(uri) do |client|
-        client.connect_timeout = @timeout
-        client.read_timeout = @timeout
-
-        begin
-          body_str = body.nil? ? "{}" : body.to_json
-          client.post(path, headers: headers(extra_headers, method: "POST"), body: body_str) do |response|
-            handle_error(response) unless response.success?
-            yield response
-          end
-        rescue ex : IO::TimeoutError
-          raise APITimeoutError.new("Stream read timed out", cause: ex)
-        rescue ex : IO::Error | Socket::Error
-          raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
+      with_http_client(uri) do |client|
+        body_str = body.nil? ? "{}" : body.to_json
+        client.post(path, headers: headers(extra_headers, method: "POST"), body: body_str) do |response|
+          handle_error(response) unless response.success?
+          yield response
         end
+      rescue ex : IO::TimeoutError
+        raise APITimeoutError.new("Stream read timed out", cause: ex)
+      rescue ex : IO::Error | Socket::Error | OpenSSL::Error
+        raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
       end
     end
 
     def get_stream(path : String, extra_headers : Hash(String, String)? = nil, &)
       uri = URI.parse(@base_url)
+      path = apply_default_query(path)
 
-      HTTP::Client.new(uri) do |client|
-        client.connect_timeout = @timeout
-        client.read_timeout = @timeout
-
-        begin
-          client.get(path, headers: headers(extra_headers, method: "GET")) do |response|
-            handle_error(response) unless response.success?
-            yield response
-          end
-        rescue ex : IO::TimeoutError
-          raise APITimeoutError.new("Stream read timed out", cause: ex)
-        rescue ex : IO::Error | Socket::Error
-          raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
+      with_http_client(uri) do |client|
+        client.get(path, headers: headers(extra_headers, method: "GET")) do |response|
+          handle_error(response) unless response.success?
+          yield response
         end
+      rescue ex : IO::TimeoutError
+        raise APITimeoutError.new("Stream read timed out", cause: ex)
+      rescue ex : IO::Error | Socket::Error | OpenSSL::Error
+        raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
       end
     end
 
     # GET request returning raw response body (for binary downloads)
     def get_raw(path : String, extra_headers : Hash(String, String)? = nil) : IO::Memory
       uri = URI.parse(@base_url)
+      path = apply_default_query(path)
       io = IO::Memory.new
 
-      HTTP::Client.new(uri) do |client|
-        client.connect_timeout = @timeout
-        client.read_timeout = @timeout
-
+      with_http_client(uri) do |client|
         # Don't set content-type for downloads
         hdrs = headers(extra_headers, content_type: nil, method: "GET")
 
@@ -160,6 +252,10 @@ module Anthropic
       end
 
       io
+    rescue ex : IO::TimeoutError
+      raise APITimeoutError.new("Request timed out", cause: ex)
+    rescue ex : IO::Error | Socket::Error | OpenSSL::Error
+      raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex)
     end
 
     # POST multipart form data (for file uploads)
@@ -169,16 +265,19 @@ module Anthropic
       filename : String,
       content_type : String = "application/octet-stream",
       extra_headers : Hash(String, String)? = nil,
+      form_fields : Hash(String, String)? = nil,
     ) : HTTP::Client::Response
       uri = URI.parse(@base_url)
+      path = apply_default_query(path)
 
-      HTTP::Client.new(uri) do |client|
-        client.connect_timeout = @timeout
-        client.read_timeout = @timeout
-
+      with_http_client(uri) do |client|
         # Build multipart body using Crystal's standard FormData builder
         body_io = IO::Memory.new
         builder = HTTP::FormData::Builder.new(body_io)
+
+        form_fields.try &.each do |name, value|
+          builder.field(name, value)
+        end
 
         metadata = HTTP::FormData::FileMetadata.new(filename: filename)
         file_headers = HTTP::Headers{"Content-Type" => content_type}
@@ -194,6 +293,10 @@ module Anthropic
       end
 
       raise APIError.new("Request failed")
+    rescue ex : IO::TimeoutError
+      raise APITimeoutError.new("Request timed out", cause: ex)
+    rescue ex : IO::Error | Socket::Error | OpenSSL::Error
+      raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex)
     end
 
     # POST multipart form data with multiple files and optional form fields
@@ -204,11 +307,9 @@ module Anthropic
       extra_headers : Hash(String, String)? = nil,
     ) : HTTP::Client::Response
       uri = URI.parse(@base_url)
+      path = apply_default_query(path)
 
-      HTTP::Client.new(uri) do |client|
-        client.connect_timeout = @timeout
-        client.read_timeout = @timeout
-
+      with_http_client(uri) do |client|
         # Build multipart body using Crystal's FormData builder
         body_io = IO::Memory.new
         builder = HTTP::FormData::Builder.new(body_io)
@@ -237,10 +338,15 @@ module Anthropic
       end
 
       raise APIError.new("Request failed")
+    rescue ex : IO::TimeoutError
+      raise APITimeoutError.new("Request timed out", cause: ex)
+    rescue ex : IO::Error | Socket::Error | OpenSSL::Error
+      raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex)
     end
 
-    private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
+    private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil, query : QueryParams? = nil) : HTTP::Client::Response
       uri = URI.parse(@base_url)
+      path = append_query_params(path, merge_query(query))
       req_headers = headers(extra_headers, method: method)
 
       # Fast path: no middleware — send directly with the existing retry loop.
@@ -284,10 +390,7 @@ module Anthropic
       response = nil
       (@max_retries + 1).times do |attempt|
         begin
-          HTTP::Client.new(uri) do |client|
-            client.connect_timeout = @timeout
-            client.read_timeout = @timeout
-
+          with_http_client(uri) do |client|
             response = case method
                        when "GET"    then client.get(path, headers: req_headers)
                        when "POST"   then client.post(path, headers: req_headers, body: body)
@@ -302,9 +405,12 @@ module Anthropic
             end
           end
         rescue ex : IO::TimeoutError
-          raise APITimeoutError.new("Request timed out") if attempt >= @max_retries
-        rescue ex : IO::Error | Socket::Error
+          raise APITimeoutError.new("Request timed out", cause: ex) if attempt >= @max_retries
+        rescue ex : IO::Error | Socket::Error | OpenSSL::Error
           raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex) if attempt >= @max_retries
+        rescue ex : APITimeoutError | APIConnectionError
+          # Typed failures from the proxy path retry like socket errors.
+          raise ex if attempt >= @max_retries
         end
 
         # Use server-provided retry delay if available
@@ -340,10 +446,7 @@ module Anthropic
     # The terminal HTTP send: performs one attempt and returns an APIResponse
     # for every status. Connection-level errors raise.
     private def send_terminal(api_request : APIRequest, uri : URI) : APIResponse
-      HTTP::Client.new(uri) do |client|
-        client.connect_timeout = @timeout
-        client.read_timeout = @timeout
-
+      with_http_client(uri) do |client|
         http_response = case api_request.method
                         when "GET"    then client.get(api_request.path, headers: api_request.headers)
                         when "POST"   then client.post(api_request.path, headers: api_request.headers, body: api_request.body)
@@ -354,8 +457,8 @@ module Anthropic
         APIResponse.new(http_response.status_code, http_response.headers, http_response.body, api_request)
       end
     rescue ex : IO::TimeoutError
-      raise APITimeoutError.new("Request timed out")
-    rescue ex : IO::Error | Socket::Error
+      raise APITimeoutError.new("Request timed out", cause: ex)
+    rescue ex : IO::Error | Socket::Error | OpenSSL::Error
       raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex)
     end
 
@@ -384,12 +487,153 @@ module Anthropic
       query.to_s
     end
 
+    # Merge default query params under per-request params: an explicit
+    # per-request key wins over the default instead of sending both.
+    private def merge_query(query : QueryParams?) : Hash(String, String | Array(String))
+      merged = {} of String => String | Array(String)
+      @default_query.each { |key, value| merged[key] = value }
+      if query
+        query.each { |key, value| merged[key] = value }
+      end
+      merged
+    end
+
+    private def append_query_params(path : String, query : Hash(String, String | Array(String))) : String
+      return path if query.empty?
+
+      separator = path.includes?('?') ? '&' : '?'
+      "#{path}#{separator}#{encode_query_params(query)}"
+    end
+
+    # Append the client's default query params to a request path.
+    private def apply_default_query(path : String) : String
+      append_query_params(path, merge_query(nil))
+    end
+
+    # Yields an HTTP client for *uri*, tunneling through the configured
+    # proxy when one applies. Explicit `proxy:` wins, otherwise the
+    # `HTTPS_PROXY`/`https_proxy` environment applies unless
+    # `NO_PROXY`/`no_proxy` matches the host. Only HTTPS destinations
+    # tunnel (plain-HTTP bases bypass the proxy); credentials in the
+    # proxy URL become a `Proxy-Authorization` header. Every HTTP path
+    # in this client goes through here so timeouts stay centralized.
+    # Socket errors propagate unwrapped so each caller's retry handling
+    # applies; proxy/TLS negotiation failures raise `APIConnectionError`.
+    private def with_http_client(uri : URI, & : HTTP::Client -> T) : T forall T
+      proxy_uri = proxy_for_uri(uri)
+
+      unless proxy_uri
+        return HTTP::Client.new(uri) do |client|
+          client.connect_timeout = @timeout
+          client.read_timeout = @timeout
+          yield client
+        end
+      end
+
+      socket = open_proxy_tunnel(uri, proxy_uri)
+      begin
+        tls = OpenSSL::SSL::Socket::Client.new(socket, sync_close: true, hostname: uri.host)
+        client = HTTP::Client.new(tls, uri.host || "", uri.port || 443)
+        client.connect_timeout = @timeout
+        client.read_timeout = @timeout
+        begin
+          yield client
+        ensure
+          client.close
+        end
+      rescue ex : OpenSSL::Error
+        raise APIConnectionError.new("Proxy TLS to #{uri.host} failed: #{ex.message}", cause: ex)
+      ensure
+        socket.close unless socket.closed?
+      end
+    end
+
+    # Open a TCP connection to *proxy_uri* and issue the `CONNECT`
+    # handshake for *uri*. Returns the tunneled socket with the proxy's
+    # response headers consumed, ready for the TLS handshake.
+    private def open_proxy_tunnel(uri : URI, proxy_uri : URI) : TCPSocket
+      host = proxy_uri.host
+      if host.nil? || host.empty?
+        raise ArgumentError.new("Invalid proxy URL (missing host): #{proxy_uri}")
+      end
+      port = proxy_uri.port || (proxy_uri.scheme == "https" ? 443 : 80)
+
+      socket = TCPSocket.new(host, port, connect_timeout: @timeout)
+      socket.read_timeout = @timeout
+
+      target = "#{uri.host}:#{uri.port || 443}"
+      socket << "CONNECT #{target} HTTP/1.1\r\n"
+      socket << "Host: #{target}\r\n"
+      if user = proxy_uri.user
+        socket << "Proxy-Authorization: Basic #{Base64.strict_encode("#{user}:#{proxy_uri.password}")}\r\n"
+      end
+      socket << "\r\n"
+      socket.flush
+
+      status = socket.gets
+      if status.nil? || !status.matches?(/\AHTTP\/\d(?:\.\d)? 200\b/)
+        socket.close
+        raise APIConnectionError.new("Proxy CONNECT to #{target} failed: #{status.try(&.strip) || "no response"}")
+      end
+      while (line = socket.gets) && line != "\r\n" && !line.empty?
+      end
+
+      socket
+    end
+
+    private def proxy_for_uri(uri : URI) : URI?
+      return nil unless uri.scheme == "https"
+      return nil if proxy_bypassed?(uri.host)
+
+      raw = @proxy || ENV["HTTPS_PROXY"]? || ENV["https_proxy"]?
+      return nil if raw.nil? || raw.empty?
+
+      normalized = raw.includes?("://") ? raw : "http://#{raw}"
+      parsed = URI.parse(normalized)
+      unless parsed.scheme == "http"
+        raise ArgumentError.new("Only http:// proxies are supported (got #{parsed.scheme || "no scheme"}): #{raw}")
+      end
+      parsed
+    rescue URI::Error
+      raise ArgumentError.new("Invalid proxy URL: #{raw}")
+    end
+
+    private def proxy_bypassed?(host : String?) : Bool
+      return false unless host
+
+      no_proxy = ENV["NO_PROXY"]? || ENV["no_proxy"]?
+      return false unless no_proxy
+
+      downcased = host.downcase
+      no_proxy.split(",").any? do |entry|
+        pattern = entry.strip.downcase
+        next false if pattern.empty?
+        next true if pattern == "*"
+        # Leading-dot entries (".example.com") match the domain itself
+        # as well as subdomains.
+        pattern = pattern.lstrip('.')
+        next false if pattern.empty?
+        # Strip an optional :port without mangling IPv6 literals.
+        if bracketed = pattern.match(/\A\[(.+)\](?::\d+)?\z/)
+          pattern = bracketed[1]
+        elsif pattern.count(":") == 1
+          pattern = pattern.sub(/:\d+\z/, "")
+        end
+        downcased == pattern || downcased.ends_with?(".#{pattern}")
+      end
+    end
+
     private def headers(extra_headers : Hash(String, String)? = nil, content_type : String? = "application/json", method : String? = nil) : HTTP::Headers
       HTTP::Headers{
-        "x-api-key"         => @api_key,
         "anthropic-version" => API_VERSION,
         "user-agent"        => "anthropic-crystal/#{VERSION}",
       }.tap do |hdrs|
+        if api_key = @api_key
+          hdrs["x-api-key"] = api_key
+        elsif auth_token = @auth_token
+          hdrs["authorization"] = "Bearer #{auth_token}"
+        end
+
         hdrs["content-type"] = content_type if content_type
         @default_headers.each { |key, value| hdrs[key] = value }
         extra_headers.try &.each { |key, value| hdrs[key] = value }
@@ -504,6 +748,10 @@ module Anthropic
 
   # Request header selecting the Workspace a request runs under.
   WORKSPACE_ID_HEADER = "anthropic-workspace-id"
+
+  # Request header identifying the worker polling a self-hosted
+  # environment work queue.
+  WORKER_ID_HEADER = "anthropic-worker-id"
 
   # Merge an `anthropic-workspace-id` request header into an existing
   # header hash. Centralized so every resource sets the header the same

@@ -11,6 +11,12 @@ module Anthropic
     def initialize(@client : Client)
     end
 
+    # Parse a webhook payload without verifying its signature. Prefer
+    # `unwrap` unless you have already verified the signature yourself.
+    def parse_unverified(payload : String) : UnwrapWebhookEvent
+      UnwrapWebhookEvent.from_json(payload)
+    end
+
     # Unwrap and verify a webhook payload
     #
     # Verification follows Standard Webhooks: HMAC-SHA256 over
@@ -31,10 +37,10 @@ module Anthropic
       headers : Hash(String, String) | HTTP::Headers,
       key : String? = nil,
     ) : UnwrapWebhookEvent
-      webhook_key = key || ENV["ANTHROPIC_WEBHOOK_SIGNING_KEY"]?
+      webhook_key = key || @client.webhook_key
 
       if webhook_key.nil?
-        raise ArgumentError.new("Cannot verify a webhook without a key. Set ANTHROPIC_WEBHOOK_SIGNING_KEY or pass it as an argument")
+        raise ArgumentError.new("Cannot verify a webhook without a key. Set ANTHROPIC_WEBHOOK_SIGNING_KEY, pass webhook_key to the client, or pass it as an argument")
       end
 
       # Strip standard Svix/Webhook prefixes if present

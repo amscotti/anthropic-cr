@@ -576,13 +576,13 @@ end
 
 describe Anthropic::WebSearchResult do
   it "parses from JSON" do
-    json = %({"url":"https://example.com","title":"Example","snippet":"A snippet","page_age":"2024-01-15"})
+    json = %({"url":"https://example.com","title":"Example","page_age":"2024-01-15","type":"web_search_result"})
     result = Anthropic::WebSearchResult.from_json(json)
 
     result.url.should eq("https://example.com")
     result.title.should eq("Example")
-    result.snippet.should eq("A snippet")
     result.page_age.should eq("2024-01-15")
+    result.type.should eq("web_search_result")
   end
 
   it "handles optional fields" do
@@ -591,8 +591,14 @@ describe Anthropic::WebSearchResult do
 
     result.url.should eq("https://example.com")
     result.title.should eq("Example")
-    result.snippet.should be_nil
     result.encrypted_content.should be_nil
+  end
+
+  it "omits nulls when serializing" do
+    parsed = JSON.parse(Anthropic::WebSearchResult.new(url: "https://example.com", title: "Example").to_json)
+    parsed.as_h.has_key?("encrypted_content").should be_false
+    parsed.as_h.has_key?("page_age").should be_false
+    parsed.as_h.has_key?("snippet").should be_false
   end
 end
 
@@ -628,14 +634,28 @@ end
 
 describe Anthropic::WebSearchToolResultContent do
   it "parses from JSON" do
-    json = %({"type":"web_search_tool_result","tool_use_id":"stu_123","content":[{"url":"https://example.com","title":"Result"}]})
+    json = %({"type":"web_search_tool_result","tool_use_id":"stu_123","caller":{"type":"direct"},"content":[{"url":"https://example.com","title":"Result","type":"web_search_result"}]})
     content = Anthropic::WebSearchToolResultContent.from_json(json)
 
     content.type.should eq("web_search_tool_result")
     content.tool_use_id.should eq("stu_123")
-    content.content.size.should eq(1)
-    content.content[0].url.should eq("https://example.com")
-    content.content[0].title.should eq("Result")
+    content.caller.should eq("direct")
+    results = content.results.not_nil!
+    results.size.should eq(1)
+    results[0].url.should eq("https://example.com")
+    results[0].title.should eq("Result")
+    content.result_error.should be_nil
+  end
+
+  it "parses error payloads and server callers" do
+    json = %({"type":"web_search_tool_result","tool_use_id":"stu_124","caller":{"type":"code_execution_20260120","tool_id":"stu_ce_1"},"content":{"type":"web_search_tool_result_error","error_code":"max_uses_exceeded"}})
+    content = Anthropic::WebSearchToolResultContent.from_json(json)
+
+    content.caller.should eq("code_execution_20260120")
+    content.caller_tool_id.should eq("stu_ce_1")
+    content.results.should be_nil
+    error = content.result_error.not_nil!
+    error.error_code.should eq(Anthropic::WebSearchToolResultErrorCode::MAX_USES_EXCEEDED)
   end
 end
 

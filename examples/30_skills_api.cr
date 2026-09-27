@@ -71,7 +71,7 @@ begin
   skill_md_io = File.open(skill_md_path)
   greet_py_io = File.open(greet_py_path)
 
-  # Add timestamp to avoid duplicate display_title errors
+  # Add timestamp to avoid duplicate display_name errors
   timestamp = Time.utc.to_s("%Y%m%d%H%M%S")
 
   skill = client.beta.skills.create(
@@ -87,7 +87,7 @@ begin
         content_type: "text/x-python"
       ),
     ],
-    display_title: "Greeting Tool #{timestamp}"
+    display_name: "Greeting Tool #{timestamp}"
   )
 
   skill_md_io.close
@@ -98,9 +98,9 @@ begin
   puts "Skill created!"
   puts "  ID: #{skill.id}"
   puts "  Type: #{skill.type}"
-  puts "  Display title: #{skill.display_title}"
-  puts "  Source: #{skill.source}"
-  puts "  Latest version: #{skill.latest_version}"
+  puts "  Display name: #{skill.display_name}"
+  puts "  Source: #{skill.source.type}"
+  puts "  Latest version: #{skill.latest_version_id}"
   puts "  Created at: #{skill.created_at}"
   puts
 
@@ -111,9 +111,9 @@ begin
   puts "-" * 60
 
   skills_list = client.beta.skills.list(limit: 10)
-  puts "Found #{skills_list.data.size} skill(s) (has_more: #{skills_list.has_more?})"
+  puts "Found #{skills_list.data.size} skill(s) (next_page: #{skills_list.next_page.inspect})"
   skills_list.data.each do |item|
-    puts "  - #{item.id}: #{item.display_title || "(untitled)"} (source: #{item.source})"
+    puts "  - #{item.id}: #{item.display_name} (source: #{item.source.type})"
   end
   puts
 
@@ -125,8 +125,8 @@ begin
 
   retrieved = client.beta.skills.retrieve(skill.id)
   puts "Retrieved: #{retrieved.id}"
-  puts "  Display title: #{retrieved.display_title}"
-  puts "  Latest version: #{retrieved.latest_version}"
+  puts "  Display name: #{retrieved.display_name}"
+  puts "  Latest version: #{retrieved.latest_version_id}"
   puts "  Updated at: #{retrieved.updated_at}"
   puts
 
@@ -139,7 +139,7 @@ begin
   versions_list = client.beta.skills.versions.list(skill_id: skill.id)
   puts "Found #{versions_list.data.size} version(s)"
   versions_list.data.each do |ver|
-    puts "  - #{ver.id}: version=#{ver.version} (#{ver.created_at})"
+    puts "  - #{ver.id}: name=#{ver.name} (#{ver.created_at})"
   end
   puts
 
@@ -147,17 +147,17 @@ begin
   # 5. Retrieve a specific version
   # ============================================================================
   if first_version = versions_list.data.first?
-    puts "5. Retrieving version #{first_version.version}..."
+    puts "5. Retrieving version #{first_version.id}..."
     puts "-" * 60
 
     retrieved_version = client.beta.skills.versions.retrieve(
       skill_id: skill.id,
-      version: first_version.version
+      version: first_version.id
     )
-    puts "Retrieved version: #{retrieved_version.version}"
+    puts "Retrieved version: #{retrieved_version.id}"
     puts "  Name: #{retrieved_version.name}"
     puts "  Description: #{retrieved_version.description}"
-    puts "  Directory: #{retrieved_version.directory}"
+
     puts
   end
 
@@ -192,7 +192,7 @@ begin
   # Must delete all versions before deleting the skill
   versions_list = client.beta.skills.versions.list(skill_id: skill.id)
   versions_list.data.each do |ver|
-    deleted_ver = client.beta.skills.versions.delete(skill_id: skill.id, version: ver.version)
+    deleted_ver = client.beta.skills.versions.delete(skill_id: skill.id, version: ver.id)
     puts "  Deleted version: #{deleted_ver.id} (#{deleted_ver.type})"
   end
 
@@ -213,7 +213,7 @@ rescue ex : Anthropic::APIError
     begin
       versions = client.beta.skills.versions.list(skill_id: sid)
       versions.data.each do |ver|
-        client.beta.skills.versions.delete(skill_id: sid, version: ver.version)
+        client.beta.skills.versions.delete(skill_id: sid, version: ver.id)
       end
       client.beta.skills.delete(sid)
       puts "Cleanup successful."

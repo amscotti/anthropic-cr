@@ -17,6 +17,12 @@ module Anthropic
       @headers.try(&.["anthropic-workspace-id"]?)
     end
 
+    # Request ID echoed by the API in the `request-id` response
+    # header. Include it when reporting failures to Anthropic support.
+    def request_id : String?
+      @headers.try(&.["request-id"]?)
+    end
+
     def initialize(
       message : String,
       @status : Int32? = nil,

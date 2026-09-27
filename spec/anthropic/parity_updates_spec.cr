@@ -87,11 +87,12 @@ describe "Opus 4.7 parity updates" do
     end
 
     it "falls back to char_location for untagged citations" do
-      block_json = %({"type":"text","text":"see the report","citations":[{"start_char":5,"end_char":10,"document_title":"doc","document_index":0,"cited_text":"hello"}]})
+      block_json = %({"type":"text","text":"see the report","citations":[{"start_char_index":5,"end_char_index":10,"document_title":"doc","document_index":0,"cited_text":"hello","file_id":"file_1"}]})
       block = Anthropic::TextContentWithCitations.from_json(block_json)
       citation = block.citations.not_nil!.first.as(Anthropic::Citation)
-      citation.start_char.should eq(5)
-      citation.end_char.should eq(10)
+      citation.start_char_index.should eq(5)
+      citation.end_char_index.should eq(10)
+      citation.file_id.should eq("file_1")
     end
 
     it "parses web_search_result_location citations" do

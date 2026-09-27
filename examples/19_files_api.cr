@@ -75,7 +75,7 @@ begin
   puts "-" * 60
 
   files = client.beta.files.list(limit: 5)
-  puts "Found #{files.data.size} files (has_more: #{files.has_more?})"
+  puts "Found #{files.data.size} files (next_page: #{files.next_page.inspect})"
   files.data.each do |file_info|
     puts "  - #{file_info.filename} (#{file_info.id})"
   end

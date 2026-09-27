@@ -35,6 +35,29 @@ describe Anthropic::ImageContent do
       content.source.should be_a(Anthropic::URLImageSource)
     end
   end
+
+  describe ".file" do
+    it "creates file-backed image with transformations" do
+      content = Anthropic::ImageContent.file(
+        "file_abc",
+        transformations: Anthropic::ImageTransformations.new(
+          oversized_image: Anthropic::OversizedImageBehavior::ERROR
+        )
+      )
+      content.source.should be_a(Anthropic::FileImageSource)
+      content.source.as(Anthropic::FileImageSource).file_id.should eq("file_abc")
+
+      parsed = JSON.parse(content.to_json)
+      parsed["source"]["type"].as_s.should eq("file")
+      parsed["source"]["file_id"].as_s.should eq("file_abc")
+      parsed["transformations"]["oversized_image"].as_s.should eq("error")
+    end
+
+    it "omits transformations when unset" do
+      parsed = JSON.parse(Anthropic::ImageContent.file("file_abc").to_json)
+      parsed.as_h.has_key?("transformations").should be_false
+    end
+  end
 end
 
 struct TestInput

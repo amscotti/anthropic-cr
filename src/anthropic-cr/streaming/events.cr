@@ -90,7 +90,8 @@ module Anthropic
         end_char_index: finish.as_i,
         document_title: citation_data["document_title"]?.try(&.as_s?),
         document_index: citation_data["document_index"]?.try(&.as_i?),
-        cited_text: citation_data["cited_text"]?.try(&.as_s?)
+        cited_text: citation_data["cited_text"]?.try(&.as_s?),
+        file_id: citation_data["file_id"]?.try(&.as_s?)
       )
     end
 
@@ -101,6 +102,7 @@ module Anthropic
       getter document_title : String?
       getter document_index : Int32?
       getter cited_text : String?
+      getter file_id : String?
 
       def initialize(
         @start_char_index : Int32,
@@ -108,6 +110,7 @@ module Anthropic
         @document_title : String? = nil,
         @document_index : Int32? = nil,
         @cited_text : String? = nil,
+        @file_id : String? = nil,
       )
       end
     end
@@ -126,7 +129,43 @@ module Anthropic
     @[JSON::Field(key: "encrypted_content", emit_null: false)]
     getter encrypted_content : String?
 
-    def initialize(@content : String? = nil, @encrypted_content : String? = nil)
+    # Whether the payload carried the `encrypted_content` key (even
+    # null). The streaming accumulator only copies the key when the
+    # server sent it.
+    @[JSON::Field(ignore: true)]
+    getter? encrypted_content_present : Bool = false
+
+    def initialize(
+      @content : String? = nil,
+      @encrypted_content : String? = nil,
+      @encrypted_content_present : Bool = false,
+    )
+    end
+
+    # Custom pull-parser constructor tracking `encrypted_content` key
+    # presence, which plain deserialization cannot observe.
+    def self.new(pull : JSON::PullParser) : self
+      content : String? = nil
+      encrypted_content : String? = nil
+      encrypted_content_present = false
+
+      pull.read_object do |key|
+        case key
+        when "content"
+          content = pull.read_null_or { pull.read_string }
+        when "encrypted_content"
+          encrypted_content_present = true
+          encrypted_content = pull.read_null_or { pull.read_string }
+        else
+          pull.skip
+        end
+      end
+
+      new(
+        content: content,
+        encrypted_content: encrypted_content,
+        encrypted_content_present: encrypted_content_present
+      )
     end
   end
 
@@ -176,6 +215,11 @@ module Anthropic
     getter type : String = "message_delta"
     getter delta : MessageDelta
     getter usage : DeltaUsage?
+
+    # Holds the serving model's entries; replaces the `message_start`
+    # value when present.
+    @[JSON::Field(key: "input_transformations", converter: Anthropic::InputTransformationArrayConverter, emit_null: false)]
+    getter input_transformations : Array(InputTransformation)?
 
     struct MessageDelta
       include JSON::Serializable
@@ -258,11 +302,12 @@ module Anthropic
         return nil if data.nil?
 
         Citation.new(
-          start_char: data.start_char_index,
-          end_char: data.end_char_index,
+          start_char_index: data.start_char_index,
+          end_char_index: data.end_char_index,
           document_title: data.document_title,
           document_index: data.document_index,
-          cited_text: data.cited_text
+          cited_text: data.cited_text,
+          file_id: data.file_id
         )
       end
     end

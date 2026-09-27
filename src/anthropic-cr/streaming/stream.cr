@@ -4,151 +4,170 @@ module Anthropic
   # Events are buffered on first iteration so that helper methods like
   # `text`, `collect_text`, `final_message`, `thinking`, and `citations`
   # can be called in any order and multiple times.
+  # Accumulates stream events into a final `Message`. Internal.
+  class SnapshotBuilder
+    @message_data : Hash(String, JSON::Any)?
+    @tool_input_buffers = {} of Int32 => String
+
+    def apply(event : AnyStreamEvent)
+      case event
+      when MessageStartEvent
+        @message_data = JSON.parse(event.message.to_json).as_h
+      when MessageDeltaEvent
+        apply_message_delta(event)
+      when ContentBlockStartEvent
+        apply_content_block_start(event)
+      when ContentBlockDeltaEvent
+        apply_content_block_delta(event)
+      when ContentBlockStopEvent
+        finalize_tool_input(event.index)
+      end
+    end
+
+    def message : Message?
+      data = @message_data
+      return nil unless data
+
+      # Parse any tool-input buffers that never saw a content_block_stop
+      # (e.g. a truncated stream) so the snapshot is as complete as possible.
+      @tool_input_buffers.keys.each { |index| finalize_tool_input(index) }
+
+      Message.from_json(JSON::Any.new(data).to_json)
+    end
+
+    private def apply_message_delta(event : MessageDeltaEvent)
+      data = @message_data
+      return unless data
+
+      if stop_reason = event.delta.stop_reason
+        data["stop_reason"] = JSON::Any.new(stop_reason)
+      end
+
+      if stop_details = event.delta.stop_details
+        data["stop_details"] = JSON.parse(stop_details.to_json)
+      end
+
+      if stop_sequence = event.delta.stop_sequence
+        data["stop_sequence"] = JSON::Any.new(stop_sequence)
+      end
+
+      if container = event.delta.container
+        data["container"] = JSON.parse(container.to_json)
+      end
+
+      if transformations = event.input_transformations
+        data["input_transformations"] = JSON.parse(transformations.to_json)
+      end
+
+      if usage = data["usage"]?.try(&.as_h)
+        if delta_usage = event.usage
+          usage["output_tokens"] = JSON::Any.new(delta_usage.output_tokens)
+        end
+      end
+    end
+
+    private def apply_content_block_start(event : ContentBlockStartEvent)
+      blocks = content_blocks
+      return unless blocks
+
+      block_json = JSON.parse(event.content_block.to_json)
+
+      if event.index == blocks.size
+        blocks << block_json
+      elsif event.index < blocks.size
+        blocks[event.index] = block_json
+      end
+    end
+
+    private def apply_content_block_delta(event : ContentBlockDeltaEvent)
+      block = content_block(event.index)
+      return unless block
+
+      case delta = event.delta
+      when TextDelta
+        append_string_field(block, "text", delta.text)
+      when InputJsonDelta
+        # Lazily accumulate the partial-JSON buffer without re-parsing on
+        # every delta (avoids O(n²) re-parsing for large tool inputs). The
+        # buffer is parsed once when the content block closes (see
+        # `finalize_tool_input`) or when the snapshot message is built.
+        buffer = @tool_input_buffers[event.index]? || ""
+        buffer += delta.partial_json
+        @tool_input_buffers[event.index] = buffer
+      when ThinkingDelta
+        append_string_field(block, "thinking", delta.thinking)
+      when SignatureDelta
+        block["signature"] = JSON::Any.new(delta.signature)
+      when CitationsDelta
+        append_citation(block, delta)
+      when CompactionDelta
+        # The delta carries the block's final value (null content marks
+        # a failed compaction), so assign rather than append. The
+        # encrypted key copies only when the server sent it.
+        if content = delta.content
+          block["content"] = JSON::Any.new(content)
+        else
+          block.delete("content")
+        end
+        if delta.encrypted_content_present?
+          if encrypted = delta.encrypted_content
+            block["encrypted_content"] = JSON::Any.new(encrypted)
+          else
+            block.delete("encrypted_content")
+          end
+        end
+      end
+    end
+
+    private def append_citation(block : Hash(String, JSON::Any), delta : CitationsDelta)
+      # Persist the raw citation payload so that non-char-location variants
+      # (page, content_block, web_search_result, search_result) round-trip
+      # through the accumulated message without data loss.
+      citations = block["citations"]?.try(&.as_a) || begin
+        list = [] of JSON::Any
+        block["citations"] = JSON::Any.new(list)
+        list
+      end
+
+      citations << delta.citation_data
+    end
+
+    private def append_string_field(block : Hash(String, JSON::Any), field : String, fragment : String)
+      current = block[field]?.try(&.as_s) || ""
+      block[field] = JSON::Any.new(current + fragment)
+    end
+
+    private def content_blocks : Array(JSON::Any)?
+      @message_data.try { |data| data["content"]?.try(&.as_a) }
+    end
+
+    private def content_block(index : Int32) : Hash(String, JSON::Any)?
+      content_blocks.try(&.[index]?).try(&.as_h)
+    end
+
+    # Finalize a tool-use block by parsing its accumulated partial-JSON buffer
+    # once the block closes. This is the lazy counterpart to the per-delta
+    # accumulation: parsing happens a single time per block instead of on
+    # every `input_json_delta`.
+    private def finalize_tool_input(index : Int32) : Nil
+      buffer = @tool_input_buffers.delete(index)
+      return unless buffer
+      return unless block = content_block(index)
+
+      begin
+        block["input"] = JSON.parse(buffer)
+      rescue JSON::ParseException
+        # Leave whatever best-effort value was already set.
+      end
+    end
+  end
+
   class MessageStream
     include Enumerable(AnyStreamEvent)
 
     @response : HTTP::Client::Response
     @buffered_events : Array(AnyStreamEvent)?
     @snapshot : SnapshotBuilder?
-
-    private class SnapshotBuilder
-      @message_data : Hash(String, JSON::Any)?
-      @tool_input_buffers = {} of Int32 => String
-
-      def apply(event : AnyStreamEvent)
-        case event
-        when MessageStartEvent
-          @message_data = JSON.parse(event.message.to_json).as_h
-        when MessageDeltaEvent
-          apply_message_delta(event)
-        when ContentBlockStartEvent
-          apply_content_block_start(event)
-        when ContentBlockDeltaEvent
-          apply_content_block_delta(event)
-        when ContentBlockStopEvent
-          finalize_tool_input(event.index)
-        end
-      end
-
-      def message : Message?
-        data = @message_data
-        return nil unless data
-
-        # Parse any tool-input buffers that never saw a content_block_stop
-        # (e.g. a truncated stream) so the snapshot is as complete as possible.
-        @tool_input_buffers.keys.each { |index| finalize_tool_input(index) }
-
-        Message.from_json(JSON::Any.new(data).to_json)
-      end
-
-      private def apply_message_delta(event : MessageDeltaEvent)
-        data = @message_data
-        return unless data
-
-        if stop_reason = event.delta.stop_reason
-          data["stop_reason"] = JSON::Any.new(stop_reason)
-        end
-
-        if stop_details = event.delta.stop_details
-          data["stop_details"] = JSON.parse(stop_details.to_json)
-        end
-
-        if stop_sequence = event.delta.stop_sequence
-          data["stop_sequence"] = JSON::Any.new(stop_sequence)
-        end
-
-        if container = event.delta.container
-          data["container"] = JSON.parse(container.to_json)
-        end
-
-        if usage = data["usage"]?.try(&.as_h)
-          if delta_usage = event.usage
-            usage["output_tokens"] = JSON::Any.new(delta_usage.output_tokens)
-          end
-        end
-      end
-
-      private def apply_content_block_start(event : ContentBlockStartEvent)
-        blocks = content_blocks
-        return unless blocks
-
-        block_json = JSON.parse(event.content_block.to_json)
-
-        if event.index == blocks.size
-          blocks << block_json
-        elsif event.index < blocks.size
-          blocks[event.index] = block_json
-        end
-      end
-
-      private def apply_content_block_delta(event : ContentBlockDeltaEvent)
-        block = content_block(event.index)
-        return unless block
-
-        case delta = event.delta
-        when TextDelta
-          append_string_field(block, "text", delta.text)
-        when InputJsonDelta
-          # Lazily accumulate the partial-JSON buffer without re-parsing on
-          # every delta (avoids O(n²) re-parsing for large tool inputs). The
-          # buffer is parsed once when the content block closes (see
-          # `finalize_tool_input`) or when the snapshot message is built.
-          buffer = @tool_input_buffers[event.index]? || ""
-          buffer += delta.partial_json
-          @tool_input_buffers[event.index] = buffer
-        when ThinkingDelta
-          append_string_field(block, "thinking", delta.thinking)
-        when SignatureDelta
-          block["signature"] = JSON::Any.new(delta.signature)
-        when CitationsDelta
-          append_citation(block, delta)
-        when CompactionDelta
-          append_string_field(block, "content", delta.content.to_s) if delta.content
-        end
-      end
-
-      private def append_citation(block : Hash(String, JSON::Any), delta : CitationsDelta)
-        # Persist the raw citation payload so that non-char-location variants
-        # (page, content_block, web_search_result, search_result) round-trip
-        # through the accumulated message without data loss.
-        citations = block["citations"]?.try(&.as_a) || begin
-          list = [] of JSON::Any
-          block["citations"] = JSON::Any.new(list)
-          list
-        end
-
-        citations << delta.citation_data
-      end
-
-      private def append_string_field(block : Hash(String, JSON::Any), field : String, fragment : String)
-        current = block[field]?.try(&.as_s) || ""
-        block[field] = JSON::Any.new(current + fragment)
-      end
-
-      private def content_blocks : Array(JSON::Any)?
-        @message_data.try { |data| data["content"]?.try(&.as_a) }
-      end
-
-      private def content_block(index : Int32) : Hash(String, JSON::Any)?
-        content_blocks.try(&.[index]?).try(&.as_h)
-      end
-
-      # Finalize a tool-use block by parsing its accumulated partial-JSON buffer
-      # once the block closes. This is the lazy counterpart to the per-delta
-      # accumulation: parsing happens a single time per block instead of on
-      # every `input_json_delta`.
-      private def finalize_tool_input(index : Int32) : Nil
-        buffer = @tool_input_buffers.delete(index)
-        return unless buffer
-        return unless block = content_block(index)
-
-        begin
-          block["input"] = JSON.parse(buffer)
-        rescue JSON::ParseException
-          # Leave whatever best-effort value was already set.
-        end
-      end
-    end
 
     def initialize(@response)
     end
@@ -215,6 +234,24 @@ module Anthropic
       ensure_snapshot.message
     end
 
+    # Parse the final message's structured output into `T`.
+    #
+    # Returns `nil` when no final message exists yet, the message has no
+    # text content, or the text does not parse as JSON.
+    def final_parsed_output_as(type : T.class) : T? forall T
+      final_message.try(&.parsed_output_as(type))
+    end
+
+    # Parse the final message's structured output into `T`.
+    #
+    # Raises `StructuredOutputParseError` when no final message exists,
+    # the message has no text content, or the text does not parse as `T`.
+    def final_parsed_output_as!(type : T.class) : T forall T
+      message = final_message
+      raise StructuredOutputParseError.new("Cannot parse structured output: no final message") if message.nil?
+      message.parsed_output_as!(type)
+    end
+
     # Iterate only tool use deltas
     def tool_use_deltas : ToolUseIterator
       ToolUseIterator.new(self)
@@ -272,7 +309,7 @@ module Anthropic
         end
       rescue ex : IO::TimeoutError
         raise APITimeoutError.new("Stream read timed out", cause: ex)
-      rescue ex : IO::Error | Socket::Error
+      rescue ex : IO::Error | Socket::Error | OpenSSL::Error
         raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
       end
 

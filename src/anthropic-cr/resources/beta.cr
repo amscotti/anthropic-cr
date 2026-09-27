@@ -264,6 +264,7 @@ module Anthropic
       workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
+      compaction : CompactionParam? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -301,7 +302,8 @@ module Anthropic
         mcp_servers: mcp_servers,
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
-        diagnostics: diagnostics
+        diagnostics: diagnostics,
+        compaction: compaction
       )
 
       beta_headers = build_beta_headers(
@@ -314,7 +316,8 @@ module Anthropic
         include_user_profiles_beta: !user_profile_id.nil?,
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
-        thinking: thinking
+        thinking: thinking,
+        compaction: compaction
       )
       merged = merge_user_profile_header(beta_headers, user_profile_id)
       merged = Anthropic.merge_workspace_header(merged, workspace_id)
@@ -367,6 +370,7 @@ module Anthropic
       workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
+      compaction : CompactionParam? = nil,
       &
     )
       open_stream(
@@ -399,7 +403,8 @@ module Anthropic
         user_profile_id: user_profile_id,
         workspace_id: workspace_id,
         extra_headers: extra_headers,
-        diagnostics: diagnostics
+        diagnostics: diagnostics,
+        compaction: compaction
       ) do |stream|
         stream.each { |event| yield event }
       end
@@ -437,6 +442,7 @@ module Anthropic
       workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
+      compaction : CompactionParam? = nil,
       &
     )
       typed_messages = normalize_messages(messages)
@@ -469,7 +475,8 @@ module Anthropic
         mcp_servers: mcp_servers,
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
-        diagnostics: diagnostics
+        diagnostics: diagnostics,
+        compaction: compaction
       )
 
       beta_headers = build_beta_headers(
@@ -482,7 +489,8 @@ module Anthropic
         include_user_profiles_beta: !user_profile_id.nil?,
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
-        thinking: thinking
+        thinking: thinking,
+        compaction: compaction
       )
 
       merged = merge_user_profile_header(beta_headers, user_profile_id)
@@ -516,6 +524,7 @@ module Anthropic
       user_profile_id : String? = nil,
       workspace_id : String? = nil,
       diagnostics : DiagnosticsParam? = nil,
+      compaction : CompactionParam? = nil,
     ) : TokenCountResponse
       typed_messages = normalize_messages(messages)
       tool_definitions = build_tool_definitions(tools, server_tools)
@@ -537,7 +546,8 @@ module Anthropic
         container: container,
         mcp_servers: mcp_servers,
         speed: speed,
-        diagnostics: diagnostics
+        diagnostics: diagnostics,
+        compaction: compaction
       )
 
       beta_headers = build_beta_headers(
@@ -549,7 +559,8 @@ module Anthropic
         diagnostics: diagnostics,
         include_token_counting_beta: true,
         include_user_profiles_beta: !user_profile_id.nil?,
-        thinking: thinking
+        thinking: thinking,
+        compaction: compaction
       )
 
       response = @client.post("/v1/messages/count_tokens?beta=true", params, Anthropic.merge_workspace_header(merge_user_profile_header(beta_headers, user_profile_id), workspace_id))
@@ -587,6 +598,7 @@ module Anthropic
       workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
+      compaction : CompactionParam? = nil,
     ) : ParsedMessage(T) forall T
       message = create(
         model: model,
@@ -618,7 +630,8 @@ module Anthropic
         user_profile_id: user_profile_id,
         workspace_id: workspace_id,
         extra_headers: extra_headers,
-        diagnostics: diagnostics
+        diagnostics: diagnostics,
+        compaction: compaction
       )
 
       ParsedMessage(T).new(message, message.parsed_output_as!(T))
@@ -655,6 +668,7 @@ module Anthropic
       workspace_id : String? = nil,
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
+      compaction : CompactionParam? = nil,
     ) : ParsedMessage(JSON::Any)
       message = create(
         model: model,
@@ -686,7 +700,8 @@ module Anthropic
         user_profile_id: user_profile_id,
         workspace_id: workspace_id,
         extra_headers: extra_headers,
-        diagnostics: diagnostics
+        diagnostics: diagnostics,
+        compaction: compaction
       )
 
       ParsedMessage(JSON::Any).new(message, message.parsed_output_as!(JSON::Any))
@@ -750,6 +765,7 @@ module Anthropic
       fallbacks : FallbacksParam? = nil,
       fallback_credit_token : FallbackCreditToken? = nil,
       thinking : ThinkingConfig? = nil,
+      compaction : CompactionParam? = nil,
     ) : Hash(String, String)?
       # Explicit chain / "default" and bare-string credit tokens auto-attach the
       # server-side fallback beta. Object-form credit tokens need the July 2026
@@ -771,7 +787,8 @@ module Anthropic
         output_config: output_config,
         include_token_counting: include_token_counting_beta,
         include_user_profiles: include_user_profiles_beta,
-        thinking: thinking
+        thinking: thinking,
+        compaction: compaction
       )
     end
 

@@ -10,7 +10,7 @@ module Anthropic
   #
   # skill = client.beta.skills.create(
   #   files: [file],
-  #   display_title: "My Skill"
+  #   display_name: "My Skill"
   # )
   # ```
   struct FileUpload
@@ -51,24 +51,36 @@ module Anthropic
       new(io, actual_filename, actual_content_type)
     end
 
+    # Extension to content-type mapping for uploads.
+    CONTENT_TYPES = {
+      ".py"   => "text/x-python",
+      ".js"   => "text/javascript",
+      ".mjs"  => "text/javascript",
+      ".ts"   => "text/typescript",
+      ".rb"   => "text/x-ruby",
+      ".cr"   => "text/x-crystal",
+      ".md"   => "text/markdown",
+      ".txt"  => "text/plain",
+      ".json" => "application/json",
+      ".yaml" => "text/yaml",
+      ".yml"  => "text/yaml",
+      ".html" => "text/html",
+      ".htm"  => "text/html",
+      ".css"  => "text/css",
+      ".xml"  => "application/xml",
+      ".sh"   => "text/x-shellscript",
+      ".pdf"  => "application/pdf",
+      ".csv"  => "text/csv",
+      ".jpg"  => "image/jpeg",
+      ".jpeg" => "image/jpeg",
+      ".png"  => "image/png",
+      ".gif"  => "image/gif",
+      ".webp" => "image/webp",
+    }
+
     # Infer content type from a file extension
     def self.content_type_for(extension : String) : String
-      case extension.downcase
-      when ".py"           then "text/x-python"
-      when ".js", ".mjs"   then "text/javascript"
-      when ".ts"           then "text/typescript"
-      when ".rb"           then "text/x-ruby"
-      when ".cr"           then "text/x-crystal"
-      when ".md"           then "text/markdown"
-      when ".txt"          then "text/plain"
-      when ".json"         then "application/json"
-      when ".yaml", ".yml" then "text/yaml"
-      when ".html", ".htm" then "text/html"
-      when ".css"          then "text/css"
-      when ".xml"          then "application/xml"
-      when ".sh"           then "text/x-shellscript"
-      else                      "application/octet-stream"
-      end
+      CONTENT_TYPES[extension.downcase]? || "application/octet-stream"
     end
   end
 end

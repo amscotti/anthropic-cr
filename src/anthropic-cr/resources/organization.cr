@@ -318,7 +318,7 @@ module Anthropic
     # Create a workspace.
     def create(
       name : String,
-      data_residency : BetaDataResidency | Hash(String, JSON::Any)? = nil,
+      data_residency : BetaDataResidency | BetaDataResidencyCreateConfig | Hash(String, JSON::Any)? = nil,
       display_color : String? = nil,
       external_key_id : String? = nil,
       tags : Hash(String, String)? = nil,
@@ -345,7 +345,7 @@ module Anthropic
     def update(
       workspace_id : String,
       name : String? = nil,
-      data_residency : BetaDataResidency | Hash(String, JSON::Any)? = nil,
+      data_residency : BetaDataResidency | BetaDataResidencyUpdateConfig | Hash(String, JSON::Any)? = nil,
       display_color : String? = nil,
       external_key_id : String? = nil,
       tags : Hash(String, String)? = nil,
@@ -756,6 +756,10 @@ module Anthropic
     def initialize(@client : Client)
     end
 
+    def workspaces : BetaOrganizationFederationRuleWorkspaces
+      BetaOrganizationFederationRuleWorkspaces.new(@client)
+    end
+
     # Create a federation rule.
     def create(
       issuer_id : String,
@@ -842,6 +846,69 @@ module Anthropic
         {} of String => JSON::Any
       )
       BetaFederationRule.from_json(response.body)
+    end
+  end
+
+  # Workspaces a workload identity federation rule is enabled for.
+  #
+  # Access via `client.beta.organization.federation.rules.workspaces`.
+  class BetaOrganizationFederationRuleWorkspaces
+    def initialize(@client : Client)
+    end
+
+    # List the workspaces a federation rule is enabled for.
+    def list(
+      federation_rule_id : String,
+      limit : Int32 = 20,
+      page : String? = nil,
+      betas : Array(String) = [] of String,
+    ) : BetaFederationRuleWorkspaceListResponse
+      query = {"limit" => limit.to_s}
+      query["page"] = page if page
+
+      response = @client.get(
+        "/v1/organizations/federation_rules/#{federation_rule_id}/workspaces?beta=true",
+        query,
+        beta_headers(betas)
+      )
+      BetaFederationRuleWorkspaceListResponse.from_json(response.body)
+    end
+
+    # Enable a federation rule for a workspace.
+    #
+    # Idempotent; re-enabling returns the existing enablement.
+    def add(
+      federation_rule_id : String,
+      workspace_id : String,
+      betas : Array(String) = [] of String,
+    ) : BetaFederationRuleWorkspace
+      body = {"workspace_id" => JSON::Any.new(workspace_id)}
+      response = @client.post(
+        "/v1/organizations/federation_rules/#{federation_rule_id}/workspaces?beta=true",
+        body,
+        beta_headers(betas)
+      )
+      BetaFederationRuleWorkspace.from_json(response.body)
+    end
+
+    # Disable a federation rule for a workspace.
+    #
+    # Idempotent; succeeds even if the enablement was already removed.
+    def remove(
+      federation_rule_id : String,
+      workspace_id : String,
+      betas : Array(String) = [] of String,
+    ) : BetaDeletedFederationRuleWorkspace
+      response = @client.delete(
+        "/v1/organizations/federation_rules/#{federation_rule_id}/workspaces/#{workspace_id}?beta=true",
+        beta_headers(betas)
+      )
+      BetaDeletedFederationRuleWorkspace.from_json(response.body)
+    end
+
+    private def beta_headers(betas : Array(String)) : Hash(String, String)?
+      return nil if betas.empty?
+      {"anthropic-beta" => betas.join(",")}
     end
   end
 end

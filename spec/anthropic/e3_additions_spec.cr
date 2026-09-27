@@ -57,10 +57,11 @@ describe "Phase E3 additions" do
 
   describe "BetaWebhookEvent classification" do
     it "parses a deployment webhook event and classifies it" do
-      json = %({"id":"wh_1","created_at":"2026-07-01T00:00:00Z","type":"deployment.created","data":{"id":"dep_1","organization_id":"org","workspace_id":"ws","type":"deployment"}})
+      json = %({"id":"wh_1","created_at":"2026-07-01T00:00:00Z","type":"event","data":{"id":"dep_1","organization_id":"org","workspace_id":"ws","type":"deployment.created"}})
       event = Anthropic::BetaWebhookEvent.from_json(json)
 
-      event.type.should eq("deployment.created")
+      event.type.should eq("event")
+      event.event_type.should eq("deployment.created")
       event.deployment_event?.should be_true
       event.deployment_run_event?.should be_false
       event.agent_event?.should be_false
@@ -83,6 +84,17 @@ describe "Phase E3 additions" do
       env_event.memory_store_event?.should be_false
       mem_event.memory_store_event?.should be_true
       mem_event.environment_event?.should be_false
+    end
+
+    it "classifies data-nested and vault events" do
+      session = Anthropic::BetaWebhookEvent.from_json(%({"id":"wh_6","created_at":"","type":"event","data":{"id":"s1","type":"session.thread_created"}}))
+      session.event_type.should eq("session.thread_created")
+      session.session_event?.should be_true
+      session.vault_event?.should be_false
+
+      vault = Anthropic::BetaWebhookEvent.from_json(%({"id":"wh_7","created_at":"","type":"event","data":{"id":"v1","type":"vault_credential.refresh_failed"}}))
+      vault.vault_event?.should be_true
+      vault.session_event?.should be_false
     end
 
     it "exposes the EventType vocabulary" do

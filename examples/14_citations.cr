@@ -127,7 +127,7 @@ if !citations_found.empty?
   citations_found.each_with_index do |citation, i|
     puts "  [#{i + 1}] Document: #{citation.document_title || "untitled"}"
     puts "       Text: \"#{citation.cited_text}\"" if citation.cited_text
-    puts "       Position: chars #{citation.start_char}-#{citation.end_char}"
+    puts "       Position: chars #{citation.start_char_index}-#{citation.end_char_index}"
   end
 else
   puts "No citations found in streaming response"

@@ -96,6 +96,13 @@ module Anthropic
     @last_response : Message? = nil
     @initial_container : String | ContainerConfig?
 
+    # Mid-conversation tool changes queued for the next request, local
+    # dispatch overrides (`nil` stops a tool from running), and a pending
+    # explicit compaction request.
+    @pending_tool_changes : Array(ContentBlock) = [] of ContentBlock
+    @tool_overrides : Hash(String, Tool?) = {} of String => Tool?
+    @pending_compaction : CompactionParam? = nil
+
     def initialize(
       @client : Client,
       @model : String,
@@ -130,6 +137,9 @@ module Anthropic
       @finished = false
       @last_response = nil
       @container = @initial_container
+      @pending_tool_changes.clear
+      @tool_overrides.clear
+      @pending_compaction = nil
     end
 
     # Iterate through messages, auto-executing tools
@@ -163,11 +173,31 @@ module Anthropic
     def next_message : Message?
       return nil if @finished
 
+      last_stop_reason = @last_response.try(&.stop_reason)
+
+      # A pending explicit compaction runs before queued tool changes
+      # flush, so a successful compaction returns early with the changes
+      # still queued for the follow-up turn. Compaction turns don't burn
+      # an iteration. The API can't compact a conversation that ends
+      # mid-turn, so a paused turn resumes first.
+      if compaction = @pending_compaction
+        unless resume_stop_reason?(last_stop_reason)
+          if compacted = compaction_turn(compaction)
+            return compacted
+          end
+        end
+      end
+
       @iteration += 1
       if @iteration > @max_iterations
         @finished = true
         return nil
       end
+
+      # A paused turn goes back as the last message, so queued tool
+      # changes wait for the request after it.
+      send_pending_tool_changes unless last_stop_reason == "pause_turn"
+      inline_beta = history_has_tool_changes?
 
       # Check for compaction before making request
       if should_compact?(@current_messages)
@@ -183,11 +213,22 @@ module Anthropic
         thinking: @thinking,
         output_config: @output_config,
         inference_geo: @inference_geo,
-        container: @container
+        container: @container,
+        betas: inline_beta ? with_inline_tools_beta : nil
       )
 
       @last_response = response
       update_container(response.container_id)
+
+      # A paused turn is sent back unchanged so the server continues it.
+      # No tool calls run; the loop proceeds with the resumed history.
+      if resume_stop_reason?(response.stop_reason)
+        @current_messages << MessageParam.new(
+          role: Role::Assistant,
+          content: parse_response_content(response)
+        )
+        return response
+      end
 
       # Check if tool use is requested
       unless response.tool_use?
@@ -236,6 +277,97 @@ module Anthropic
     # Add a single message to the conversation
     def feed_message(message : MessageParam)
       feed_messages([message])
+    end
+
+    # Offer more tools from the next request on.
+    #
+    # Sends the tools' full definitions in `tool_addition` blocks with the
+    # next request, leaving the runner's `tools` and the prompt cache
+    # alone. A `Tool` runs under its name straight away, replacing a
+    # same-name tool even for a call already in the message being handled;
+    # a raw `ToolDefinition` is never run here and stops a same-name tool
+    # from running. Needs the `inline-tools-2026-09-15` beta (attached
+    # automatically when changes are sent). Requires a beta runner
+    # (`use_beta: true`).
+    #
+    # Queued changes only take effect on manual `next_message` loops: the
+    # `each_*`, `final_message`, and `run_until_finished` entry points
+    # reset the runner first, dropping anything queued before the run.
+    #
+    # ```
+    # runner.add_tools(my_tool)
+    # ```
+    def add_tools(*tools : Tool | ToolDefinition)
+      unless @use_beta
+        raise ArgumentError.new("add_tools requires a beta tool runner (use_beta: true)")
+      end
+
+      tools.each do |tool|
+        definition, runnable = case tool
+                               when Tool
+                                 {tool.to_definition, tool}
+                               else
+                                 {tool.as(ToolDefinition), nil}
+                               end
+        @tool_overrides[definition.name] = runnable
+        @pending_tool_changes << ToolAdditionContent.new(
+          tool: ToolChangeToolDefinition.new(
+            definition: JSON.parse(definition.to_json)
+          )
+        ).as(ContentBlock)
+      end
+    end
+
+    # Withdraw tools from the next request on.
+    #
+    # Sends `tool_removal` blocks with the next request. The tools stop
+    # being run straight away, so a call to one gets the "not found" error
+    # result. Needs the `inline-tools-2026-09-15` beta (attached
+    # automatically when changes are sent). Requires a beta runner
+    # (`use_beta: true`).
+    #
+    # Queued changes only take effect on manual `next_message` loops: the
+    # `each_*`, `final_message`, and `run_until_finished` entry points
+    # reset the runner first, dropping anything queued before the run.
+    #
+    # ```
+    # runner.remove_tools("legacy_tool")
+    # ```
+    def remove_tools(*tools : Tool | String)
+      unless @use_beta
+        raise ArgumentError.new("remove_tools requires a beta tool runner (use_beta: true)")
+      end
+
+      tools.each do |tool|
+        name = tool.is_a?(Tool) ? tool.name : tool.to_s
+        @tool_overrides[name] = nil
+        @pending_tool_changes << ToolRemovalContent.new(
+          tool: ToolChangeToolReference.new(name: name)
+        ).as(ContentBlock)
+      end
+    end
+
+    # Compact the conversation before the model's next turn.
+    #
+    # Once the current turn has finished, including any tool calls, the
+    # runner asks the API for a summary and replaces its messages with the
+    # compaction response, which is returned like any other message.
+    # Requires a beta runner (`use_beta: true`) and the
+    # `compact-2026-09-04` beta (attached automatically).
+    #
+    # Only takes effect on manual `next_message` loops: the `each_*`,
+    # `final_message`, and `run_until_finished` entry points reset the
+    # runner first, dropping a request queued before the run.
+    #
+    # ```
+    # runner.compact_before_next_turn
+    # ```
+    def compact_before_next_turn(compaction : CompactionParam? = nil)
+      unless @use_beta
+        raise ArgumentError.new("compact_before_next_turn requires a beta tool runner (use_beta: true)")
+      end
+
+      @pending_compaction = compaction || SummarizeCompaction.new
     end
 
     # Get final message after all tool execution
@@ -305,6 +437,10 @@ module Anthropic
     # Similar to each_message but yields streaming events in real-time.
     # Tool execution still happens between streaming responses.
     #
+    # A pending explicit compaction runs silently as a single
+    # non-streaming turn (no events are yielded for it); the replaced
+    # conversation then streams normally.
+    #
     # ```
     # runner.each_streaming do |event|
     #   case event
@@ -317,21 +453,37 @@ module Anthropic
     # ```
     def each_streaming(&block : AnyStreamEvent ->)
       reset
+      last_stop_reason : String? = nil
 
       loop do
+        # Explicit compaction runs as a single non-streaming turn before
+        # queued tool changes flush; the replaced conversation then
+        # streams normally. Compaction turns don't burn an iteration.
+        # The API can't compact a conversation that ends mid-turn, so a
+        # paused turn resumes first.
+        if compaction = @pending_compaction
+          compaction_turn(compaction) unless resume_stop_reason?(last_stop_reason)
+        end
+
         @iteration += 1
-        break if @iteration > @max_iterations
+        if @iteration > @max_iterations
+          @finished = true
+          break
+        end
+
+        # A paused turn goes back as the last message, so queued tool
+        # changes wait for the request after it.
+        send_pending_tool_changes unless last_stop_reason == "pause_turn"
+        inline_beta = history_has_tool_changes?
 
         # Check for compaction before making request
         if should_compact?(@current_messages)
           @current_messages = compact_messages(@current_messages)
         end
 
-        # Collect tool uses during streaming
-        collected_tool_uses = [] of ToolUseContent
-        active_tool_uses = {} of Int32 => NamedTuple(id: String, name: String)
-        tool_json_buffers = {} of Int32 => String
-        response_text = ""
+        # Accumulate the full message (thinking, text, tool uses) so
+        # resumes and tool turns replay complete content.
+        snapshot = SnapshotBuilder.new
 
         stream_messages(
           @current_messages,
@@ -342,48 +494,141 @@ module Anthropic
           thinking: @thinking,
           output_config: @output_config,
           inference_geo: @inference_geo,
-          container: @container
+          container: @container,
+          betas: inline_beta ? with_inline_tools_beta : nil
         ) do |event|
           # Yield every event to the caller
           block.call(event)
 
-          if text = process_streaming_event(
-               event,
-               collected_tool_uses,
-               active_tool_uses,
-               tool_json_buffers
-             )
-            response_text += text
-          end
+          snapshot.apply(event)
+          track_streaming_container(event)
         end
 
-        # If no tool uses, we're done
-        if collected_tool_uses.empty?
+        final = snapshot.message
+        stop_reason = final.try(&.stop_reason)
+        last_stop_reason = stop_reason
+
+        # A paused turn resumes: send it back unchanged so the server
+        # continues it.
+        if resume_stop_reason?(stop_reason) && final
+          @current_messages << MessageParam.new(
+            role: Role::Assistant,
+            content: final.content
+          )
+          next
+        end
+
+        # Tools run only on tool_use turns; any other stop reason ends
+        # the loop without executing, even if blocks are present.
+        tool_uses = final.try(&.tool_use_blocks) || [] of ToolUseContent
+        if stop_reason == "tool_use" && !tool_uses.empty? && final
+          # Execute tools
+          tool_results = execute_tools(tool_uses)
+
+          @current_messages << MessageParam.new(
+            role: Role::Assistant,
+            content: final.content
+          )
+
+          @current_messages << MessageParam.new(
+            role: Role::User,
+            content: tool_results.map(&.as(ContentBlock))
+          )
+        else
           @finished = true
           break
         end
+      end
+    end
 
-        # Execute tools
-        tool_results = execute_tools(collected_tool_uses)
+    # Stop reasons for unfinished turns. `pause_turn` pauses a
+    # long-running turn; `compaction` hands the turn back before the
+    # model answers (pause after compaction). Sending the turn back
+    # unchanged continues it.
+    RESUME_STOP_REASONS = ["pause_turn", "compaction"]
 
-        # Build assistant content from collected data
-        assistant_content = [] of ContentBlock
-        unless response_text.empty?
-          assistant_content << TextContent.new(text: response_text).as(ContentBlock)
-        end
-        collected_tool_uses.each do |tool_use|
-          assistant_content << tool_use.as(ContentBlock)
-        end
+    private def resume_stop_reason?(stop_reason : String?) : Bool
+      !!stop_reason && RESUME_STOP_REASONS.includes?(stop_reason)
+    end
 
-        @current_messages << MessageParam.new(
-          role: Role::Assistant,
-          content: assistant_content
-        )
+    # Flush queued tool changes as a trailing system message.
+    #
+    # Returns whether anything was sent (the request then needs the
+    # inline-tools beta).
+    private def send_pending_tool_changes : Bool
+      return false if @pending_tool_changes.empty?
 
-        @current_messages << MessageParam.new(
-          role: Role::User,
-          content: tool_results.map(&.as(ContentBlock))
-        )
+      @current_messages << MessageParam.new(
+        role: Role::System,
+        content: @pending_tool_changes.dup
+      )
+      @pending_tool_changes.clear
+      true
+    end
+
+    # Whether the current history carries tool-change blocks. Derived
+    # from the messages so a failed turn's retry still attaches the
+    # inline-tools beta for the already-flushed blocks.
+    private def history_has_tool_changes? : Bool
+      @current_messages.any? do |message|
+        content = message.content
+        next false if content.is_a?(String)
+
+        content.any? { |block| block.is_a?(ToolAdditionContent) || block.is_a?(ToolRemovalContent) }
+      end
+    end
+
+    # Runner betas plus the inline-tools beta for tool-change requests.
+    private def with_inline_tools_beta : Array(String)
+      betas = @betas.dup
+      betas << INLINE_TOOLS_2026_09_15_BETA unless betas.includes?(INLINE_TOOLS_2026_09_15_BETA)
+      betas
+    end
+
+    # Run one explicit compaction turn.
+    #
+    # Returns the compaction response after replacing the conversation
+    # with it, or `nil` when the server returned no summary (the caller
+    # then proceeds with a normal turn). The pending request clears only
+    # once the turn succeeds, so a transport failure preserves it for
+    # the next turn's retry.
+    private def compaction_turn(compaction : CompactionParam) : Message?
+      unless @use_beta
+        raise ArgumentError.new("compact_before_next_turn requires a beta tool runner (use_beta: true)")
+      end
+
+      # Compaction turns sample no reply, so a structured-output format
+      # is incompatible with them; effort and task budgets carry over.
+      output_config = @output_config
+      if (config = output_config) && config.format
+        output_config = OutputConfig.new(effort: config.effort, task_budget: config.task_budget)
+      end
+
+      response = create_message(
+        @current_messages,
+        max_tokens: @max_tokens,
+        tools: @tools,
+        system: @system,
+        speed: @speed,
+        thinking: @thinking,
+        output_config: output_config,
+        inference_geo: @inference_geo,
+        container: @container,
+        compaction: compaction
+      )
+      @pending_compaction = nil
+
+      @last_response = response
+      update_container(response.container_id)
+
+      summary = response.content.compact_map { |block| block.as?(CompactionContent) }.first?
+      has_summary = summary && (!(summary.content || "").empty? || !(summary.encrypted_content || "").empty?)
+      if has_summary
+        @current_messages = [MessageParam.new(role: Role::Assistant, content: response.content)]
+        response
+      else
+        Log.for("anthropic-cr.tool_runner").warn { "Compaction produced no summary; keeping the conversation as it is." }
+        nil
       end
     end
 
@@ -398,7 +643,9 @@ module Anthropic
       available = ToolDispatch.available_tool_names(@current_messages, @tools.map(&.name))
 
       tool_uses.map do |tool_use|
-        tool = if available.includes?(tool_use.name)
+        tool = if @tool_overrides.has_key?(tool_use.name)
+                 @tool_overrides[tool_use.name]
+               elsif available.includes?(tool_use.name)
                  @tools.find { |available_tool| available_tool.name == tool_use.name }
                end
 
@@ -436,7 +683,7 @@ module Anthropic
       begin
         count = count_tokens(messages)
         count.input_tokens > threshold
-      rescue ex : APIError | IO::Error | Socket::Error
+      rescue ex : APIError | IO::Error | Socket::Error | OpenSSL::Error
         # If token counting fails, don't compact
         false
       end
@@ -449,7 +696,7 @@ module Anthropic
       # Get token count before compaction
       tokens_before = begin
         count_tokens(messages).input_tokens
-      rescue ex : APIError | IO::Error | Socket::Error
+      rescue ex : APIError | IO::Error | Socket::Error | OpenSSL::Error
         0
       end
 
@@ -507,7 +754,7 @@ module Anthropic
       # Get token count after compaction and call callback
       tokens_after = begin
         count_tokens(compacted).input_tokens
-      rescue ex : APIError | IO::Error | Socket::Error
+      rescue ex : APIError | IO::Error | Socket::Error | OpenSSL::Error
         0
       end
 
@@ -516,58 +763,15 @@ module Anthropic
       compacted
     end
 
-    private def process_streaming_event(
-      event : AnyStreamEvent,
-      collected_tool_uses : Array(ToolUseContent),
-      active_tool_uses : Hash(Int32, NamedTuple(id: String, name: String)),
-      tool_json_buffers : Hash(Int32, String),
-    ) : String?
+    # Track container reassignment during streaming. Content
+    # accumulation lives in `SnapshotBuilder`.
+    private def track_streaming_container(event : AnyStreamEvent) : Nil
       case event
       when MessageStartEvent
         update_container(event.message.container_id)
       when MessageDeltaEvent
         update_container(event.delta.container.try(&.id))
-      when ContentBlockStartEvent
-        if tool_use = event.content_block.as?(ToolUseContent)
-          active_tool_uses[event.index] = {id: tool_use.id, name: tool_use.name}
-          tool_json_buffers[event.index] = ""
-        end
-      when ContentBlockDeltaEvent
-        if partial = event.partial_json
-          if active_tool_uses.has_key?(event.index)
-            tool_json_buffers[event.index] = "#{tool_json_buffers[event.index]? || ""}#{partial}"
-          end
-        end
-
-        return event.text
-      when ContentBlockStopEvent
-        complete_streaming_tool_use(event.index, collected_tool_uses, active_tool_uses, tool_json_buffers)
       end
-
-      nil
-    end
-
-    private def complete_streaming_tool_use(
-      index : Int32,
-      collected_tool_uses : Array(ToolUseContent),
-      active_tool_uses : Hash(Int32, NamedTuple(id: String, name: String)),
-      tool_json_buffers : Hash(Int32, String),
-    )
-      return unless active_tool_use = active_tool_uses[index]?
-
-      begin
-        tool_json = tool_json_buffers[index]? || ""
-        parsed_input = tool_json.empty? ? JSON::Any.new({} of String => JSON::Any) : JSON.parse(tool_json)
-        collected_tool_uses << ToolUseContent.new(
-          id: active_tool_use[:id],
-          name: active_tool_use[:name],
-          input: parsed_input
-        )
-      rescue JSON::ParseException
-      end
-
-      active_tool_uses.delete(index)
-      tool_json_buffers.delete(index)
     end
 
     private def create_message(
@@ -580,10 +784,12 @@ module Anthropic
       output_config : OutputConfig?,
       inference_geo : String?,
       container : String | ContainerConfig?,
+      betas : Array(String)? = nil,
+      compaction : CompactionParam? = nil,
     ) : Message
       if @use_beta
         @client.beta.messages.create(
-          betas: @betas,
+          betas: betas || @betas,
           model: @model,
           max_tokens: max_tokens,
           messages: messages,
@@ -594,6 +800,7 @@ module Anthropic
           output_config: output_config,
           inference_geo: inference_geo,
           container: container,
+          compaction: compaction,
           extra_headers: Anthropic::StainlessHelper.header(Anthropic::StainlessHelper::BETA_TOOL_RUNNER)
         )
       else
@@ -622,11 +829,12 @@ module Anthropic
       output_config : OutputConfig?,
       inference_geo : String?,
       container : String | ContainerConfig?,
+      betas : Array(String)? = nil,
       &block : AnyStreamEvent ->
     )
       if @use_beta
         @client.beta.messages.stream(
-          betas: @betas,
+          betas: betas || @betas,
           model: @model,
           max_tokens: max_tokens,
           messages: messages,
@@ -662,7 +870,7 @@ module Anthropic
     private def count_tokens(messages : Array(MessageParam)) : TokenCountResponse
       if @use_beta
         @client.beta.messages.count_tokens(
-          betas: @betas,
+          betas: history_has_tool_changes? ? with_inline_tools_beta : @betas,
           model: @model,
           messages: messages,
           tools: @tools,
@@ -720,13 +928,26 @@ module Anthropic
       tool_names.each { |name| available.add(name) }
 
       messages.each do |message|
-        next unless message.role == "system"
-
         content = message.content
         next if content.is_a?(String)
 
-        content.each do |block|
-          apply_tool_change(block, available)
+        if message.role == "system"
+          content.each do |block|
+            apply_tool_change(block, available)
+          end
+        elsif message.role == "assistant"
+          # A compaction block's tool changes carry the tool set in
+          # effect at the end of the compacted range.
+          content.each do |block|
+            next unless block.is_a?(CompactionContent)
+
+            block.tool_changes.try &.each do |change|
+              case change
+              when ToolAdditionContent, ToolRemovalContent
+                apply_tool_change(change, available)
+              end
+            end
+          end
         end
       end
 

@@ -86,7 +86,7 @@ describe "v0.10.0 parity additions" do
   end
 
   it "lists user profiles with order_by" do
-    list = %({"data":[],"has_more":false,"first_id":null,"last_id":null})
+    list = %({"data":[],"next_page":null})
     capture = stub_and_capture(:get, "https://api.anthropic.com/v1/user_profiles?beta=true&limit=20&order_by=name", list)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 

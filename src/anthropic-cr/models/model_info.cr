@@ -20,6 +20,9 @@ module Anthropic
     # Claude Mythos 5.1 — Most capable model for cybersecurity and biology research.
     CLAUDE_MYTHOS_5_1 = "claude-mythos-5-1"
 
+    # Claude Opus 5.5 — Most capable model for complex reasoning and agents.
+    CLAUDE_OPUS_5_5 = "claude-opus-5-5"
+
     # Claude Fable 5 — Next generation of intelligence for the hardest knowledge work and coding.
     CLAUDE_FABLE_5 = "claude-fable-5"
 
@@ -83,6 +86,7 @@ module Anthropic
     :mythos_5   => Model::CLAUDE_MYTHOS_5,
     :opus       => Model::CLAUDE_OPUS_5,
     :opus_5     => Model::CLAUDE_OPUS_5,
+    :opus_5_5   => Model::CLAUDE_OPUS_5_5,
     :opus_4_8   => Model::CLAUDE_OPUS_4_8,
     :opus_4_7   => Model::CLAUDE_OPUS_4_7,
     :haiku      => Model::CLAUDE_HAIKU_4_5,
@@ -151,6 +155,17 @@ module Anthropic
     getter? supported : Bool
   end
 
+  # Compaction capability details: whether the model accepts the
+  # top-level `compaction` request parameter.
+  struct CompactionCapability
+    include JSON::Serializable
+
+    # Whether the summarize compaction type is supported.
+    getter summarize : CapabilitySupport
+
+    getter? supported : Bool
+  end
+
   struct ModelCapabilities
     include JSON::Serializable
 
@@ -159,6 +174,9 @@ module Anthropic
 
     @[JSON::Field(key: "code_execution")]
     getter code_execution : CapabilitySupport
+
+    @[JSON::Field(emit_null: false)]
+    getter compaction : CompactionCapability?
 
     @[JSON::Field(key: "context_management")]
     getter context_management : ContextManagementCapability

@@ -16,10 +16,13 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged = betas.dup
       merged << MANAGED_AGENTS_BETA unless merged.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged.join(",")}, workspace_id) || {} of String => String
     end
 
     # Create a deployment.
@@ -34,6 +37,7 @@ module Anthropic
       schedule : JSON::Any | Hash(String, JSON::Any)? = nil,
       vault_ids : Array(String)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
       params = {} of String => JSON::Any
       params["agent"] = agent.is_a?(String) ? JSON::Any.new(agent) : JSON.parse(agent.to_json)
@@ -46,7 +50,7 @@ module Anthropic
       params["schedule"] = schedule.is_a?(JSON::Any) ? schedule : JSON.parse(schedule.to_json) if schedule
       params["vault_ids"] = JSON.parse(vault_ids.to_json) if vault_ids
 
-      response = @client.post("/v1/deployments?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/deployments?beta=true", params, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -54,8 +58,9 @@ module Anthropic
     def retrieve(
       deployment_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
-      response = @client.get("/v1/deployments/#{deployment_id}?beta=true", nil, beta_headers(betas))
+      response = @client.get("/v1/deployments/#{deployment_id}?beta=true", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -72,6 +77,7 @@ module Anthropic
       schedule : JSON::Any | Hash(String, JSON::Any)? = nil,
       vault_ids : Array(String)? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
       params = {} of String => JSON::Any
       params["agent"] = agent.is_a?(String) ? JSON::Any.new(agent) : JSON.parse(agent.to_json) if agent
@@ -84,7 +90,7 @@ module Anthropic
       params["schedule"] = schedule.is_a?(JSON::Any) ? schedule : JSON.parse(schedule.to_json) if schedule
       params["vault_ids"] = JSON.parse(vault_ids.to_json) if vault_ids
 
-      response = @client.post("/v1/deployments/#{deployment_id}?beta=true", params, beta_headers(betas))
+      response = @client.post("/v1/deployments/#{deployment_id}?beta=true", params, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -98,6 +104,7 @@ module Anthropic
       page : String? = nil,
       status : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeploymentListResponse
       query = {"limit" => limit.to_s}
       query["agent_id"] = agent_id if agent_id
@@ -107,7 +114,7 @@ module Anthropic
       query["page"] = page if page
       query["status"] = status if status
 
-      response = @client.get("/v1/deployments?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/deployments?beta=true", query, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeploymentListResponse.from_json(response.body)
     end
 
@@ -115,8 +122,9 @@ module Anthropic
     def archive(
       deployment_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
-      response = @client.post("/v1/deployments/#{deployment_id}/archive?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/deployments/#{deployment_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -124,8 +132,9 @@ module Anthropic
     def pause(
       deployment_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
-      response = @client.post("/v1/deployments/#{deployment_id}/pause?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/deployments/#{deployment_id}/pause?beta=true", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -133,8 +142,9 @@ module Anthropic
     def unpause(
       deployment_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
-      response = @client.post("/v1/deployments/#{deployment_id}/unpause?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/deployments/#{deployment_id}/unpause?beta=true", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -142,8 +152,9 @@ module Anthropic
     def run(
       deployment_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeploymentRun
-      response = @client.post("/v1/deployments/#{deployment_id}/run?beta=true", nil, beta_headers(betas))
+      response = @client.post("/v1/deployments/#{deployment_id}/run?beta=true", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeploymentRun.from_json(response.body)
     end
   end
@@ -155,18 +166,22 @@ module Anthropic
     def initialize(@client : Client)
     end
 
-    private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
+    private def beta_headers(
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : Hash(String, String)
       merged = betas.dup
       merged << MANAGED_AGENTS_BETA unless merged.includes?(MANAGED_AGENTS_BETA)
-      {"anthropic-beta" => merged.join(",")}
+      Anthropic.merge_workspace_header({"anthropic-beta" => merged.join(",")}, workspace_id) || {} of String => String
     end
 
     # Retrieve a deployment run by ID.
     def retrieve(
       deployment_run_id : String,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeploymentRun
-      response = @client.get("/v1/deployment_runs/#{deployment_run_id}?beta=true", nil, beta_headers(betas))
+      response = @client.get("/v1/deployment_runs/#{deployment_run_id}?beta=true", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeploymentRun.from_json(response.body)
     end
 
@@ -182,6 +197,7 @@ module Anthropic
       page : String? = nil,
       trigger_type : String? = nil,
       betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
     ) : BetaManagedAgentsDeploymentRunListResponse
       query = {"limit" => limit.to_s}
       query["created_at[gt]"] = created_at_gt if created_at_gt
@@ -193,7 +209,7 @@ module Anthropic
       query["page"] = page if page
       query["trigger_type"] = trigger_type if trigger_type
 
-      response = @client.get("/v1/deployment_runs?beta=true", query, beta_headers(betas))
+      response = @client.get("/v1/deployment_runs?beta=true", query, beta_headers(betas, workspace_id))
       BetaManagedAgentsDeploymentRunListResponse.from_json(response.body)
     end
   end

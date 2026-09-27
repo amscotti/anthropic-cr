@@ -101,14 +101,9 @@ module Anthropic
 
     getter data : Array(BetaManagedAgentsDeployment)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool
-
-    @[JSON::Field(key: "first_id", emit_null: false)]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id", emit_null: false)]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 
   # List response envelope for deployment runs.
@@ -117,13 +112,8 @@ module Anthropic
 
     getter data : Array(BetaManagedAgentsDeploymentRun)
 
-    @[JSON::Field(key: "has_more")]
-    getter? has_more : Bool
-
-    @[JSON::Field(key: "first_id", emit_null: false)]
-    getter first_id : String?
-
-    @[JSON::Field(key: "last_id", emit_null: false)]
-    getter last_id : String?
+    # Opaque cursor for the next page, if any
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
   end
 end

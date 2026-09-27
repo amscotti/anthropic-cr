@@ -119,6 +119,7 @@ crystal run examples/01_basic_message.cr
 | `47_completions.cr` | Legacy Text Completions — `client.completions` create + streaming |
 | `48_organization.cr` | Organization Admin API — `client.beta.organization` overview |
 | `49_providers.cr` | Alternate providers — AWS / Google Cloud / Vertex clients |
+| `50_compaction_and_tools.cr` | Explicit compaction + runner tool changes |
 
 Prefer inference profile model IDs for Runtime (`us.anthropic.*` / `global.anthropic.*`). Credentials resolve from env, `~/.aws/credentials`, `aws login` cache, IAM Identity Center SSO (`aws sso login`), or IMDS. Mantle Anthropic models may need separate account entitlement beyond Runtime access.
 
