@@ -313,13 +313,13 @@ describe "v0.12.0 core foundation (2026-10-21)" do
 
     it "preserves virtual dispatch to GoogleCloud and Bedrock provider overrides across get, stream, and multipart" do
       gc_models_cap = nil
-      WebMock.stub(:get, "https://claude.googleapis.com/v1alpha/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/models?limit=20").to_return do |req|
+      WebMock.stub(:get, "https://claude.googleapis.com/v1/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/models?limit=20").to_return do |req|
         gc_models_cap = req
         HTTP::Client::Response.new(200, body: Fixtures::Responses::MODEL_LIST)
       end
 
       gc_files_cap = nil
-      WebMock.stub(:post, "https://claude.googleapis.com/v1alpha/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/files").to_return do |req|
+      WebMock.stub(:post, "https://claude.googleapis.com/v1/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/files").to_return do |req|
         gc_files_cap = req
         HTTP::Client::Response.new(
           200,
@@ -334,11 +334,11 @@ describe "v0.12.0 core foundation (2026-10-21)" do
         skip_auth: true,
       )
       gc_client.models.list
-      gc_models_cap.not_nil!.uri.path.should eq("/v1alpha/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/models")
+      gc_models_cap.not_nil!.uri.path.should eq("/v1/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/models")
 
       gc_client.files.upload(IO::Memory.new("hello"), expires_in_seconds: 3600)
       gc_files_req = gc_files_cap.not_nil!
-      gc_files_req.uri.path.should eq("/v1alpha/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/files")
+      gc_files_req.uri.path.should eq("/v1/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/files")
       gc_files_req.body.to_s.should contain("expires_in_seconds")
 
       frame = Anthropic::Bedrock::EventStream.encode_chunk_event(%({"type":"message_stop"}))

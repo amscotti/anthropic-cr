@@ -34,11 +34,12 @@ describe "Anthropic::Bedrock::Client streaming" do
     req.headers["Authorization"]?.should be_truthy
     req.headers["Authorization"].should start_with("AWS4-HMAC-SHA256")
     req.headers["x-api-key"]?.should be_nil
+    req.headers["anthropic-version"]?.should be_nil
 
     body = JSON.parse(req.body.not_nil!)
     body.as_h.has_key?("model").should be_false
     body.as_h.has_key?("stream").should be_false
-    body["anthropic_version"].as_s.should eq("bedrock-2023-05-31")
+    body["anthropic_version"].as_s.should eq("2026-10-21")
 
     events.size.should eq(1)
     events[0].should be_a(Anthropic::MessageStopEvent)
