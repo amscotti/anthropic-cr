@@ -864,4 +864,116 @@ describe "v0.12.0 cloud providers parity (2026-10-21)" do
       captured_body.should contain("skill-bytes")
     end
   end
+
+  describe "cross-slice organization, user_profiles, and tool_runner integration" do
+    it "raises NotImplementedError for organization and beta.organization on Bedrock, Mantle, and Vertex" do
+      bedrock = Anthropic::Bedrock::Client.new(api_key: "br-k", aws_region: "us-east-1")
+      mantle = Anthropic::Bedrock::MantleClient.new(api_key: "mt-k", aws_region: "us-east-1")
+      vertex = Anthropic::Vertex::Client.new(region: "us-central1", project_id: "proj-1", access_token: "tok")
+
+      [bedrock, mantle, vertex].each do |client|
+        expect_raises(NotImplementedError) { client.organization }
+        expect_raises(NotImplementedError) { client.beta.organization }
+        expect_raises(NotImplementedError) { client.get("/v1/organizations/me") }
+      end
+    end
+
+    it "supports organization and user_profiles on AWS::Client and GoogleCloud::Client" do
+      org_json = %({"id":"org_1","name":"Acme","type":"organization"})
+      profile_json = %({"id":"uprof_1","access_type":"passthrough","created_at":"2026-10-21T00:00:00Z","updated_at":"2026-10-21T00:00:00Z","type":"user_profile","metadata":{},"external_user_details":{},"enforcement_status":"unrestricted","enforcement_actions":[],"programs":{}})
+      action_url_json = %({"type":"user_profile_action_url","url":"https://claude.ai/action/abc","expires_at":"2026-10-21T01:00:00Z"})
+
+      aws = Anthropic::AWS::Client.new(api_key: "aws-k", aws_region: "us-east-1", workspace_id: "ws_1")
+      WebMock.stub(:get, "https://aws-external-anthropic.us-east-1.api.aws/v1/organizations/me")
+        .to_return(status: 200, body: org_json)
+      WebMock.stub(:post, "https://aws-external-anthropic.us-east-1.api.aws/v1/user_profiles")
+        .to_return(status: 200, body: profile_json)
+
+      aws.organization.retrieve.id.should eq("org_1")
+      aws.beta.organization.retrieve.id.should eq("org_1")
+      aws.user_profiles.create(name: "Acme").id.should eq("uprof_1")
+      expect_raises(ArgumentError, /User profile action URLs are not supported in the AWS client\./) do
+        aws.user_profiles.action_urls.create("uprof_1", action: Anthropic::UserProfileEnrollEndUserAction.new)
+      end
+
+      gc = Anthropic::GoogleCloud::Client.new(project: "proj-1", workspace_id: nil, skip_auth: true)
+      gc_paths = [] of String
+      WebMock.stub(:get, /claude\.googleapis\.com\/v1\/projects\/proj-1\/locations\/global\/claudeOrganization\/invoke\/.*/).to_return do |req|
+        gc_paths << req.uri.path
+        HTTP::Client::Response.new(200, body: org_json)
+      end
+      WebMock.stub(:post, /claude\.googleapis\.com\/v1\/projects\/proj-1\/locations\/global\/claudeOrganization\/invoke\/.*/).to_return do |req|
+        gc_paths << req.uri.path
+        HTTP::Client::Response.new(200, body: action_url_json)
+      end
+
+      gc.organization.retrieve.id.should eq("org_1")
+      gc.beta.organization.retrieve.id.should eq("org_1")
+      gc.user_profiles.action_urls.create("uprof_1", action: Anthropic::UserProfileEnrollEndUserAction.new).url.should eq("https://claude.ai/action/abc")
+      gc_paths.should eq([
+        "/v1/projects/proj-1/locations/global/claudeOrganization/invoke/v1/organizations/me",
+        "/v1/projects/proj-1/locations/global/claudeOrganization/invoke/v1/organizations/me",
+        "/v1/projects/proj-1/locations/global/claudeOrganization/invoke/v1/user_profiles/uprof_1/action_urls",
+      ])
+    end
+
+    it "handles beta.messages.tool_runner with threads on AWS/GoogleCloud and unthreaded on Bedrock/Mantle/Vertex" do
+      aws_body = ""
+      gc_body = ""
+      bedrock_body = ""
+      mantle_body = ""
+      vertex_body = ""
+
+      WebMock.stub(:post, "https://aws-external-anthropic.us-east-1.api.aws/v1/messages").to_return do |req|
+        aws_body = req.body.to_s
+        HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC)
+      end
+      WebMock.stub(:post, "https://claude.googleapis.com/v1/projects/proj-1/locations/global/workspaces/ws_1/invoke/v1/messages").to_return do |req|
+        gc_body = req.body.to_s
+        HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC)
+      end
+      WebMock.stub(:post, /bedrock-runtime\.us-east-1\.amazonaws\.com\/model\//).to_return do |req|
+        bedrock_body = req.body.to_s
+        HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC)
+      end
+      WebMock.stub(:post, "https://bedrock-mantle.us-east-1.api.aws/anthropic/v1/messages").to_return do |req|
+        mantle_body = req.body.to_s
+        HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC)
+      end
+      WebMock.stub(:post, /us-central1-aiplatform\.googleapis\.com\/v1\/projects\//).to_return do |req|
+        vertex_body = req.body.to_s
+        HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC)
+      end
+
+      aws = Anthropic::AWS::Client.new(api_key: "aws-k", aws_region: "us-east-1", workspace_id: "ws_1")
+      gc = Anthropic::GoogleCloud::Client.new(project: "proj-1", workspace_id: "ws_1", skip_auth: true)
+      bedrock = Anthropic::Bedrock::Client.new(api_key: "br-k", aws_region: "us-east-1")
+      mantle = Anthropic::Bedrock::MantleClient.new(api_key: "mt-k", aws_region: "us-east-1")
+      vertex = Anthropic::Vertex::Client.new(region: "us-central1", project_id: "proj-1", access_token: "tok")
+
+      tools = [] of Anthropic::Tool
+      msgs = [Anthropic::MessageParam.user("hi")]
+
+      aws_runner = aws.beta.messages.tool_runner(model: "claude-sonnet-5", max_tokens: 16, messages: msgs, tools: tools)
+      aws_runner.thread.should_not be_nil
+      aws_runner.final_message.should be_a(Anthropic::Message)
+      JSON.parse(aws_body)["thread"]["type"].as_s.should eq("create")
+
+      gc_runner = gc.beta.messages.tool_runner(model: "claude-sonnet-5", max_tokens: 16, messages: msgs, tools: tools)
+      gc_runner.thread.should_not be_nil
+      gc_runner.final_message.should be_a(Anthropic::Message)
+      JSON.parse(gc_body)["thread"]["type"].as_s.should eq("create")
+
+      [
+        {bedrock, "us.anthropic.claude-sonnet-5", -> { bedrock_body }},
+        {mantle, "claude-sonnet-5", -> { mantle_body }},
+        {vertex, "claude-sonnet-4-6", -> { vertex_body }},
+      ].each do |client, model, get_body|
+        runner = client.beta.messages.tool_runner(model: model, max_tokens: 16, messages: msgs, tools: tools)
+        runner.thread.should be_nil
+        runner.final_message.should be_a(Anthropic::Message)
+        JSON.parse(get_body.call).as_h.has_key?("thread").should be_false
+      end
+    end
+  end
 end

@@ -142,6 +142,13 @@ module Anthropic
         )
       end
 
+      def organization : NoReturn
+        raise ::NotImplementedError.new(
+          "Organization management is not supported on Bedrock Mantle. " \
+          "Only Messages (/v1/messages) is supported."
+        )
+      end
+
       def with_options(
         timeout : Time::Span | UnsetValue | Nil = UNSET,
         max_retries : Int32? = nil,
@@ -586,7 +593,8 @@ module Anthropic
             "Only Messages (/v1/messages) is supported."
           )
         end
-        if path.includes?("/v1/files") || path.includes?("/v1/skills") || path.includes?("/v1/user_profiles")
+        if path.includes?("/v1/files") || path.includes?("/v1/skills") ||
+           path.includes?("/v1/user_profiles") || path.includes?("/v1/organizations")
           raise ::NotImplementedError.new(
             "This endpoint is not supported on Bedrock Mantle. " \
             "Only Messages (/v1/messages) is supported."
@@ -677,6 +685,27 @@ module Anthropic
       def dreams
         raise ::NotImplementedError.new(
           "Beta dreams are not supported on Bedrock Mantle. " \
+          "Only Messages (/v1/messages) is supported."
+        )
+      end
+
+      def organization
+        raise ::NotImplementedError.new(
+          "Beta organization management is not supported on Bedrock Mantle. " \
+          "Only Messages (/v1/messages) is supported."
+        )
+      end
+
+      def webhooks
+        raise ::NotImplementedError.new(
+          "Beta webhooks are not supported on Bedrock Mantle. " \
+          "Only Messages (/v1/messages) is supported."
+        )
+      end
+
+      def deployment_runs
+        raise ::NotImplementedError.new(
+          "Beta deployment runs are not supported on Bedrock Mantle. " \
           "Only Messages (/v1/messages) is supported."
         )
       end

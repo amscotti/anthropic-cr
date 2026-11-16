@@ -67,6 +67,10 @@ module Anthropic
         not_supported("dreams")
       end
 
+      def organization : Anthropic::BetaOrganizations
+        not_supported("organization")
+      end
+
       def tunnels : Anthropic::BetaTunnels
         not_supported("tunnels")
       end

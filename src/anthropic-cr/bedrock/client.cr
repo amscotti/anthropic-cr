@@ -146,6 +146,12 @@ module Anthropic
         )
       end
 
+      def organization : NoReturn
+        raise ::NotImplementedError.new(
+          "Amazon Bedrock does not support the Organization Admin API."
+        )
+      end
+
       def with_options(
         timeout : Time::Span | UnsetValue | Nil = UNSET,
         max_retries : Int32? = nil,
@@ -556,6 +562,9 @@ module Anthropic
         end
         if path.includes?("/v1/user_profiles")
           raise ::NotImplementedError.new("User profiles are not supported in Bedrock")
+        end
+        if path.includes?("/v1/organizations")
+          raise ::NotImplementedError.new("Organization management is not supported in Bedrock")
         end
         if path.includes?("/v1/models")
           raise ::NotImplementedError.new(

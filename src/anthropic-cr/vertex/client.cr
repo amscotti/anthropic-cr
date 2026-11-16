@@ -38,6 +38,12 @@ module Anthropic
           "Pass `user_profile_id` on message requests instead."
         )
       end
+
+      def organization : NoReturn
+        raise ::NotImplementedError.new(
+          "Managing organization resources is not available on Anthropic::Vertex::Client."
+        )
+      end
     end
 
     class Client < Anthropic::Client
@@ -112,6 +118,12 @@ module Anthropic
         raise ::NotImplementedError.new(
           "Managing user profiles is not available on Anthropic::Vertex::Client. " \
           "Pass `user_profile_id` on message requests instead."
+        )
+      end
+
+      def organization : NoReturn
+        raise ::NotImplementedError.new(
+          "Managing organization resources is not available on Anthropic::Vertex::Client."
         )
       end
 
@@ -347,6 +359,9 @@ module Anthropic
         end
         if base_path.starts_with?("/v1/user_profiles")
           raise ::NotImplementedError.new("User profiles are not supported in the Vertex client")
+        end
+        if base_path.starts_with?("/v1/organizations")
+          raise ::NotImplementedError.new("Organization management is not supported in the Vertex client")
         end
         if base_path.starts_with?("/v1/files") || base_path.starts_with?("/v1/skills")
           raise ::NotImplementedError.new("This endpoint is not supported in the Vertex client")
