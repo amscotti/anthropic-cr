@@ -296,6 +296,11 @@ module Anthropic
       UserProfiles.new(self)
     end
 
+    # Organization administration API (users, invites, workspaces, keys, RBAC, spend limits, analytics).
+    def organization : Organizations
+      Organizations.new(self)
+    end
+
     def beta : Beta
       Beta.new(self)
     end

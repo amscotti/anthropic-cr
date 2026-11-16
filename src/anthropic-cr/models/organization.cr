@@ -13,10 +13,13 @@ module Anthropic
     getter type : String = "organization"
   end
 
+  alias Organization = BetaOrganization
+
   # Organization-level roles for users and invites.
   #
-  # One of `"admin"`, `"billing"`, `"claude_code_user"`, `"developer"`,
-  # `"managed"`, `"membership_admin"`, `"support"`, `"user"`.
+  # Includes GA/2026-10-21 roles (`"admin"`, `"billing"`,
+  # `"claude_code_user"`, `"developer"`, `"managed"`, `"membership_admin"`,
+  # `"owner"`, `"primary_owner"`, `"user"`) and legacy `"support"`.
   module OrganizationRole
     ADMIN            = "admin"
     BILLING          = "billing"
@@ -24,15 +27,26 @@ module Anthropic
     DEVELOPER        = "developer"
     MANAGED          = "managed"
     MEMBERSHIP_ADMIN = "membership_admin"
+    OWNER            = "owner"
+    PRIMARY_OWNER    = "primary_owner"
     SUPPORT          = "support"
     USER             = "user"
   end
 
   # Workspace roles assignable to members and service accounts.
   #
-  # One of `"admin"`, `"developer"`, `"user"`, `"billing"`,
-  # `"support"`, `"no_billing"`.
+  # Canonical roles are `"workspace_admin"`, `"workspace_billing"`,
+  # `"workspace_developer"`, `"workspace_restricted_developer"`, and
+  # `"workspace_user"`. Legacy short names are retained for backwards
+  # compatibility.
   module WorkspaceRole
+    WORKSPACE_ADMIN                = "workspace_admin"
+    WORKSPACE_BILLING              = "workspace_billing"
+    WORKSPACE_DEVELOPER            = "workspace_developer"
+    WORKSPACE_RESTRICTED_DEVELOPER = "workspace_restricted_developer"
+    WORKSPACE_USER                 = "workspace_user"
+
+    # Legacy short names retained for backwards compatibility.
     ADMIN      = "admin"
     DEVELOPER  = "developer"
     USER       = "user"
@@ -40,6 +54,90 @@ module Anthropic
     SUPPORT    = "support"
     NO_BILLING = "no_billing"
   end
+
+  # Non-billing workspace roles for workspace membership updates and
+  # service-account workspace memberships.
+  module NoBillingWorkspaceRole
+    WORKSPACE_ADMIN                = "workspace_admin"
+    WORKSPACE_DEVELOPER            = "workspace_developer"
+    WORKSPACE_RESTRICTED_DEVELOPER = "workspace_restricted_developer"
+    WORKSPACE_USER                 = "workspace_user"
+  end
+
+  # API key lifecycle statuses.
+  module APIKeyStatus
+    ACTIVE   = "active"
+    ARCHIVED = "archived"
+    EXPIRED  = "expired"
+    INACTIVE = "inactive"
+  end
+
+  alias BetaAPIKeyStatus = APIKeyStatus
+
+  # Actor that created an API key.
+  struct APIKeyCreatedBy
+    include JSON::Serializable
+
+    @[JSON::Field(emit_null: false)]
+    getter id : String?
+
+    getter type : String
+
+    def initialize(@type : String, @id : String? = nil)
+    end
+  end
+
+  # Organization-level scope for an API key.
+  struct APIKeyOrganizationScope
+    include JSON::Serializable
+
+    getter type : String = "organization"
+
+    def initialize(@type : String = "organization")
+    end
+  end
+
+  # Workspace-level scope for an API key.
+  struct APIKeyWorkspaceScope
+    include JSON::Serializable
+
+    getter type : String = "workspace"
+
+    @[JSON::Field(key: "workspace_id")]
+    getter workspace_id : String
+
+    def initialize(@workspace_id : String, @type : String = "workspace")
+    end
+  end
+
+  # User actor principal bound to an API key.
+  struct APIKeyUserActor
+    include JSON::Serializable
+
+    getter type : String = "user_actor"
+
+    @[JSON::Field(key: "user_id")]
+    getter user_id : String
+
+    def initialize(@user_id : String, @type : String = "user_actor")
+    end
+  end
+
+  # Service account actor principal bound to an API key.
+  struct APIKeyServiceAccountActor
+    include JSON::Serializable
+
+    @[JSON::Field(key: "service_account_id")]
+    getter service_account_id : String
+
+    getter type : String = "service_account_actor"
+
+    def initialize(@service_account_id : String, @type : String = "service_account_actor")
+    end
+  end
+
+  alias APIKeyScope = APIKeyOrganizationScope | APIKeyWorkspaceScope
+  alias APIKeyPrincipal = APIKeyOrganizationScope | APIKeyWorkspaceScope | APIKeyUserActor | APIKeyServiceAccountActor
 
   # An API key in the organization.
   struct BetaAPIKey
@@ -50,33 +148,81 @@ module Anthropic
     @[JSON::Field(key: "created_at")]
     getter created_at : String
 
-    # Actor that created the key (user or service-account shape).
-    @[JSON::Field(key: "created_by")]
-    getter created_by : JSON::Any
+    # Actor that created the key (`nil` for system/legacy keys).
+    @[JSON::Field(key: "created_by", emit_null: false)]
+    getter created_by : JSON::Any? = nil
 
-    @[JSON::Field(key: "expires_at")]
-    getter expires_at : String
+    @[JSON::Field(key: "expires_at", emit_null: false)]
+    getter expires_at : String? = nil
 
     getter name : String
 
-    @[JSON::Field(key: "partial_key_hint")]
-    getter partial_key_hint : String
+    @[JSON::Field(key: "partial_key_hint", emit_null: false)]
+    getter partial_key_hint : String? = nil
 
-    # Key principal (organization or workspace scope shape).
-    getter principal : JSON::Any
+    # Principal the API key acts as (`user_actor`, `service_account_actor`, or `nil`).
+    @[JSON::Field(emit_null: false)]
+    getter principal : JSON::Any? = nil
 
-    # Key scope shape.
+    # Key scope shape (`{"type": "organization"}` or `{"type": "workspace", "workspace_id": ...}`).
     getter scope : JSON::Any
 
-    # Key status: `"active"`, `"archived"`, or `"inactive"`.
+    # Key status: `"active"`, `"archived"`, `"expired"`, or `"inactive"`.
     getter status : String
 
     # Object type. Always `"api_key"`.
     getter type : String = "api_key"
 
-    @[JSON::Field(key: "workspace_id")]
-    getter workspace_id : String
+    @[JSON::Field(key: "workspace_id", emit_null: false)]
+    getter raw_workspace_id : String? = nil
+
+    # Workspace ID when explicitly present or carried inside a workspace `scope`.
+    def workspace_id : String?
+      @raw_workspace_id || scope["workspace_id"]?.try(&.as_s?)
+    end
+
+    # Parse `scope` into a typed scope struct when recognized.
+    def parsed_scope : APIKeyScope?
+      case scope["type"]?.try(&.as_s?)
+      when "organization"
+        APIKeyOrganizationScope.from_json(scope.to_json)
+      when "workspace"
+        APIKeyWorkspaceScope.from_json(scope.to_json) if scope["workspace_id"]?.try(&.as_s?)
+      else
+        nil
+      end
+    end
+
+    # Parse `principal` into a typed principal/actor struct when present and recognized.
+    def parsed_principal : APIKeyPrincipal?
+      raw = @principal
+      return nil unless raw
+
+      case raw["type"]?.try(&.as_s?)
+      when "user_actor"
+        APIKeyUserActor.from_json(raw.to_json) if raw["user_id"]?.try(&.as_s?)
+      when "service_account_actor"
+        APIKeyServiceAccountActor.from_json(raw.to_json) if raw["service_account_id"]?.try(&.as_s?)
+      when "organization", "organization_scope"
+        APIKeyOrganizationScope.new(type: raw["type"].as_s)
+      when "workspace", "workspace_scope"
+        if ws_id = raw["workspace_id"]?.try(&.as_s?)
+          APIKeyWorkspaceScope.new(workspace_id: ws_id, type: raw["type"].as_s)
+        end
+      else
+        nil
+      end
+    end
+
+    # Parse `created_by` into a typed actor struct when present.
+    def parsed_created_by : APIKeyCreatedBy?
+      raw = @created_by
+      return nil unless raw && raw["type"]?.try(&.as_s?)
+      APIKeyCreatedBy.from_json(raw.to_json)
+    end
   end
+
+  alias APIKey = BetaAPIKey
 
   # Paginated list of organization API keys.
   struct BetaAPIKeyListResponse
@@ -94,6 +240,8 @@ module Anthropic
     getter last_id : String?
   end
 
+  alias APIKeyListResponse = BetaAPIKeyListResponse
+
   # An external (BYO-cloud) key attached to the organization.
   #
   # `attachment` and `provider_config` carry provider-specific shapes and
@@ -108,8 +256,8 @@ module Anthropic
     @[JSON::Field(key: "created_at")]
     getter created_at : String
 
-    @[JSON::Field(key: "display_name")]
-    getter display_name : String
+    @[JSON::Field(key: "display_name", emit_null: false)]
+    getter display_name : String?
 
     # Key geography (e.g. `"us"`).
     getter geo : String
@@ -122,7 +270,12 @@ module Anthropic
 
     @[JSON::Field(key: "updated_at")]
     getter updated_at : String
+
+    @[JSON::Field(key: "user_profile_id", emit_null: false)]
+    getter user_profile_id : String? = nil
   end
+
+  alias ExternalKey = BetaExternalKey
 
   # Paginated list of external keys.
   struct BetaExternalKeyListResponse
@@ -136,6 +289,8 @@ module Anthropic
     getter next_page : String?
   end
 
+  alias ExternalKeyListResponse = BetaExternalKeyListResponse
+
   # Confirmation returned when an external key is deleted.
   struct BetaDeletedExternalKey
     include JSON::Serializable
@@ -145,6 +300,8 @@ module Anthropic
     # Object type. Always `"external_key_deleted"`.
     getter type : String = "external_key_deleted"
   end
+
+  alias DeletedExternalKey = BetaDeletedExternalKey
 
   # Result of validating an external key.
   struct BetaExternalKeyValidation
@@ -160,6 +317,8 @@ module Anthropic
     # Object type. Always `"external_key_validation"`.
     getter type : String = "external_key_validation"
   end
+
+  alias ExternalKeyValidation = BetaExternalKeyValidation
 
   # A pending or accepted organization invite.
   struct BetaOrganizationInvite
@@ -179,7 +338,7 @@ module Anthropic
     getter invited_at : String
 
     @[JSON::Field(key: "rbac_group_ids")]
-    getter rbac_group_ids : Array(String)
+    getter rbac_group_ids : Array(String) = [] of String
 
     getter role : String
 
@@ -189,6 +348,8 @@ module Anthropic
     # Object type. Always `"invite"`.
     getter type : String = "invite"
   end
+
+  alias OrganizationInvite = BetaOrganizationInvite
 
   # Paginated list of organization invites.
   struct BetaOrganizationInviteListResponse
@@ -206,6 +367,8 @@ module Anthropic
     getter last_id : String?
   end
 
+  alias OrganizationInviteListResponse = BetaOrganizationInviteListResponse
+
   # Confirmation returned when an invite is deleted.
   struct BetaDeletedInvite
     include JSON::Serializable
@@ -215,6 +378,8 @@ module Anthropic
     # Object type. Always `"invite_deleted"`.
     getter type : String = "invite_deleted"
   end
+
+  alias DeletedInvite = BetaDeletedInvite
 
   # A member user of the organization.
   struct BetaOrganizationUser
@@ -235,6 +400,8 @@ module Anthropic
     getter type : String = "user"
   end
 
+  alias OrganizationUser = BetaOrganizationUser
+
   # Paginated list of organization users.
   struct BetaOrganizationUserListResponse
     include JSON::Serializable
@@ -251,6 +418,8 @@ module Anthropic
     getter last_id : String?
   end
 
+  alias OrganizationUserListResponse = BetaOrganizationUserListResponse
+
   # Confirmation returned when a user is removed.
   struct BetaDeletedOrganizationUser
     include JSON::Serializable
@@ -261,13 +430,20 @@ module Anthropic
     getter type : String = "user_deleted"
   end
 
+  alias DeletedOrganizationUser = BetaDeletedOrganizationUser
+
   # A single rate-limit value entry.
   struct BetaOrganizationRateLimitValue
     include JSON::Serializable
 
     getter type : String
     getter value : Int64
+
+    def initialize(@type : String, @value : Int64)
+    end
   end
+
+  alias OrganizationRateLimitValue = BetaOrganizationRateLimitValue
 
   # A rate-limit group applying to a model.
   struct BetaOrganizationRateLimitModelGroup
@@ -282,6 +458,8 @@ module Anthropic
     getter type : String = "model_group"
   end
 
+  alias OrganizationRateLimitModelGroup = BetaOrganizationRateLimitModelGroup
+
   # A rate-limit group applying to batches.
   struct BetaOrganizationRateLimitBatchGroup
     include JSON::Serializable
@@ -291,6 +469,8 @@ module Anthropic
     # Group type. Always `"batch"`.
     getter type : String = "batch"
   end
+
+  alias OrganizationRateLimitBatchGroup = BetaOrganizationRateLimitBatchGroup
 
   # A rate-limit group applying to files.
   struct BetaOrganizationRateLimitFilesGroup
@@ -302,6 +482,8 @@ module Anthropic
     getter type : String = "files"
   end
 
+  alias OrganizationRateLimitFilesGroup = BetaOrganizationRateLimitFilesGroup
+
   # A rate-limit group applying to skills.
   struct BetaOrganizationRateLimitSkillsGroup
     include JSON::Serializable
@@ -311,6 +493,8 @@ module Anthropic
     # Group type. Always `"skills"`.
     getter type : String = "skills"
   end
+
+  alias OrganizationRateLimitSkillsGroup = BetaOrganizationRateLimitSkillsGroup
 
   # A rate-limit group applying to token counting.
   struct BetaOrganizationRateLimitTokenCountGroup
@@ -322,6 +506,8 @@ module Anthropic
     getter type : String = "token_count"
   end
 
+  alias OrganizationRateLimitTokenCountGroup = BetaOrganizationRateLimitTokenCountGroup
+
   # A rate-limit group applying to web search.
   struct BetaOrganizationRateLimitWebSearchGroup
     include JSON::Serializable
@@ -331,6 +517,8 @@ module Anthropic
     # Group type. Always `"web_search"`.
     getter type : String = "web_search"
   end
+
+  alias OrganizationRateLimitWebSearchGroup = BetaOrganizationRateLimitWebSearchGroup
 
   # A future rate-limit group type, preserved with its raw payload so
   # unknown shapes don't break response parsing.
@@ -347,8 +535,11 @@ module Anthropic
     end
   end
 
+  alias OrganizationRateLimitGenericGroup = BetaOrganizationRateLimitGenericGroup
+
   # Discriminated union of rate-limit group variants.
   alias BetaOrganizationRateLimitGroup = BetaOrganizationRateLimitModelGroup | BetaOrganizationRateLimitBatchGroup | BetaOrganizationRateLimitFilesGroup | BetaOrganizationRateLimitSkillsGroup | BetaOrganizationRateLimitTokenCountGroup | BetaOrganizationRateLimitWebSearchGroup | BetaOrganizationRateLimitGenericGroup
+  alias OrganizationRateLimitGroup = BetaOrganizationRateLimitGroup
 
   # Converter for a single BetaOrganizationRateLimitGroup discriminated by `"type"`.
   module BetaOrganizationRateLimitGroupConverter
@@ -390,9 +581,9 @@ module Anthropic
     @[JSON::Field(converter: Anthropic::BetaOrganizationRateLimitGroupConverter)]
     getter group : BetaOrganizationRateLimitGroup
 
-    # Deprecated in favor of `group`; still returned by the API.
-    @[JSON::Field(key: "group_type")]
-    getter group_type : String
+    # Deprecated in favor of `group`; omitted in newer API payloads.
+    @[JSON::Field(key: "group_type", emit_null: false)]
+    getter group_type : String? = nil
 
     getter limits : JSON::Any
 
@@ -402,7 +593,24 @@ module Anthropic
 
     # Object type. Always `"rate_limit"`.
     getter type : String = "rate_limit"
+
+    # Extract limiter entries whether `limits` is returned as an array or object.
+    def limit_values : Array(BetaOrganizationRateLimitValue)
+      if arr = limits.as_a?
+        return arr.map { |item| BetaOrganizationRateLimitValue.from_json(item.to_json) }
+      end
+      if obj = limits.as_h?
+        return obj.compact_map do |key, entry|
+          if val = entry["value"]?.try(&.as_i64?)
+            BetaOrganizationRateLimitValue.new(type: key, value: val)
+          end
+        end
+      end
+      [] of BetaOrganizationRateLimitValue
+    end
   end
+
+  alias OrganizationRateLimit = BetaOrganizationRateLimit
 
   # Paginated list of organization rate limits.
   struct BetaOrganizationRateLimitListResponse
@@ -415,6 +623,140 @@ module Anthropic
     @[JSON::Field(key: "next_page")]
     getter next_page : String?
   end
+
+  alias OrganizationRateLimitListResponse = BetaOrganizationRateLimitListResponse
+
+  # Known workspace rate-limit limiter types.
+  module WorkspaceRateLimitType
+    FAST_ITPMCA                         = "fast_itpmca"
+    FAST_OTPM                           = "fast_otpm"
+    INPUT_TOKENS_PER_MINUTE             = "input_tokens_per_minute"
+    INPUT_TOKENS_PER_MINUTE_CACHE_AWARE = "input_tokens_per_minute_cache_aware"
+    OUTPUT_TOKENS_PER_MINUTE            = "output_tokens_per_minute"
+    REQUESTS_PER_MINUTE                 = "requests_per_minute"
+    TOKENS_PER_DAY                      = "tokens_per_day"
+    TOKENS_PER_MINUTE                   = "tokens_per_minute"
+    TOOL_USES_PER_SECOND                = "tool_uses_per_second"
+  end
+
+  # Indicates a workspace rate-limit value comes from a workspace override.
+  struct WorkspaceRateLimitWorkspaceSource
+    include JSON::Serializable
+
+    getter type : String = "workspace"
+  end
+
+  # Indicates a workspace rate-limit value is inherited from the organization.
+  struct WorkspaceRateLimitOrganizationSource
+    include JSON::Serializable
+
+    getter type : String = "organization"
+  end
+
+  # Forward-compatible fallback for future workspace rate-limit source variants.
+  struct WorkspaceRateLimitGenericSource
+    getter type : String
+    getter raw : JSON::Any
+
+    def initialize(@type : String, @raw : JSON::Any)
+    end
+
+    def to_json(builder : JSON::Builder) : Nil
+      raw.to_json(builder)
+    end
+  end
+
+  alias WorkspaceRateLimitSource = WorkspaceRateLimitWorkspaceSource | WorkspaceRateLimitOrganizationSource | WorkspaceRateLimitGenericSource
+
+  module WorkspaceRateLimitSourceConverter
+    def self.from_json(pull : JSON::PullParser) : WorkspaceRateLimitSource
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s?) || "unknown"
+      raw = json.to_json
+
+      case type
+      when "workspace"
+        WorkspaceRateLimitWorkspaceSource.from_json(raw)
+      when "organization"
+        WorkspaceRateLimitOrganizationSource.from_json(raw)
+      else
+        WorkspaceRateLimitGenericSource.new(type: type, raw: json)
+      end
+    end
+
+    def self.to_json(value : WorkspaceRateLimitSource, builder : JSON::Builder)
+      value.to_json(builder)
+    end
+  end
+
+  # Single rate-limit value entry on a workspace rate limit.
+  struct WorkspaceRateLimitValue
+    include JSON::Serializable
+
+    @[JSON::Field(key: "org_limit", emit_null: false)]
+    getter org_limit : Int64?
+
+    @[JSON::Field(converter: Anthropic::WorkspaceRateLimitSourceConverter)]
+    getter source : WorkspaceRateLimitSource
+
+    getter type : String
+    getter value : Int64
+  end
+
+  # Update payload item for `workspaces.rate_limits.update`.
+  #
+  # Pass `value: nil` to clear a workspace override so the workspace inherits
+  # the organization-level limit.
+  struct WorkspaceRateLimitUpdateValue
+    include JSON::Serializable
+
+    getter type : String
+
+    @[JSON::Field(emit_null: true)]
+    getter value : Int64?
+
+    def initialize(@type : String, @value : Int64? = nil)
+    end
+  end
+
+  # Rate-limit overrides for a workspace group.
+  struct WorkspaceRateLimit
+    include JSON::Serializable
+
+    @[JSON::Field(converter: Anthropic::BetaOrganizationRateLimitGroupConverter)]
+    getter group : BetaOrganizationRateLimitGroup
+
+    getter limits : Array(WorkspaceRateLimitValue)
+
+    @[JSON::Field(emit_null: false)]
+    getter models : Array(String)?
+
+    @[JSON::Field(key: "rate_limit_id")]
+    getter rate_limit_id : String
+
+    getter type : String = "workspace_rate_limit"
+
+    @[JSON::Field(key: "workspace_id")]
+    getter workspace_id : String
+  end
+
+  alias BetaWorkspaceRateLimit = WorkspaceRateLimit
+  alias BetaWorkspaceRateLimitValue = WorkspaceRateLimitValue
+  alias BetaWorkspaceRateLimitUpdateValue = WorkspaceRateLimitUpdateValue
+  alias BetaWorkspaceRateLimitType = WorkspaceRateLimitType
+
+  # Paginated list of workspace rate limits.
+  struct WorkspaceRateLimitListResponse
+    include JSON::Serializable
+    include PageCursorMethods
+
+    getter data : Array(WorkspaceRateLimit)
+
+    @[JSON::Field(key: "next_page")]
+    getter next_page : String?
+  end
+
+  alias BetaWorkspaceRateLimitListResponse = WorkspaceRateLimitListResponse
 
   # Organization compliance settings state.
   #
@@ -429,11 +771,15 @@ module Anthropic
     getter type : String = "compliance_settings"
   end
 
+  alias ComplianceSettings = BetaComplianceSettings
+
   # Allowed inference geographies for beta data-residency configuration.
   module BetaAllowedInferenceGeo
     GLOBAL = "global"
     US     = "us"
   end
+
+  alias AllowedInferenceGeo = BetaAllowedInferenceGeo
 
   # Data-residency configuration for a workspace.
   #
@@ -468,6 +814,8 @@ module Anthropic
     end
   end
 
+  alias DataResidency = BetaDataResidency
+
   # Data-residency configuration accepted when creating a workspace.
   #
   # Omitted fields fall back to API defaults (`allowed_inference_geos`
@@ -493,6 +841,8 @@ module Anthropic
     end
   end
 
+  alias DataResidencyCreateConfig = BetaDataResidencyCreateConfig
+
   # Data-residency configuration accepted when updating a workspace.
   struct BetaDataResidencyUpdateConfig
     include JSON::Serializable
@@ -509,6 +859,8 @@ module Anthropic
     )
     end
   end
+
+  alias DataResidencyUpdateConfig = BetaDataResidencyUpdateConfig
 
   # A workspace in the organization.
   struct BetaWorkspace
@@ -540,7 +892,12 @@ module Anthropic
 
     # Object type. Always `"workspace"`.
     getter type : String = "workspace"
+
+    @[JSON::Field(key: "user_profile_id", emit_null: false)]
+    getter user_profile_id : String? = nil
   end
+
+  alias Workspace = BetaWorkspace
 
   # Paginated list of workspaces.
   struct BetaWorkspaceListResponse
@@ -557,6 +914,8 @@ module Anthropic
     @[JSON::Field(key: "last_id")]
     getter last_id : String?
   end
+
+  alias WorkspaceListResponse = BetaWorkspaceListResponse
 
   # A user's membership in a workspace.
   struct BetaWorkspaceMember
@@ -575,6 +934,8 @@ module Anthropic
     getter workspace_role : String
   end
 
+  alias WorkspaceMember = BetaWorkspaceMember
+
   # Confirmation returned when a user is removed from a workspace.
   struct BetaDeletedWorkspaceMember
     include JSON::Serializable
@@ -588,6 +949,8 @@ module Anthropic
     @[JSON::Field(key: "workspace_id")]
     getter workspace_id : String
   end
+
+  alias DeletedWorkspaceMember = BetaDeletedWorkspaceMember
 
   # Paginated list of workspace members.
   struct BetaWorkspaceMemberListResponse
@@ -605,6 +968,8 @@ module Anthropic
     getter last_id : String?
   end
 
+  alias WorkspaceMemberListResponse = BetaWorkspaceMemberListResponse
+
   # A service account in the organization.
   struct BetaServiceAccount
     include JSON::Serializable
@@ -620,10 +985,11 @@ module Anthropic
     @[JSON::Field(key: "created_at")]
     getter created_at : String
 
-    @[JSON::Field(key: "created_by_actor_id")]
-    getter created_by_actor_id : String
+    @[JSON::Field(key: "created_by_actor_id", emit_null: false)]
+    getter created_by_actor_id : String? = nil
 
-    getter description : String
+    @[JSON::Field(emit_null: false)]
+    getter description : String? = nil
 
     getter name : String
 
@@ -636,9 +1002,11 @@ module Anthropic
     @[JSON::Field(key: "updated_at")]
     getter updated_at : String
 
-    @[JSON::Field(key: "updated_by_actor_id")]
-    getter updated_by_actor_id : String
+    @[JSON::Field(key: "updated_by_actor_id", emit_null: false)]
+    getter updated_by_actor_id : String? = nil
   end
+
+  alias ServiceAccount = BetaServiceAccount
 
   # Paginated list of service accounts.
   struct BetaServiceAccountListResponse
@@ -652,14 +1020,17 @@ module Anthropic
     getter next_page : String?
   end
 
+  alias ServiceAccountListResponse = BetaServiceAccountListResponse
+
   # A service account's membership in a workspace.
   struct BetaServiceAccountWorkspaceMember
     include JSON::Serializable
 
-    @[JSON::Field(key: "created_by_actor_id")]
-    getter created_by_actor_id : String
+    @[JSON::Field(key: "created_by_actor_id", emit_null: false)]
+    getter created_by_actor_id : String? = nil
 
-    getter? implicit : Bool
+    @[JSON::Field(emit_null: false)]
+    getter implicit : Bool?
 
     @[JSON::Field(key: "service_account_id")]
     getter service_account_id : String
@@ -672,7 +1043,13 @@ module Anthropic
 
     @[JSON::Field(key: "workspace_role")]
     getter workspace_role : String
+
+    def implicit? : Bool
+      @implicit == true
+    end
   end
+
+  alias ServiceAccountWorkspaceMember = BetaServiceAccountWorkspaceMember
 
   # Paginated list of service-account workspace memberships.
   struct BetaServiceAccountWorkspaceMemberListResponse
@@ -685,6 +1062,8 @@ module Anthropic
     @[JSON::Field(key: "next_page")]
     getter next_page : String?
   end
+
+  alias ServiceAccountWorkspaceMemberListResponse = BetaServiceAccountWorkspaceMemberListResponse
 
   # Confirmation returned when a service account is removed from a workspace.
   struct BetaDeletedServiceAccountWorkspaceMember
@@ -700,6 +1079,8 @@ module Anthropic
     getter workspace_id : String
   end
 
+  alias DeletedServiceAccountWorkspaceMember = BetaDeletedServiceAccountWorkspaceMember
+
   # JWKS polling status for a federation issuer.
   struct BetaFederationIssuerPollStatus
     include JSON::Serializable
@@ -707,12 +1088,14 @@ module Anthropic
     @[JSON::Field(key: "consecutive_failures")]
     getter consecutive_failures : Int64
 
-    @[JSON::Field(key: "last_fetched_at")]
-    getter last_fetched_at : String
+    @[JSON::Field(key: "last_fetched_at", emit_null: false)]
+    getter last_fetched_at : String?
 
-    @[JSON::Field(key: "next_poll_at")]
-    getter next_poll_at : String
+    @[JSON::Field(key: "next_poll_at", emit_null: false)]
+    getter next_poll_at : String?
   end
+
+  alias FederationIssuerPollStatus = BetaFederationIssuerPollStatus
 
   # A workload-identity federation issuer.
   #
@@ -735,8 +1118,8 @@ module Anthropic
     @[JSON::Field(key: "created_at")]
     getter created_at : String
 
-    @[JSON::Field(key: "created_by_actor_id")]
-    getter created_by_actor_id : String
+    @[JSON::Field(key: "created_by_actor_id", emit_null: false)]
+    getter created_by_actor_id : String? = nil
 
     @[JSON::Field(key: "issuer_url")]
     getter issuer_url : String
@@ -751,8 +1134,8 @@ module Anthropic
 
     getter name : String
 
-    @[JSON::Field(key: "poll_status")]
-    getter poll_status : BetaFederationIssuerPollStatus
+    @[JSON::Field(key: "poll_status", emit_null: false)]
+    getter poll_status : BetaFederationIssuerPollStatus?
 
     # Object type. Always `"federation_issuer"`.
     getter type : String = "federation_issuer"
@@ -760,9 +1143,11 @@ module Anthropic
     @[JSON::Field(key: "updated_at")]
     getter updated_at : String
 
-    @[JSON::Field(key: "updated_by_actor_id")]
-    getter updated_by_actor_id : String
+    @[JSON::Field(key: "updated_by_actor_id", emit_null: false)]
+    getter updated_by_actor_id : String? = nil
   end
+
+  alias FederationIssuer = BetaFederationIssuer
 
   # Paginated list of federation issuers.
   struct BetaFederationIssuerListResponse
@@ -775,6 +1160,8 @@ module Anthropic
     @[JSON::Field(key: "next_page")]
     getter next_page : String?
   end
+
+  alias FederationIssuerListResponse = BetaFederationIssuerListResponse
 
   # JWT match conditions for a federation rule.
   struct BetaFederationRuleMatch
@@ -800,6 +1187,8 @@ module Anthropic
     )
     end
   end
+
+  alias FederationRuleMatch = BetaFederationRuleMatch
 
   # A workload-identity federation rule.
   struct BetaFederationRule
@@ -862,6 +1251,8 @@ module Anthropic
     getter workspace_ids : Array(String)
   end
 
+  alias FederationRule = BetaFederationRule
+
   # Paginated list of federation rules.
   struct BetaFederationRuleListResponse
     include JSON::Serializable
@@ -873,6 +1264,8 @@ module Anthropic
     @[JSON::Field(key: "next_page")]
     getter next_page : String?
   end
+
+  alias FederationRuleListResponse = BetaFederationRuleListResponse
 
   # A workspace attached to a federation rule.
   struct BetaFederationRuleWorkspace
@@ -897,6 +1290,8 @@ module Anthropic
     getter workspace_name : String?
   end
 
+  alias FederationRuleWorkspace = BetaFederationRuleWorkspace
+
   # Paginated list of workspaces a federation rule is enabled for.
   struct BetaFederationRuleWorkspaceListResponse
     include JSON::Serializable
@@ -908,6 +1303,8 @@ module Anthropic
     @[JSON::Field(key: "next_page")]
     getter next_page : String?
   end
+
+  alias FederationRuleWorkspaceListResponse = BetaFederationRuleWorkspaceListResponse
 
   # Confirmation returned when a federation rule is disabled for a workspace.
   struct BetaDeletedFederationRuleWorkspace
@@ -921,4 +1318,6 @@ module Anthropic
     @[JSON::Field(key: "workspace_id")]
     getter workspace_id : String
   end
+
+  alias DeletedFederationRuleWorkspace = BetaDeletedFederationRuleWorkspace
 end
