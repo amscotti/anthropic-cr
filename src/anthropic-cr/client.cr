@@ -291,6 +291,10 @@ module Anthropic
       Skills.new(self)
     end
 
+    def organization : Organizations
+      Organizations.new(self)
+    end
+
     def beta : Beta
       Beta.new(self)
     end

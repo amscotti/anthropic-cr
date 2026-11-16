@@ -212,4 +212,23 @@ describe Anthropic::BetaOrganizations do
 
     capture.headers.not_nil!["anthropic-beta"].should eq("workspace-beta")
   end
+
+  it "retrieves the organization via GA client.organization without beta headers" do
+    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/organizations/me", org_json)
+    client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+    org = client.organization.retrieve
+    org.id.should eq("org_123")
+    capture.headers.not_nil!.has_key?("anthropic-beta").should be_false
+  end
+
+  it "signs out users with ADMIN_USER_SIGN_OUT_BETA" do
+    user = %({"id":"user_1","added_at":"2026-01-01T00:00:00Z","email":"dev@acme.test","name":"Dev","role":"user","type":"user"})
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/users/user_1/sign_out", user)
+    client = Anthropic::Client.new(api_key: "sk-ant-test")
+
+    result = client.beta.organization.users.sign_out("user_1")
+    result.id.should eq("user_1")
+    capture.headers.not_nil!["anthropic-beta"].should eq(Anthropic::ADMIN_USER_SIGN_OUT_BETA)
+  end
 end
