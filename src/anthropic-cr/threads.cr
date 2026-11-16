@@ -736,15 +736,13 @@ module Anthropic
       after_not_found = false
 
       loop do
-        begin
-          return yield
-        rescue ex : ThreadNotFoundError
-          after_not_found = recover_not_found!(ex, after_not_found)
-        rescue ex : ThreadAlreadyContinuedError | ThreadContinueInFlightError
-          recover_continue_conflict!(ex)
-        rescue ex : ThreadUnsupportedRequestError
-          recover_unsupported_request!(ex)
-        end
+        return yield
+      rescue ex : ThreadNotFoundError
+        after_not_found = recover_not_found!(ex, after_not_found)
+      rescue ex : ThreadAlreadyContinuedError | ThreadContinueInFlightError
+        recover_continue_conflict!(ex)
+      rescue ex : ThreadUnsupportedRequestError
+        recover_unsupported_request!(ex)
       end
     end
 

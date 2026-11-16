@@ -804,13 +804,11 @@ describe "v0.12.0 cloud providers parity (2026-10-21)" do
         port = server.local_address.port
         3.times do
           spawn do
-            begin
-              client_sock = server.accept
-              client_sock.gets
-              sleep(0.15.seconds)
-              client_sock.close
-            rescue
-            end
+            client_sock = server.accept
+            client_sock.gets
+            sleep(0.15.seconds)
+            client_sock.close
+          rescue
           end
         end
 
