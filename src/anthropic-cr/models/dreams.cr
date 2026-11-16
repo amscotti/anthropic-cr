@@ -255,6 +255,7 @@ module Anthropic
   # Page-cursor list response for dreams (`data` + `next_page`).
   struct BetaDreamListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaDream)
 

@@ -40,6 +40,7 @@ module Anthropic
   # Paginated list of skills
   struct SkillListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(SkillResponse)
 
@@ -76,6 +77,7 @@ module Anthropic
   # Paginated list of skill versions
   struct SkillVersionListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(SkillVersionResponse)
 
@@ -157,14 +159,14 @@ module Anthropic
     # Retrieve a skill by ID
     def retrieve(skill_id : String, workspace_id : String? = nil) : SkillResponse
       headers = Anthropic.merge_workspace_header(nil, workspace_id)
-      response = @client.get("/v1/skills/#{skill_id}", nil, headers)
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}", nil, headers)
       SkillResponse.from_json(response.body)
     end
 
     # Delete a skill
     def delete(skill_id : String, workspace_id : String? = nil) : SkillDeleteResponse
       headers = Anthropic.merge_workspace_header(nil, workspace_id)
-      response = @client.delete("/v1/skills/#{skill_id}", headers)
+      response = @client.delete("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}", headers)
       SkillDeleteResponse.from_json(response.body)
     end
 
@@ -202,7 +204,7 @@ module Anthropic
     ) : SkillVersionResponse
       headers = Anthropic.merge_workspace_header(nil, workspace_id)
       response = @client.post_multipart_files(
-        "/v1/skills/#{skill_id}/versions",
+        "/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions",
         files,
         nil,
         headers
@@ -221,21 +223,21 @@ module Anthropic
       params["page"] = page if page
 
       headers = Anthropic.merge_workspace_header(nil, workspace_id)
-      response = @client.get("/v1/skills/#{skill_id}/versions", params, headers)
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions", params, headers)
       SkillVersionListResponse.from_json(response.body)
     end
 
     # Retrieve a specific skill version
     def retrieve(skill_id : String, version : String, workspace_id : String? = nil) : SkillVersionResponse
       headers = Anthropic.merge_workspace_header(nil, workspace_id)
-      response = @client.get("/v1/skills/#{skill_id}/versions/#{version}", nil, headers)
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}", nil, headers)
       SkillVersionResponse.from_json(response.body)
     end
 
     # Delete a specific skill version
     def delete(skill_id : String, version : String, workspace_id : String? = nil) : SkillVersionDeleteResponse
       headers = Anthropic.merge_workspace_header(nil, workspace_id)
-      response = @client.delete("/v1/skills/#{skill_id}/versions/#{version}", headers)
+      response = @client.delete("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}", headers)
       SkillVersionDeleteResponse.from_json(response.body)
     end
   end
@@ -298,7 +300,7 @@ module Anthropic
       form_fields = display_name ? {"display_name" => display_name} : nil
 
       response = @client.post_multipart_files(
-        "/v1/skills?beta=true",
+        "/v1/skills",
         files,
         form_fields,
         beta_headers(betas, workspace_id)
@@ -323,7 +325,7 @@ module Anthropic
       params["page"] = page if page
       params["source"] = source if source
 
-      response = @client.get("/v1/skills?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/skills", params, beta_headers(betas, workspace_id))
       SkillListResponse.from_json(response.body)
     end
 
@@ -333,7 +335,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : SkillResponse
-      response = @client.get("/v1/skills/#{skill_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}", nil, beta_headers(betas, workspace_id))
       SkillResponse.from_json(response.body)
     end
 
@@ -343,7 +345,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : SkillDeleteResponse
-      response = @client.delete("/v1/skills/#{skill_id}?beta=true", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}", beta_headers(betas, workspace_id))
       SkillDeleteResponse.from_json(response.body)
     end
 
@@ -355,10 +357,9 @@ module Anthropic
     private def beta_headers(
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
-    ) : Hash(String, String)
-      merged = betas.dup
-      merged << BETA_HEADER unless merged.includes?(BETA_HEADER)
-      Anthropic.merge_workspace_header({"anthropic-beta" => merged.join(",")}, workspace_id) || {} of String => String
+    ) : Hash(String, String)?
+      base = betas.empty? ? nil : {"anthropic-beta" => betas.join(",")}
+      Anthropic.merge_workspace_header(base, workspace_id)
     end
   end
 
@@ -392,7 +393,7 @@ module Anthropic
       workspace_id : String? = nil,
     ) : SkillVersionResponse
       response = @client.post_multipart_files(
-        "/v1/skills/#{skill_id}/versions?beta=true",
+        "/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions",
         files,
         nil,
         beta_headers(betas, workspace_id)
@@ -411,7 +412,7 @@ module Anthropic
       params = {"limit" => limit.to_s}
       params["page"] = page if page
 
-      response = @client.get("/v1/skills/#{skill_id}/versions?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions", params, beta_headers(betas, workspace_id))
       SkillVersionListResponse.from_json(response.body)
     end
 
@@ -422,7 +423,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : SkillVersionResponse
-      response = @client.get("/v1/skills/#{skill_id}/versions/#{version}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}", nil, beta_headers(betas, workspace_id))
       SkillVersionResponse.from_json(response.body)
     end
 
@@ -433,7 +434,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : SkillVersionDeleteResponse
-      response = @client.delete("/v1/skills/#{skill_id}/versions/#{version}?beta=true", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}", beta_headers(betas, workspace_id))
       SkillVersionDeleteResponse.from_json(response.body)
     end
 
@@ -449,18 +450,17 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : IO::Memory
-      headers = beta_headers(betas, workspace_id)
+      headers = beta_headers(betas, workspace_id) || {} of String => String
       headers["accept"] = "application/binary"
-      @client.get_raw("/v1/skills/#{skill_id}/versions/#{version}/content?beta=true", headers)
+      @client.get_raw("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}/content", headers)
     end
 
     private def beta_headers(
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
-    ) : Hash(String, String)
-      merged = betas.dup
-      merged << BETA_HEADER unless merged.includes?(BETA_HEADER)
-      Anthropic.merge_workspace_header({"anthropic-beta" => merged.join(",")}, workspace_id) || {} of String => String
+    ) : Hash(String, String)?
+      base = betas.empty? ? nil : {"anthropic-beta" => betas.join(",")}
+      Anthropic.merge_workspace_header(base, workspace_id)
     end
   end
 end

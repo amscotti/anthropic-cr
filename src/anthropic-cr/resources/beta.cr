@@ -322,7 +322,7 @@ module Anthropic
       merged = merge_user_profile_header(beta_headers, user_profile_id)
       merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
-      response = @client.post("/v1/messages", params, merged)
+      response = @client.post("/v1/messages", params, merged, beta: true)
       Message.from_json(response.body)
     end
 
@@ -497,7 +497,7 @@ module Anthropic
       merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
 
-      @client.post_stream("/v1/messages", params, merged) do |response|
+      @client.post_stream("/v1/messages", params, merged, beta: true) do |response|
         yield MessageStream.new(response)
       end
     end
@@ -563,7 +563,7 @@ module Anthropic
         compaction: compaction
       )
 
-      response = @client.post("/v1/messages/count_tokens?beta=true", params, Anthropic.merge_workspace_header(merge_user_profile_header(beta_headers, user_profile_id), workspace_id))
+      response = @client.post("/v1/messages/count_tokens", params, Anthropic.merge_workspace_header(merge_user_profile_header(beta_headers, user_profile_id), workspace_id), beta: true)
       TokenCountResponse.from_json(response.body)
     end
 
@@ -788,7 +788,8 @@ module Anthropic
         include_token_counting: include_token_counting_beta,
         include_user_profiles: include_user_profiles_beta,
         thinking: thinking,
-        compaction: compaction
+        compaction: compaction,
+        beta: true
       )
     end
 

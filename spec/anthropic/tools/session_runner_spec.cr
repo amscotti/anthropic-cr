@@ -44,11 +44,11 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.status_terminated","id":"evt_end"}),
       "",
     ].join("\n")
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -90,10 +90,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     ].join("\n")
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -125,10 +125,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     ].join("\n")
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -157,10 +157,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -188,7 +188,7 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"agent.message","id":"evt_3","content":[]}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -208,14 +208,14 @@ describe Anthropic::SessionRunner do
     # History already contains the terminal event (e.g. the session was
     # terminated while disconnected); the live replay must still end
     # the run rather than dedupe-skip into an EOF reconnect loop.
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true&limit=1000")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?limit=1000")
       .to_return(body: %q({"data":[{"type":"session.deleted","id":"evt_end"}]}))
     body = sse_body(
       "event: session.deleted",
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -238,10 +238,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     ].join("\n")
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -275,10 +275,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     ].join("\n")
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -306,10 +306,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -345,10 +345,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -382,10 +382,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -413,10 +413,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -444,10 +444,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -474,7 +474,7 @@ describe Anthropic::SessionRunner do
       "",
     )
     attempts = 0
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true").to_return do |_request|
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream").to_return do |_request|
       attempts += 1
       if attempts == 1
         HTTP::Client::Response.new(500, body: "boom")
@@ -483,7 +483,7 @@ describe Anthropic::SessionRunner do
       end
     end
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -501,7 +501,7 @@ describe Anthropic::SessionRunner do
   end
 
   it "raises once max_reconnects is exceeded" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(status: 500, body: "boom")
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -517,7 +517,7 @@ describe Anthropic::SessionRunner do
   end
 
   it "aborts the run on a permanent 4xx stream failure" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(status: 400, body: %q({"error":{"type":"invalid_request_error","message":"bad"}}))
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -544,7 +544,7 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -572,7 +572,7 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -587,17 +587,17 @@ describe Anthropic::SessionRunner do
   end
 
   it "reconciles unanswered history after connecting" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true&limit=1000")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?limit=1000")
       .to_return(body: %q({"data":[{"type":"agent.tool_use","id":"tu_hist","name":"echo","input":{"text":"hi"},"processed_at":""}]}))
     body = sse_body(
       "event: session.deleted",
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -618,7 +618,7 @@ describe Anthropic::SessionRunner do
   end
 
   it "skips already-answered history during reconcile" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true&limit=1000")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?limit=1000")
       .to_return(body: %q({"data":[
         {"type":"agent.tool_use","id":"tu_done","name":"echo","input":{"text":"hi"},"processed_at":""},
         {"type":"user.tool_result","id":"evt_res","tool_use_id":"tu_done","content":[{"type":"text","text":"echo:hi"}]}
@@ -628,10 +628,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -648,16 +648,16 @@ describe Anthropic::SessionRunner do
   end
 
   it "aborts the run instead of re-executing when a send fails" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true&limit=1000")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?limit=1000")
       .to_return(body: %q({"data":[{"type":"agent.tool_use","id":"tu_send","name":"echo","input":{"text":"hi"},"processed_at":""}]}))
     body = sse_body(
       "event: session.deleted",
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true")
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events")
       .to_return(status: 500, body: "boom")
 
     client = Anthropic::Client.new(api_key: "sk-ant-test", max_retries: 0)
@@ -686,10 +686,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"agent.tool_use","id":"tu_hold","name":"echo","input":{"text":"hi"},"evaluated_permission":"ask","processed_at":""}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -715,7 +715,7 @@ describe Anthropic::SessionRunner do
       "",
     )
     attempts = 0
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true").to_return do |_request|
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream").to_return do |_request|
       attempts += 1
       if attempts == 1
         HTTP::Client::Response.new(429, body: %q({"error":{"type":"rate_limit_error","message":"slow"}}))
@@ -747,10 +747,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -771,7 +771,7 @@ describe Anthropic::SessionRunner do
   end
 
   it "carries on with the live stream when reconcile fails" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true&limit=1000")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?limit=1000")
       .to_return(status: 500, body: "boom")
     body = sse_body(
       "event: agent.tool_use",
@@ -781,10 +781,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -812,7 +812,7 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -839,7 +839,7 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -865,10 +865,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -896,10 +896,10 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     sent = [] of String
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |request|
       sent << request.body.to_s
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -930,7 +930,7 @@ describe Anthropic::SessionRunner do
       "",
     )
     attempts = 0
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true").to_return do |_request|
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream").to_return do |_request|
       attempts += 1
       body = attempts == 1 ? first : second
       HTTP::Client::Response.new(200, body: body, headers: HTTP::Headers{"Content-Type" => "text/event-stream"})
@@ -951,18 +951,18 @@ describe Anthropic::SessionRunner do
   end
 
   it "ends the run from a terminal already in history" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true&limit=1000")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?limit=1000")
       .to_return(body: %q({"data":[
         {"type":"agent.tool_use","id":"tu_dead","name":"echo","input":{"text":"hi"},"processed_at":""},
         {"type":"session.deleted","id":"evt_hist"}
       ]}))
     attempts = 0
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true").to_return do |_request|
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream").to_return do |_request|
       attempts += 1
       HTTP::Client::Response.new(200, body: "", headers: HTTP::Headers{"Content-Type" => "text/event-stream"})
     end
     send_count = 0
-    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true").to_return do |_request|
+    WebMock.stub(:post, "https://api.anthropic.com/v1/sessions/sess_1/events").to_return do |_request|
       send_count += 1
       HTTP::Client::Response.new(200, body: %({"data":[]}))
     end
@@ -981,7 +981,7 @@ describe Anthropic::SessionRunner do
   end
 
   it "re-arms the idle countdown from a trailing history idle" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?beta=true&limit=1000")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events?limit=1000")
       .to_return(body: %q({"data":[{"type":"session.status_idle","id":"evt_h_idle","stop_reason":{"type":"end_turn"}}]}))
     body = sse_body(
       "event: agent.message",
@@ -991,7 +991,7 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -1011,7 +1011,7 @@ describe Anthropic::SessionRunner do
       "data: not-json",
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -1034,7 +1034,7 @@ describe Anthropic::SessionRunner do
       %q(data: {"type":"session.deleted","id":"evt_end"}),
       "",
     )
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")

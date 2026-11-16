@@ -67,7 +67,7 @@ describe "v0.10.0 parity additions" do
 
   it "creates user profiles with access_type, name, and onboarding timestamp" do
     profile = %({"id":"uprof_1","type":"user_profile","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","metadata":{},"trust_grants":{},"external_id":"ext-1","access_type":"application","name":"Acme User","external_user_onboarded_at":"2026-01-02T00:00:00Z"})
-    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles?beta=true", profile)
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles", profile)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     created = client.beta.user_profiles.create(
@@ -87,7 +87,7 @@ describe "v0.10.0 parity additions" do
 
   it "lists user profiles with order_by" do
     list = %({"data":[],"next_page":null})
-    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/user_profiles?beta=true&limit=20&order_by=name", list)
+    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/user_profiles?limit=20&order_by=name", list)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     client.beta.user_profiles.list(order_by: "name")
@@ -97,7 +97,7 @@ describe "v0.10.0 parity additions" do
 
   it "sends dream output_behavior on create and parses it back" do
     dream = %({"id":"dream_1","archived_at":null,"created_at":"2026-01-01T00:00:00Z","ended_at":null,"error":null,"inputs":[{"type":"memory_store","memory_store_id":"ms_1"}],"instructions":null,"model":{"id":"claude-opus-4-7"},"output_behavior":{"type":"update_existing","memory_store_id":"ms_out"},"outputs":[],"session_id":null,"status":"pending","type":"dream","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":0}})
-    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams?beta=true", dream)
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams", dream)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     created = client.beta.dreams.create(
@@ -117,7 +117,7 @@ describe "v0.10.0 parity additions" do
 
   it "sends session budgets on create" do
     session = %({"id":"sess_1","agent":{},"stats":{},"usage":{},"type":"session","status":"running","title":null,"environment_id":"env_1","vault_ids":[],"outcome_evaluations":[],"resources":[],"metadata":{},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","archived_at":null,"budget":{"max_list_cost":{"amount":"2500","currency":"USD"},"type":"limit"}})
-    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions?beta=true", session)
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions", session)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     created = client.beta.sessions.create(

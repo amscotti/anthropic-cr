@@ -198,6 +198,7 @@ module Anthropic
 
   struct BetaSessionListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaManagedAgentsSession)
 
     # Opaque cursor for the next page, if any
@@ -237,6 +238,7 @@ module Anthropic
 
   struct BetaSessionThreadListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaManagedAgentsSessionThread)
 
     # Opaque cursor for the next page, if any
@@ -372,6 +374,7 @@ module Anthropic
   # Paginated list of session resources.
   struct BetaSessionResourceListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     @[JSON::Field(converter: Anthropic::BetaSessionResourceArrayConverter)]
     getter data : Array(BetaSessionResource)

@@ -129,6 +129,7 @@ module Anthropic
   # Paginated list of user profiles.
   struct BetaUserProfileListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaUserProfile)
 
@@ -191,7 +192,7 @@ module Anthropic
       end
       body["external_user_details"] = JSON.parse(external_user_details.to_json) if external_user_details
 
-      response = @client.post("/v1/user_profiles?beta=true", body, beta_headers(!external_user_details.nil?, betas, workspace_id))
+      response = @client.post("/v1/user_profiles", body, beta_headers(!external_user_details.nil?, betas, workspace_id))
       BetaUserProfile.from_json(response.body)
     end
 
@@ -201,7 +202,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaUserProfile
-      response = @client.get("/v1/user_profiles/#{user_profile_id}?beta=true", nil, beta_headers(false, betas, workspace_id))
+      response = @client.get("/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}", nil, beta_headers(false, betas, workspace_id))
       BetaUserProfile.from_json(response.body)
     end
 
@@ -235,7 +236,7 @@ module Anthropic
       end
       body["external_user_details"] = JSON.parse(external_user_details.to_json) if external_user_details
 
-      response = @client.post("/v1/user_profiles/#{user_profile_id}?beta=true", body, beta_headers(!external_user_details.nil?, betas, workspace_id))
+      response = @client.post("/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}", body, beta_headers(!external_user_details.nil?, betas, workspace_id))
       BetaUserProfile.from_json(response.body)
     end
 
@@ -251,7 +252,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaUserProfileListResponse
-      path = "/v1/user_profiles?beta=true&limit=#{limit}"
+      path = "/v1/user_profiles?limit=#{limit}"
       path += "&order=#{URI.encode_path_segment(order)}" if order
       path += "&order_by=#{URI.encode_path_segment(order_by)}" if order_by
       path += "&page=#{URI.encode_path_segment(page)}" if page
@@ -269,7 +270,7 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaUserProfileEnrollmentURL
       response = @client.post(
-        "/v1/user_profiles/#{user_profile_id}/enrollment_url?beta=true",
+        "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}/enrollment_url",
         {} of String => JSON::Any,
         beta_headers(false, betas, workspace_id)
       )

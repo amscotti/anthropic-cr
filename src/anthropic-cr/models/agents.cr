@@ -159,6 +159,7 @@ module Anthropic
   # Response for listing agents
   struct BetaAgentListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     # Array of retrieved agents
     getter data : Array(BetaAgent)

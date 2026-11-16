@@ -32,7 +32,8 @@ module Anthropic
 
     # Retrieve batch status
     def retrieve(batch_id : String) : BatchResponse
-      response = @client.get("/v1/messages/batches/#{batch_id}")
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.get("/v1/messages/batches/#{encoded_id}")
       BatchResponse.from_json(response.body)
     end
 
@@ -52,7 +53,8 @@ module Anthropic
 
     # Stream batch results (JSONL format)
     def results(batch_id : String, &)
-      @client.get_stream("/v1/messages/batches/#{batch_id}/results") do |response|
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      @client.get_stream("/v1/messages/batches/#{encoded_id}/results") do |response|
         response.body_io.each_line do |line|
           next if line.empty?
           yield BatchResult.from_json(line)
@@ -62,13 +64,15 @@ module Anthropic
 
     # Cancel a batch
     def cancel(batch_id : String) : BatchResponse
-      response = @client.post("/v1/messages/batches/#{batch_id}/cancel", NamedTuple.new)
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.post("/v1/messages/batches/#{encoded_id}/cancel", NamedTuple.new)
       BatchResponse.from_json(response.body)
     end
 
     # Delete a batch
     def delete(batch_id : String) : DeletedResponse
-      response = @client.delete("/v1/messages/batches/#{batch_id}")
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.delete("/v1/messages/batches/#{encoded_id}")
       DeletedResponse.from_json(response.body)
     end
 
@@ -104,21 +108,23 @@ module Anthropic
       betas : Array(String) = [] of String,
     ) : BatchResponse
       body = BatchCreateBody.new(requests)
-      response = @client.post("/v1/messages/batches?beta=true", body, beta_headers(betas, requests))
+      response = @client.post("/v1/messages/batches", body, beta_headers(betas, requests), beta: true)
       BatchResponse.from_json(response.body)
     end
 
+    # :ditto:
     def create(
       requests : Array(BetaBatchRequest),
       betas : Array(String) = [] of String,
     ) : BatchResponse
       body = BetaBatchCreateBody.new(requests)
-      response = @client.post("/v1/messages/batches?beta=true", body, beta_headers(betas, requests))
+      response = @client.post("/v1/messages/batches", body, beta_headers(betas, requests), beta: true)
       BatchResponse.from_json(response.body)
     end
 
     def retrieve(batch_id : String, betas : Array(String) = [] of String) : BatchResponse
-      response = @client.get("/v1/messages/batches/#{batch_id}?beta=true", nil, beta_headers(betas))
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.get("/v1/messages/batches/#{encoded_id}", nil, beta_headers(betas), beta: true)
       BatchResponse.from_json(response.body)
     end
 
@@ -132,12 +138,13 @@ module Anthropic
       params["before_id"] = before_id if before_id
       params["after_id"] = after_id if after_id
 
-      response = @client.get("/v1/messages/batches?beta=true", params, beta_headers(betas))
+      response = @client.get("/v1/messages/batches", params, beta_headers(betas), beta: true)
       BetaBatchListResponse.from_json(response.body)
     end
 
     def results(batch_id : String, betas : Array(String) = [] of String, &)
-      @client.get_stream("/v1/messages/batches/#{batch_id}/results?beta=true", beta_headers(betas)) do |response|
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      @client.get_stream("/v1/messages/batches/#{encoded_id}/results", beta_headers(betas), beta: true) do |response|
         response.body_io.each_line do |line|
           next if line.empty?
           yield BatchResult.from_json(line)
@@ -146,12 +153,14 @@ module Anthropic
     end
 
     def cancel(batch_id : String, betas : Array(String) = [] of String) : BatchResponse
-      response = @client.post("/v1/messages/batches/#{batch_id}/cancel?beta=true", NamedTuple.new, beta_headers(betas))
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.post("/v1/messages/batches/#{encoded_id}/cancel", NamedTuple.new, beta_headers(betas), beta: true)
       BatchResponse.from_json(response.body)
     end
 
     def delete(batch_id : String, betas : Array(String) = [] of String) : DeletedResponse
-      response = @client.delete("/v1/messages/batches/#{batch_id}?beta=true", beta_headers(betas))
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.delete("/v1/messages/batches/#{encoded_id}", beta_headers(betas), beta: true)
       DeletedResponse.from_json(response.body)
     end
 
@@ -183,10 +192,6 @@ module Anthropic
 
         if (params.cache_control.try(&.ttl) || 0) > 0
           merged_betas << EXTENDED_CACHE_TTL_BETA unless merged_betas.includes?(EXTENDED_CACHE_TTL_BETA)
-        end
-
-        if params.output_config.try(&.format)
-          merged_betas << STRUCTURED_OUTPUT_BETA unless merged_betas.includes?(STRUCTURED_OUTPUT_BETA)
         end
 
         if params.compaction

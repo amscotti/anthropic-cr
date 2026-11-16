@@ -150,7 +150,7 @@ describe "v0.11.0 parity additions" do
     end
 
     it "sends compaction on token counting" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/count_tokens?beta=true", Fixtures::Responses::TOKEN_COUNT_BASIC)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/count_tokens", Fixtures::Responses::TOKEN_COUNT_BASIC)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       count = client.beta.messages.count_tokens(
@@ -167,7 +167,7 @@ describe "v0.11.0 parity additions" do
 
   describe "beta batch per-request compaction" do
     it "sends compaction inside the request params and attaches the beta" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/batches?beta=true", Fixtures::Responses::BETA_BATCH_CREATED)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/batches", Fixtures::Responses::BETA_BATCH_CREATED)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       client.beta.messages.batches.create(
@@ -450,7 +450,7 @@ describe "v0.11.0 parity additions" do
 
   describe "user profile external details" do
     it "sends details and attaches the details beta revision on create" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles?beta=true", Fixtures::Responses::USER_PROFILE_WITH_DETAILS)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles", Fixtures::Responses::USER_PROFILE_WITH_DETAILS)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       profile = client.beta.user_profiles.create(
@@ -472,7 +472,7 @@ describe "v0.11.0 parity additions" do
     end
 
     it "omits the details beta revision when no details are sent" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles?beta=true", Fixtures::Responses::USER_PROFILE)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles", Fixtures::Responses::USER_PROFILE)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       profile = client.beta.user_profiles.create(name: "Acme")
@@ -494,7 +494,7 @@ describe "v0.11.0 parity additions" do
     end
 
     it "sends details and attaches the details beta revision on update" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles/uprof_01abc?beta=true", Fixtures::Responses::USER_PROFILE_WITH_DETAILS)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles/uprof_01abc", Fixtures::Responses::USER_PROFILE_WITH_DETAILS)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       profile = client.beta.user_profiles.update(
@@ -545,7 +545,7 @@ describe "v0.11.0 parity additions" do
 
     it "sends data-residency configs on workspace create" do
       workspace = %({"id":"ws_1","archived_at":null,"compartment_id":"comp_1","created_at":"2026-01-01T00:00:00Z","data_residency":null,"display_color":"#fff","external_key_id":null,"name":"prod","tags":{},"type":"workspace"})
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/workspaces?beta=true", workspace)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/workspaces", workspace)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       created = client.beta.organization.workspaces.create(
@@ -564,7 +564,7 @@ describe "v0.11.0 parity additions" do
 
     it "parses typed data-residency on workspaces" do
       workspace = %({"id":"ws_1","archived_at":null,"compartment_id":"comp_1","created_at":"2026-01-01T00:00:00Z","data_residency":{"allowed_inference_geos":"unrestricted","default_inference_geo":"global","workspace_geo":"us"},"display_color":"#fff","external_key_id":null,"name":"prod","tags":{},"type":"workspace"})
-      stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/workspaces?beta=true", workspace)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/workspaces", workspace)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       created = client.beta.organization.workspaces.create(name: "prod")
@@ -573,7 +573,7 @@ describe "v0.11.0 parity additions" do
 
     it "sends data-residency configs on workspace update" do
       workspace = %({"id":"ws_1","archived_at":null,"compartment_id":"comp_1","created_at":"2026-01-01T00:00:00Z","data_residency":null,"display_color":"#fff","external_key_id":null,"name":"prod","tags":{},"type":"workspace"})
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/workspaces/ws_1?beta=true", workspace)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/workspaces/ws_1", workspace)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       client.beta.organization.workspaces.update(
@@ -749,7 +749,7 @@ describe "v0.11.0 parity additions" do
     end
 
     it "keeps the inline-tools beta on count_tokens over tool-change history" do
-      count_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/count_tokens?beta=true", Fixtures::Responses::TOKEN_COUNT_WITH_CACHE)
+      count_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/count_tokens", Fixtures::Responses::TOKEN_COUNT_WITH_CACHE)
       stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       runner = client.beta.messages.tool_runner(
@@ -1048,7 +1048,7 @@ describe "v0.11.0 parity additions" do
 
     it "preserves unknown rate-limit group types" do
       limits = %({"data":[{"id":"rl_9","group":{"id":"g_9","type":"future_group"},"group_type":"sessions","limits":{},"models":null,"type":"rate_limit"}],"next_page":null})
-      stub_and_capture(:get, "https://api.anthropic.com/v1/organizations/rate_limits?beta=true&limit=20", limits)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/organizations/rate_limits?limit=20", limits)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       listed = client.beta.organization.rate_limits.list

@@ -6,8 +6,28 @@ require "uri"
 
 module Anthropic
   class Client
-    DEFAULT_BASE_URL      = "https://api.anthropic.com"
-    API_VERSION           = "2023-06-01"
+    DEFAULT_BASE_URL = "https://api.anthropic.com"
+    API_VERSION      = "2026-10-21"
+    DEFAULT_TIMEOUT  = 600.seconds
+    MAX_REDIRECTS    = 20
+
+    CROSS_ORIGIN_STRIPPED_HEADERS = {"authorization", "x-api-key", "cookie", "host", "proxy-authorization"}
+
+    # Sentinel distinguishing omitted keyword arguments from explicit `nil`.
+    struct UnsetValue
+      INSTANCE = new
+    end
+
+    UNSET = UnsetValue::INSTANCE
+
+    @@warned_dual_credentials = false
+    class_property warning_io : IO? = nil
+
+    # Reset one-shot dual-credential warning state (intended for test suites).
+    def self.reset_dual_credentials_warning! : Nil
+      @@warned_dual_credentials = false
+    end
+
     DEFAULT_MAX_RETRIES   =   2
     DEFAULT_INITIAL_DELAY = 0.5 # seconds
     DEFAULT_MAX_DELAY     = 8.0 # seconds
@@ -15,7 +35,8 @@ module Anthropic
     @api_key : String?
     @auth_token : String?
     @base_url : String
-    @timeout : Time::Span
+    @timeout : Time::Span?
+    @timeout_overridden : Bool
     @max_retries : Int32
     @initial_retry_delay : Float64
     @max_retry_delay : Float64
@@ -23,12 +44,15 @@ module Anthropic
     @default_query : Hash(String, String)
     @middleware : Array(Middleware)
     @proxy : String?
+    @client_workspace_id : String?
+    @client_user_profile_id : String?
+    @request_contexts : Hash(UInt64, {Time::Span?, Bool})? = nil
 
     def initialize(
-      api_key : String? = nil,
-      auth_token : String? = nil,
+      api_key : String | UnsetValue | Nil = UNSET,
+      auth_token : String | UnsetValue | Nil = UNSET,
       base_url : String? = nil,
-      timeout : Time::Span = 600.seconds,
+      timeout : Time::Span | UnsetValue | Nil = UNSET,
       max_retries : Int32 = DEFAULT_MAX_RETRIES,
       initial_retry_delay : Float64 = DEFAULT_INITIAL_DELAY,
       max_retry_delay : Float64 = DEFAULT_MAX_DELAY,
@@ -37,24 +61,14 @@ module Anthropic
       middleware : Array(Middleware) = [] of Middleware,
       webhook_key : String? = nil,
       proxy : String? = nil,
+      workspace_id : String? = nil,
+      user_profile_id : String? = nil,
     )
-      # An explicit credential argument disables env-var lookup, matching
-      # the Python and Ruby SDKs: pass one credential and no other source
-      # is consulted. (TypeScript falls back per field instead.)
-      if api_key || auth_token
-        @api_key = api_key
-        @auth_token = auth_token
-      else
-        @api_key = ENV["ANTHROPIC_API_KEY"]?
-        @auth_token = ENV["ANTHROPIC_AUTH_TOKEN"]?
-      end
-      unless @api_key || @auth_token
-        raise ArgumentError.new(
-          "API key or auth token required. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variables, or pass api_key/auth_token parameters."
-        )
-      end
+      @api_key, @auth_token = resolve_initial_credentials(api_key, auth_token)
       @base_url = (base_url || ENV["ANTHROPIC_BASE_URL"]? || DEFAULT_BASE_URL).rstrip('/')
-      @timeout = timeout
+      @timeout, @timeout_overridden = resolve_initial_timeout(timeout)
+      @client_workspace_id = workspace_id
+      @client_user_profile_id = user_profile_id
       @max_retries = max_retries
       @initial_retry_delay = initial_retry_delay
       @max_retry_delay = max_retry_delay
@@ -84,27 +98,129 @@ module Anthropic
     # scoped.messages.create(model: "...", max_tokens: 64, messages: [...])
     # ```
     def with_options(
-      timeout : Time::Span? = nil,
+      timeout : Time::Span | UnsetValue | Nil = UNSET,
       max_retries : Int32? = nil,
       extra_headers : Hash(String, String)? = nil,
       extra_query : Hash(String, String)? = nil,
       middleware : Array(Middleware)? = nil,
-      api_key : String? = nil,
-      auth_token : String? = nil,
+      api_key : String | UnsetValue | Nil = UNSET,
+      auth_token : String | UnsetValue | Nil = UNSET,
       base_url : String? = nil,
       proxy : String? = nil,
+      workspace_id : String | UnsetValue | Nil = UNSET,
+      user_profile_id : String | UnsetValue | Nil = UNSET,
     ) : Client
+      if api_key.is_a?(String) && auth_token.is_a?(String)
+        raise ArgumentError.new("Cannot provide both api_key and auth_token")
+      end
+
       copy = dup
+      copy.reset_request_contexts!
       copy.middleware = middleware ? middleware.map(&.as(Middleware)) : @middleware.dup
-      copy.timeout = timeout if timeout
+      apply_option_timeout(copy, timeout)
       copy.max_retries = max_retries if max_retries
       copy.default_headers = @default_headers.merge(extra_headers || {} of String => String)
       copy.default_query = @default_query.merge(extra_query || {} of String => String)
-      copy.api_key = api_key if api_key
-      copy.auth_token = auth_token if auth_token
+      apply_option_credentials(copy, api_key, auth_token)
       copy.base_url = base_url.rstrip('/') if base_url
       copy.proxy = proxy if proxy
+      copy.client_workspace_id = workspace_id unless workspace_id.is_a?(UnsetValue)
+      copy.client_user_profile_id = user_profile_id unless user_profile_id.is_a?(UnsetValue)
       copy
+    end
+
+    private def resolve_initial_credentials(
+      api_key : String | UnsetValue | Nil,
+      auth_token : String | UnsetValue | Nil,
+    ) : {String?, String?}
+      if api_key.is_a?(String) && auth_token.is_a?(String)
+        raise ArgumentError.new("Cannot provide both api_key and auth_token")
+      end
+
+      resolved_key, resolved_token =
+        if api_key.is_a?(UnsetValue) && auth_token.is_a?(UnsetValue)
+          resolve_env_credentials
+        else
+          {
+            api_key.is_a?(UnsetValue) ? nil : api_key,
+            auth_token.is_a?(UnsetValue) ? nil : auth_token,
+          }
+        end
+
+      unless resolved_key || resolved_token
+        raise ArgumentError.new(
+          "API key or auth token required. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variables, or pass api_key/auth_token parameters."
+        )
+      end
+
+      {resolved_key, resolved_token}
+    end
+
+    private def resolve_env_credentials : {String?, String?}
+      env_key = ENV["ANTHROPIC_API_KEY"]?
+      env_token = ENV["ANTHROPIC_AUTH_TOKEN"]?
+      has_key = !env_key.nil? && !env_key.empty?
+      has_token = !env_token.nil? && !env_token.empty?
+
+      if has_key && has_token
+        emit_dual_credential_warning!
+        return {env_key, nil}
+      end
+      return {env_key, nil} if has_key
+      return {nil, env_token} if has_token
+
+      {nil, nil}
+    end
+
+    private def emit_dual_credential_warning! : Nil
+      return if @@warned_dual_credentials
+
+      @@warned_dual_credentials = true
+      (@@warning_io || STDERR).puts(
+        "Anthropic: ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN are both set. Using ANTHROPIC_API_KEY."
+      )
+    end
+
+    private def resolve_initial_timeout(timeout : Time::Span | UnsetValue | Nil) : {Time::Span?, Bool}
+      case timeout
+      when UnsetValue, Nil
+        {timeout.nil? ? nil : DEFAULT_TIMEOUT, !timeout.is_a?(UnsetValue)}
+      else
+        {timeout, true}
+      end
+    end
+
+    private def apply_option_timeout(copy : Client, timeout : Time::Span | UnsetValue | Nil) : Nil
+      case timeout
+      when UnsetValue
+        # Preserve existing timeout and override flag
+      when Nil
+        copy.timeout = nil
+        copy.timeout_overridden = true
+      else
+        copy.timeout = timeout
+        copy.timeout_overridden = true
+      end
+    end
+
+    private def apply_option_credentials(
+      copy : Client,
+      api_key : String | UnsetValue | Nil,
+      auth_token : String | UnsetValue | Nil,
+    ) : Nil
+      if !api_key.is_a?(UnsetValue) && !auth_token.is_a?(UnsetValue)
+        if !api_key.nil? && !auth_token.nil?
+          raise ArgumentError.new("Cannot provide both api_key and auth_token")
+        end
+        copy.api_key = api_key
+        copy.auth_token = auth_token
+      elsif !api_key.is_a?(UnsetValue)
+        copy.api_key = api_key
+        copy.auth_token = nil unless api_key.nil?
+      elsif !auth_token.is_a?(UnsetValue)
+        copy.auth_token = auth_token
+        copy.api_key = nil unless auth_token.nil?
+      end
     end
 
     # Returns a copy of this client with *middleware* appended after the
@@ -117,7 +233,21 @@ module Anthropic
       with_options(middleware: @middleware + middleware.to_a)
     end
 
-    protected setter timeout : Time::Span
+    getter api_key : String?
+    getter auth_token : String?
+    getter timeout : Time::Span?
+    getter? timeout_overridden : Bool
+
+    def workspace_id : String?
+      @client_workspace_id
+    end
+
+    def user_profile_id : String?
+      @client_user_profile_id
+    end
+
+    protected setter timeout : Time::Span?
+    protected setter timeout_overridden : Bool
     protected setter max_retries : Int32
     protected setter default_headers : Hash(String, String)
     protected setter default_query : Hash(String, String)
@@ -126,6 +256,8 @@ module Anthropic
     protected setter auth_token : String?
     protected setter base_url : String
     protected setter proxy : String?
+    protected setter client_workspace_id : String?
+    protected setter client_user_profile_id : String?
 
     # The configured middleware chain (outermost first).
     def middleware : Array(Middleware)
@@ -159,56 +291,77 @@ module Anthropic
       Skills.new(self)
     end
 
-    # [Legacy] Text Completions API.
-    #
-    # ```
-    # completion = client.completions.create(
-    #   model: "claude-haiku-4-5-20251001",
-    #   prompt: "\n\nHuman: Hello!\n\nAssistant:",
-    #   max_tokens_to_sample: 256
-    # )
-    # ```
-    def completions : Completions
-      Completions.new(self)
-    end
-
-    # Beta namespace for beta features
-    #
-    # ```
-    # client.beta.messages.create(
-    #   betas: ["structured-outputs-2025-12-15"],
-    #   ...
-    # )
-    # ```
     def beta : Beta
       Beta.new(self)
     end
 
-    # HTTP methods
-    alias QueryParams = Hash(String, String) | Hash(String, String | Array(String))
+    # Whether this client supports the Beta Message Threads API.
+    def supports_message_threads? : Bool
+      true
+    end
 
-    def get(path : String, params : QueryParams? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
-      request("GET", path, nil, extra_headers, query: params)
+    # HTTP methods
+    alias QueryParamValue = String | Int32 | Int64 | Float64 | Bool | Nil | JSON::Any | Array(String) | Array(JSON::Any) | Hash(String, String) | Hash(String, JSON::Any)
+    alias QueryParams = Hash(String, String) |
+                        Hash(String, String?) |
+                        Hash(String, String | Array(String)) |
+                        Hash(String, String | Array(String) | Nil) |
+                        Hash(String, JSON::Any) |
+                        Hash(String, QueryParamValue)
+
+    def get(
+      path : String,
+      params : QueryParams? = nil,
+      extra_headers : Hash(String, String)? = nil,
+      timeout : Time::Span? = nil,
+      beta : Bool = false,
+    ) : HTTP::Client::Response
+      with_request_context(timeout, beta) do
+        request("GET", path, nil, extra_headers, query: params)
+      end
     end
 
     # POST with any JSON::Serializable body
-    def post(path : String, body, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
+    def post(
+      path : String,
+      body,
+      extra_headers : Hash(String, String)? = nil,
+      timeout : Time::Span? = nil,
+      beta : Bool = false,
+    ) : HTTP::Client::Response
       body_str = body.nil? ? "{}" : body.to_json
-      request("POST", path, body_str, extra_headers)
+      with_request_context(timeout, beta) do
+        request("POST", path, body_str, extra_headers)
+      end
     end
 
-    def delete(path : String, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
-      request("DELETE", path, nil, extra_headers)
+    def delete(
+      path : String,
+      extra_headers : Hash(String, String)? = nil,
+      timeout : Time::Span? = nil,
+      beta : Bool = false,
+    ) : HTTP::Client::Response
+      with_request_context(timeout, beta) do
+        request("DELETE", path, nil, extra_headers)
+      end
     end
 
     # POST with streaming response
-    def post_stream(path : String, body, extra_headers : Hash(String, String)? = nil, &)
+    def post_stream(
+      path : String,
+      body,
+      extra_headers : Hash(String, String)? = nil,
+      timeout : Time::Span? = nil,
+      beta : Bool = false,
+      &
+    )
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
+      hdrs = with_request_context(timeout, beta) { headers(extra_headers, method: "POST") }
 
-      with_http_client(uri) do |client|
+      with_http_client(uri, timeout: timeout) do |client|
         body_str = body.nil? ? "{}" : body.to_json
-        client.post(path, headers: headers(extra_headers, method: "POST"), body: body_str) do |response|
+        client.post(path, headers: hdrs, body: body_str) do |response|
           handle_error(response) unless response.success?
           yield response
         end
@@ -219,12 +372,19 @@ module Anthropic
       end
     end
 
-    def get_stream(path : String, extra_headers : Hash(String, String)? = nil, &)
+    def get_stream(
+      path : String,
+      extra_headers : Hash(String, String)? = nil,
+      timeout : Time::Span? = nil,
+      beta : Bool = false,
+      &
+    )
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
+      hdrs = with_request_context(timeout, beta) { headers(extra_headers, method: "GET") }
 
-      with_http_client(uri) do |client|
-        client.get(path, headers: headers(extra_headers, method: "GET")) do |response|
+      with_http_client(uri, timeout: timeout) do |client|
+        client.get(path, headers: hdrs) do |response|
           handle_error(response) unless response.success?
           yield response
         end
@@ -236,20 +396,22 @@ module Anthropic
     end
 
     # GET request returning raw response body (for binary downloads)
-    def get_raw(path : String, extra_headers : Hash(String, String)? = nil) : IO::Memory
+    def get_raw(
+      path : String,
+      extra_headers : Hash(String, String)? = nil,
+      timeout : Time::Span? = nil,
+      beta : Bool = false,
+    ) : IO::Memory
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
       io = IO::Memory.new
 
-      with_http_client(uri) do |client|
-        # Don't set content-type for downloads
-        hdrs = headers(extra_headers, content_type: nil, method: "GET")
-
-        response = client.get(path, headers: hdrs)
-        handle_error(response) unless response.success?
-        io.write(response.body.to_slice)
-        io.rewind
-      end
+      # Don't set content-type for downloads
+      hdrs = with_request_context(timeout, beta) { headers(extra_headers, content_type: nil, method: "GET") }
+      response = execute_http_with_redirects("GET", path, nil, uri, hdrs, timeout: timeout)
+      handle_error(response) unless response.success?
+      io.write(response.body.to_slice)
+      io.rewind
 
       io
     rescue ex : IO::TimeoutError
@@ -262,15 +424,17 @@ module Anthropic
     def post_multipart(
       path : String,
       file : IO,
-      filename : String,
+      filename : String? = nil,
       content_type : String = "application/octet-stream",
       extra_headers : Hash(String, String)? = nil,
       form_fields : Hash(String, String)? = nil,
+      timeout : Time::Span? = nil,
+      beta : Bool = false,
     ) : HTTP::Client::Response
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
 
-      with_http_client(uri) do |client|
+      with_http_client(uri, timeout: timeout) do |client|
         # Build multipart body using Crystal's standard FormData builder
         body_io = IO::Memory.new
         builder = HTTP::FormData::Builder.new(body_io)
@@ -279,13 +443,13 @@ module Anthropic
           builder.field(name, value)
         end
 
-        metadata = HTTP::FormData::FileMetadata.new(filename: filename)
+        metadata = HTTP::FormData::FileMetadata.new(filename: filename || "")
         file_headers = HTTP::Headers{"Content-Type" => content_type}
         builder.file("file", file, metadata, headers: file_headers)
         builder.finish
 
         body_io.rewind
-        hdrs = headers(extra_headers, content_type: builder.content_type, method: "POST")
+        hdrs = with_request_context(timeout, beta) { headers(extra_headers, content_type: builder.content_type, method: "POST") }
 
         response = client.post(path, headers: hdrs, body: body_io)
         handle_error(response) unless response.success?
@@ -305,12 +469,14 @@ module Anthropic
       files : Array(FileUpload),
       form_fields : Hash(String, String)? = nil,
       extra_headers : Hash(String, String)? = nil,
+      timeout : Time::Span? = nil,
+      beta : Bool = false,
     ) : HTTP::Client::Response
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
 
-      with_http_client(uri) do |client|
-        # Build multipart body using Crystal's FormData builder
+      with_http_client(uri, timeout: timeout) do |client|
+        # Build multipart body using Crystal's standard FormData builder
         body_io = IO::Memory.new
         builder = HTTP::FormData::Builder.new(body_io)
 
@@ -321,7 +487,7 @@ module Anthropic
 
         # File parts
         files.each do |file|
-          metadata = HTTP::FormData::FileMetadata.new(filename: file.filename)
+          metadata = HTTP::FormData::FileMetadata.new(filename: file.filename || "")
           file_headers = HTTP::Headers{"Content-Type" => file.content_type}
           builder.file("files[]", file.io, metadata, headers: file_headers)
         end
@@ -329,7 +495,7 @@ module Anthropic
         builder.finish
 
         # Headers for multipart using unified helper
-        hdrs = headers(extra_headers, content_type: builder.content_type, method: "POST")
+        hdrs = with_request_context(timeout, beta) { headers(extra_headers, content_type: builder.content_type, method: "POST") }
 
         body_io.rewind
         response = client.post(path, headers: hdrs, body: body_io)
@@ -345,23 +511,24 @@ module Anthropic
     end
 
     private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil, query : QueryParams? = nil) : HTTP::Client::Response
+      timeout, beta = current_request_context
       uri = URI.parse(@base_url)
       path = append_query_params(path, merge_query(query))
       req_headers = headers(extra_headers, method: method)
 
       # Fast path: no middleware — send directly with the existing retry loop.
-      return request_direct(method, path, body, uri, req_headers) if @middleware.empty?
+      return request_direct(method, path, body, uri, req_headers, timeout: timeout) if @middleware.empty?
 
       # Middleware path: compose a chain around the terminal HTTP send. The
       # chain runs once per attempt inside the retry loop. The terminal returns
       # an APIResponse for every status (4xx/5xx do not raise); connection
       # errors do raise. Typed error raising happens after the chain returns.
-      api_request = APIRequest.new(method, path, req_headers, body)
+      api_request = APIRequest.new(method, path, req_headers, body, beta: beta)
 
       response = nil
       (@max_retries + 1).times do |attempt|
         begin
-          api_response = invoke_chain(api_request, uri)
+          api_response = invoke_chain(api_request, uri, timeout: timeout)
           response = to_http_response(api_response)
 
           if api_response.success? || !should_retry?(response)
@@ -386,23 +553,23 @@ module Anthropic
     end
 
     # Send a single HTTP attempt and return its raw response (no middleware).
-    private def request_direct(method : String, path : String, body : String?, uri : URI, req_headers : HTTP::Headers) : HTTP::Client::Response
+    private def request_direct(
+      method : String,
+      path : String,
+      body : String?,
+      uri : URI,
+      req_headers : HTTP::Headers,
+      timeout : Time::Span? = nil,
+    ) : HTTP::Client::Response
       response = nil
       (@max_retries + 1).times do |attempt|
         begin
-          with_http_client(uri) do |client|
-            response = case method
-                       when "GET"    then client.get(path, headers: req_headers)
-                       when "POST"   then client.post(path, headers: req_headers, body: body)
-                       when "DELETE" then client.delete(path, headers: req_headers)
-                       else               raise "Unknown HTTP method: #{method}"
-                       end
+          response = execute_http_with_redirects(method, path, body, uri, req_headers, timeout: timeout)
 
-            # Check if we should retry (respects x-should-retry header)
-            if response.success? || !should_retry?(response)
-              handle_error(response) unless response.success?
-              return response
-            end
+          # Check if we should retry (respects x-should-retry header)
+          if response.success? || !should_retry?(response)
+            handle_error(response) unless response.success?
+            return response
           end
         rescue ex : IO::TimeoutError
           raise APITimeoutError.new("Request timed out", cause: ex) if attempt >= @max_retries
@@ -428,9 +595,9 @@ module Anthropic
 
     # Compose the middleware chain around the terminal HTTP send and invoke it
     # for a single attempt.
-    private def invoke_chain(api_request : APIRequest, uri : URI) : APIResponse
+    private def invoke_chain(api_request : APIRequest, uri : URI, timeout : Time::Span? = nil) : APIResponse
       terminal = MiddlewareNext.new do |req|
-        send_terminal(req, uri)
+        send_terminal(req, uri, timeout: timeout)
       end
 
       chain = @middleware.reverse.reduce(terminal) do |inner, layer|
@@ -445,21 +612,115 @@ module Anthropic
 
     # The terminal HTTP send: performs one attempt and returns an APIResponse
     # for every status. Connection-level errors raise.
-    private def send_terminal(api_request : APIRequest, uri : URI) : APIResponse
-      with_http_client(uri) do |client|
-        http_response = case api_request.method
-                        when "GET"    then client.get(api_request.path, headers: api_request.headers)
-                        when "POST"   then client.post(api_request.path, headers: api_request.headers, body: api_request.body)
-                        when "DELETE" then client.delete(api_request.path, headers: api_request.headers)
-                        else               raise "Unknown HTTP method: #{api_request.method}"
-                        end
+    private def send_terminal(api_request : APIRequest, uri : URI, timeout : Time::Span? = nil) : APIResponse
+      http_response = execute_http_with_redirects(
+        api_request.method,
+        api_request.path,
+        api_request.body,
+        uri,
+        api_request.headers,
+        timeout: timeout
+      )
 
-        APIResponse.new(http_response.status_code, http_response.headers, http_response.body, api_request)
-      end
+      APIResponse.new(http_response.status_code, http_response.headers, http_response.body, api_request)
     rescue ex : IO::TimeoutError
       raise APITimeoutError.new("Request timed out", cause: ex)
     rescue ex : IO::Error | Socket::Error | OpenSSL::Error
       raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex)
+    end
+
+    private def execute_http_with_redirects(
+      method : String,
+      path : String,
+      body : String?,
+      uri : URI,
+      req_headers : HTTP::Headers,
+      timeout : Time::Span? = nil,
+    ) : HTTP::Client::Response
+      current_uri = uri
+      current_path = path
+      current_method = method
+      current_body = body
+      current_headers = req_headers.dup
+      redirects = 0
+
+      loop do
+        response = send_once(current_method, current_path, current_body, current_uri, current_headers, timeout: timeout)
+        location = response.headers["location"]?
+        if !redirect_status?(response.status_code) || location.nil? || location.empty?
+          return response
+        end
+
+        redirects += 1
+        raise APIConnectionError.new("Too many redirects (exceeded #{MAX_REDIRECTS})") if redirects > MAX_REDIRECTS
+
+        next_uri = current_uri.resolve(current_path).resolve(location)
+        strip_cross_origin_headers!(current_headers) unless same_origin?(current_uri, next_uri)
+        current_method, current_body = apply_redirect_method(response.status_code, current_method, current_body, current_headers)
+        current_uri = next_uri
+        current_path = request_target_for(next_uri)
+      end
+    end
+
+    private def send_once(
+      method : String,
+      path : String,
+      body : String?,
+      uri : URI,
+      req_headers : HTTP::Headers,
+      timeout : Time::Span? = nil,
+    ) : HTTP::Client::Response
+      with_http_client(uri, timeout: timeout) do |client|
+        case method
+        when "GET"    then client.get(path, headers: req_headers)
+        when "POST"   then client.post(path, headers: req_headers, body: body)
+        when "DELETE" then client.delete(path, headers: req_headers)
+        else               raise "Unknown HTTP method: #{method}"
+        end
+      end
+    end
+
+    private def redirect_status?(status : Int32) : Bool
+      status == 301 || status == 302 || status == 303 || status == 307 || status == 308
+    end
+
+    private def same_origin?(a : URI, b : URI) : Bool
+      a.scheme.try(&.downcase) == b.scheme.try(&.downcase) &&
+        a.host.try(&.downcase) == b.host.try(&.downcase) &&
+        effective_port(a) == effective_port(b)
+    end
+
+    private def effective_port(uri : URI) : Int32?
+      return uri.port if uri.port
+      case uri.scheme.try(&.downcase)
+      when "https" then 443
+      when "http"  then 80
+      else              nil
+      end
+    end
+
+    private def strip_cross_origin_headers!(headers : HTTP::Headers) : Nil
+      CROSS_ORIGIN_STRIPPED_HEADERS.each { |name| headers.delete(name) }
+    end
+
+    private def apply_redirect_method(
+      status : Int32,
+      method : String,
+      body : String?,
+      headers : HTTP::Headers,
+    ) : {String, String?}
+      if status == 303 || ((status == 301 || status == 302) && method == "POST")
+        headers.delete("content-type")
+        headers.delete("content-length")
+        {"GET", nil}
+      else
+        {method, body}
+      end
+    end
+
+    private def request_target_for(uri : URI) : String
+      target = uri.path.empty? ? "/" : uri.path
+      uri.query ? "#{target}?#{uri.query}" : target
     end
 
     # Reconstruct an HTTP::Client::Response from an APIResponse so the existing
@@ -476,33 +737,68 @@ module Anthropic
       query = URI::Params.new
 
       params.each do |key, value|
-        case value
-        when Array
-          value.each { |item| query.add(key, item) }
-        else
-          query.add(key, value)
-        end
+        append_encoded_query_value(query, key, value)
       end
 
       query.to_s
     end
 
+    private def append_encoded_query_value(query : URI::Params, prefix : String, value) : Nil
+      case value
+      when Nil
+        return
+      when Array
+        array_key = prefix.ends_with?("[]") ? prefix : "#{prefix}[]"
+        value.each do |item|
+          next if item.nil?
+          append_encoded_query_value(query, array_key, item)
+        end
+      when Hash
+        value.each do |k, v|
+          append_encoded_query_value(query, "#{prefix}[#{k}]", v)
+        end
+      when JSON::Any
+        case raw = value.raw
+        when Nil
+          return
+        when Array
+          array_key = prefix.ends_with?("[]") ? prefix : "#{prefix}[]"
+          raw.each { |item| append_encoded_query_value(query, array_key, item) }
+        when Hash
+          raw.each { |k, v| append_encoded_query_value(query, "#{prefix}[#{k}]", v) }
+        else
+          query.add(prefix, raw.to_s)
+        end
+      else
+        query.add(prefix, value.to_s)
+      end
+    end
+
     # Merge default query params under per-request params: an explicit
     # per-request key wins over the default instead of sending both.
-    private def merge_query(query : QueryParams?) : Hash(String, String | Array(String))
-      merged = {} of String => String | Array(String)
+    private def merge_query(query : QueryParams?) : Hash(String, QueryParamValue)
+      merged = {} of String => QueryParamValue
       @default_query.each { |key, value| merged[key] = value }
       if query
-        query.each { |key, value| merged[key] = value }
+        query.each do |key, value|
+          if value.nil?
+            merged.delete(key)
+          else
+            merged[key] = value
+          end
+        end
       end
       merged
     end
 
-    private def append_query_params(path : String, query : Hash(String, String | Array(String))) : String
+    private def append_query_params(path : String, query : Hash(String, QueryParamValue)) : String
       return path if query.empty?
 
+      encoded = encode_query_params(query)
+      return path if encoded.empty?
+
       separator = path.includes?('?') ? '&' : '?'
-      "#{path}#{separator}#{encode_query_params(query)}"
+      "#{path}#{separator}#{encoded}"
     end
 
     # Append the client's default query params to a request path.
@@ -519,13 +815,14 @@ module Anthropic
     # in this client goes through here so timeouts stay centralized.
     # Socket errors propagate unwrapped so each caller's retry handling
     # applies; proxy/TLS negotiation failures raise `APIConnectionError`.
-    private def with_http_client(uri : URI, & : HTTP::Client -> T) : T forall T
+    private def with_http_client(uri : URI, timeout : Time::Span? = nil, & : HTTP::Client -> T) : T forall T
+      active_timeout = timeout || @timeout
       proxy_uri = proxy_for_uri(uri)
 
       unless proxy_uri
         return HTTP::Client.new(uri) do |client|
-          client.connect_timeout = @timeout
-          client.read_timeout = @timeout
+          client.connect_timeout = active_timeout
+          client.read_timeout = active_timeout
           yield client
         end
       end
@@ -534,8 +831,8 @@ module Anthropic
       begin
         tls = OpenSSL::SSL::Socket::Client.new(socket, sync_close: true, hostname: uri.host)
         client = HTTP::Client.new(tls, uri.host || "", uri.port || 443)
-        client.connect_timeout = @timeout
-        client.read_timeout = @timeout
+        client.connect_timeout = active_timeout
+        client.read_timeout = active_timeout
         begin
           yield client
         ensure
@@ -623,15 +920,57 @@ module Anthropic
       end
     end
 
-    private def headers(extra_headers : Hash(String, String)? = nil, content_type : String? = "application/json", method : String? = nil) : HTTP::Headers
+    private def with_request_context(timeout : Time::Span?, beta : Bool, &)
+      return yield if timeout.nil? && !beta
+
+      contexts = (@request_contexts ||= {} of UInt64 => {Time::Span?, Bool})
+      fiber_id = Fiber.current.object_id
+      previous = contexts[fiber_id]?
+      contexts[fiber_id] = {timeout, beta}
+      begin
+        yield
+      ensure
+        if prev = previous
+          contexts[fiber_id] = prev
+        else
+          contexts.delete(fiber_id)
+        end
+      end
+    end
+
+    private def current_request_context : {Time::Span?, Bool}
+      @request_contexts.try(&.[]?(Fiber.current.object_id)) || {nil, false}
+    end
+
+    protected def reset_request_contexts! : Nil
+      @request_contexts = nil
+    end
+
+    private def headers(
+      extra_headers : Hash(String, String)? = nil,
+      content_type : String? = "application/json",
+      method : String? = nil,
+    ) : HTTP::Headers
+      ctx_timeout, _ = current_request_context
       HTTP::Headers{
         "anthropic-version" => API_VERSION,
         "user-agent"        => "anthropic-crystal/#{VERSION}",
       }.tap do |hdrs|
-        if api_key = @api_key
-          hdrs["x-api-key"] = api_key
-        elsif auth_token = @auth_token
+        if (api_key = @api_key) && !api_key.empty?
+          hdrs["authorization"] = "Bearer #{api_key}"
+        elsif (auth_token = @auth_token) && !auth_token.empty?
           hdrs["authorization"] = "Bearer #{auth_token}"
+        end
+
+        if effective_timeout = ctx_timeout || @timeout
+          hdrs["x-stainless-timeout"] = effective_timeout.total_seconds.to_i.to_s
+        end
+
+        if ws = @client_workspace_id
+          hdrs[WORKSPACE_ID_HEADER] = ws
+        end
+        if up = @client_user_profile_id
+          hdrs[USER_PROFILE_ID_HEADER] = up
         end
 
         hdrs["content-type"] = content_type if content_type
@@ -646,51 +985,7 @@ module Anthropic
     end
 
     private def handle_error(response : HTTP::Client::Response)
-      status = response.status_code
-      body = response.body
-      headers = response.headers
-
-      message, error_type = parse_error_payload(body)
-
-      error = case status
-              when 400 then BadRequestError.new(message, status, body, headers, error_type)
-              when 401 then AuthenticationError.new(message, status, body, headers, error_type)
-              when 403 then PermissionDeniedError.new(message, status, body, headers, error_type)
-              when 404 then NotFoundError.new(message, status, body, headers, error_type)
-              when 409 then ConflictError.new(message, status, body, headers, error_type)
-              when 413 then PayloadTooLargeError.new(message, status, body, headers, error_type)
-              when 422 then UnprocessableEntityError.new(message, status, body, headers, error_type)
-              when 429
-                retry_after = headers["retry-after"]?.try(&.to_i)
-                RateLimitError.new(message, status, body, headers, error_type, retry_after)
-              when 504 then GatewayTimeoutError.new(message, status, body, headers, error_type)
-              when 529 then OverloadedError.new(message, status, body, headers, error_type)
-              else
-                status >= 500 ? InternalServerError.new(message, status, body, headers, error_type) : APIError.new(message, status, body, headers, error_type)
-              end
-
-      raise error
-    end
-
-    # Parse the error envelope from a response body, returning a tuple of
-    # `{message, error_type}`. Tolerates empty bodies, non-JSON bodies, and
-    # bodies that are valid JSON but don't follow the Anthropic envelope.
-    private def parse_error_payload(body : String) : {String, String?}
-      return {"", nil} if body.empty?
-
-      begin
-        json = JSON.parse(body)
-        error = json["error"]?
-        if error.nil?
-          {body, nil}
-        else
-          message = error["message"]?.try(&.as_s?) || body
-          error_type = error["type"]?.try(&.as_s?)
-          {message, error_type}
-        end
-      rescue JSON::ParseException
-        {body, nil}
-      end
+      raise Anthropic.build_api_error(response.status_code, response.body, response.headers)
     end
 
     # Check if a response indicates we should retry
@@ -749,9 +1044,36 @@ module Anthropic
   # Request header selecting the Workspace a request runs under.
   WORKSPACE_ID_HEADER = "anthropic-workspace-id"
 
+  # Request header selecting the User Profile a request runs under.
+  USER_PROFILE_ID_HEADER = "anthropic-user-profile-id"
+
   # Request header identifying the worker polling a self-hosted
   # environment work queue.
   WORKER_ID_HEADER = "anthropic-worker-id"
+
+  # Validate a single URL path segment against empty strings, dot-segments,
+  # and matrix parameter dot-segments (`.`, `..`, `%2e`, `;`, `.;`, `..;`).
+  def self.validate_path_segment!(value : String) : String
+    raise ArgumentError.new("Path segment cannot be empty") if value.empty?
+
+    normalized = value.gsub(/%2e/i, ".").gsub(/%3b/i, ";")
+    if value.starts_with?(';') || normalized.starts_with?(';')
+      raise ArgumentError.new("Invalid path segment: #{value.inspect}")
+    end
+
+    head = normalized.split(';', 2).first
+    if head == "." || head == ".."
+      raise ArgumentError.new("Invalid path segment: #{value.inspect}")
+    end
+
+    value
+  end
+
+  # Validate and URL-encode a single URL path segment.
+  def self.encode_path_segment(value : String) : String
+    validate_path_segment!(value)
+    URI.encode_path_segment(value)
+  end
 
   # Merge an `anthropic-workspace-id` request header into an existing
   # header hash. Centralized so every resource sets the header the same

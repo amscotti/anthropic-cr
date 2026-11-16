@@ -154,6 +154,7 @@ module Anthropic
 
   struct BetaEnvironmentListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaEnvironment)
 
     # Opaque cursor for the next page, if any
@@ -248,6 +249,7 @@ module Anthropic
   # Paginated list of self-hosted work items.
   struct BetaSelfHostedWorkListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaSelfHostedWork)
 
     # Opaque cursor for the next page, if any

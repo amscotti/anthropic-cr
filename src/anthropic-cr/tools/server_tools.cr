@@ -66,6 +66,7 @@ module Anthropic
     include_user_profiles : Bool = false,
     thinking : ThinkingConfig? = nil,
     compaction : CompactionParam? = nil,
+    beta : Bool = false,
   ) : Hash(String, String)?
     merged = betas.dup
 
@@ -81,7 +82,7 @@ module Anthropic
       merged << TOKEN_COUNTING_BETA unless merged.includes?(TOKEN_COUNTING_BETA)
     end
 
-    if include_user_profiles
+    if beta && include_user_profiles
       merged << USER_PROFILES_BETA unless merged.includes?(USER_PROFILES_BETA)
     end
 
@@ -89,17 +90,17 @@ module Anthropic
       merged << EXTENDED_CACHE_TTL_BETA unless merged.includes?(EXTENDED_CACHE_TTL_BETA)
     end
 
-    if diagnostics
+    if beta && diagnostics
       merged << CACHE_DIAGNOSTICS_BETA unless merged.includes?(CACHE_DIAGNOSTICS_BETA)
     end
 
-    if output_format || output_config.try(&.format)
+    if beta && (output_format || output_config.try(&.format))
       merged << STRUCTURED_OUTPUT_BETA unless merged.includes?(STRUCTURED_OUTPUT_BETA)
     end
 
     if server_tools
-      beta_headers_for_tools(server_tools).each do |beta|
-        merged << beta unless merged.includes?(beta)
+      beta_headers_for_tools(server_tools).each do |tool_beta|
+        merged << tool_beta unless merged.includes?(tool_beta)
       end
     end
 
@@ -131,8 +132,9 @@ module Anthropic
   # Advisor tool (secondary-model advisor) beta header.
   ADVISOR_TOOL_BETA = "advisor-tool-2026-03-01"
 
-  # User profiles beta header.
-  USER_PROFILES_BETA = "user-profiles-2026-03-24"
+  # User profiles beta header (defaults to the 2026-08-18 revision).
+  USER_PROFILES_BETA            = "user-profiles-2026-08-18"
+  USER_PROFILES_2026_03_24_BETA = "user-profiles-2026-03-24"
 
   # PDF document support beta header.
   PDFS_BETA = "pdfs-2024-09-25"
@@ -227,9 +229,7 @@ module Anthropic
   # User management (CE) beta header for Organization endpoints.
   CE_USER_MANAGEMENT_BETA = "ce-user-management-2026-07-13"
 
-  # Latest user-profiles revision. Kept alongside `USER_PROFILES_BETA`
-  # (2026-03-24, still the resource default) for callers that pin newer
-  # behavior such as `order_by` listing support.
+  # User-profiles revision for callers pinning newer `order_by` listing support.
   USER_PROFILES_2026_08_18_BETA = "user-profiles-2026-08-18"
 
   # User-profiles revision with `external_user_details` support.
@@ -243,6 +243,30 @@ module Anthropic
 
   # MCP client revision with tool-list pinning.
   MCP_CLIENT_2026_09_15_BETA = "mcp-client-2026-09-15"
+
+  # Plugins / plugin marketplaces (CE) beta header.
+  CE_PLUGINS_BETA = "ce-plugins-2026-09-01"
+
+  # Organization spend-limit reads beta header.
+  SPEND_LIMIT_READS_BETA = "spend-limit-reads-2026-09-26"
+
+  # Telemetry destinations beta header.
+  TELEMETRY_DESTINATIONS_BETA = "telemetry-destinations-2026-08-11"
+
+  # Webhooks API beta header.
+  WEBHOOKS_BETA = "webhooks-2026-10-07"
+
+  # Admin user sign-out beta header.
+  ADMIN_USER_SIGN_OUT_BETA = "admin-user-sign-out-2026-10-08"
+
+  # Message threads beta header.
+  MESSAGE_THREADS_BETA = "message-threads-2026-08-12"
+
+  # Analytics usage and cost reports beta header.
+  ANALYTICS_USAGE_COST_BETA = "analytics-usage-cost-2026-08-24"
+
+  # Experimental Claude Tag beta header.
+  EXPERIMENTAL_CLAUDE_TAG_BETA = "experimental-claude-tag-2026-10-21"
 
   # Web search tool - allows Claude to search the internet
   #

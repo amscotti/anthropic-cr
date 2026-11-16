@@ -127,6 +127,7 @@ module Anthropic
   # Paginated list of external keys.
   struct BetaExternalKeyListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaExternalKey)
 
@@ -406,6 +407,7 @@ module Anthropic
   # Paginated list of organization rate limits.
   struct BetaOrganizationRateLimitListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaOrganizationRateLimit)
 
@@ -641,6 +643,7 @@ module Anthropic
   # Paginated list of service accounts.
   struct BetaServiceAccountListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaServiceAccount)
 
@@ -674,6 +677,7 @@ module Anthropic
   # Paginated list of service-account workspace memberships.
   struct BetaServiceAccountWorkspaceMemberListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaServiceAccountWorkspaceMember)
 
@@ -763,6 +767,7 @@ module Anthropic
   # Paginated list of federation issuers.
   struct BetaFederationIssuerListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaFederationIssuer)
 
@@ -860,6 +865,7 @@ module Anthropic
   # Paginated list of federation rules.
   struct BetaFederationRuleListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaFederationRule)
 
@@ -894,6 +900,7 @@ module Anthropic
   # Paginated list of workspaces a federation rule is enabled for.
   struct BetaFederationRuleWorkspaceListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaFederationRuleWorkspace)
 

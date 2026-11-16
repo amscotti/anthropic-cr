@@ -76,6 +76,7 @@ module Anthropic
   # Response from listing files
   struct FileListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     # Array of file metadata objects
     getter data : Array(FileMetadata)
@@ -111,7 +112,7 @@ module Anthropic
       results = data.dup
       current_response = self
 
-      while page = current_response.next_page
+      while current_response.has_next_page? && (page = current_response.next_page)
         current_response = if beta
                              BetaFiles.new(client).list(
                                ids: ids,
@@ -219,7 +220,7 @@ module Anthropic
     # :ditto:
     def upload(
       file : IO,
-      filename : String = "file",
+      filename : String? = nil,
       content_type : String = "application/octet-stream",
       expires_in_seconds : Int32? = nil,
       workspace_id : String? = nil,
@@ -237,6 +238,23 @@ module Anthropic
         fields
       )
       FileMetadata.from_json(response.body)
+    end
+
+    # :ditto:
+    def upload(
+      file : Bytes,
+      filename : String? = nil,
+      content_type : String = "application/octet-stream",
+      expires_in_seconds : Int32? = nil,
+      workspace_id : String? = nil,
+    ) : FileMetadata
+      upload(
+        IO::Memory.new(file),
+        filename: filename,
+        content_type: content_type,
+        expires_in_seconds: expires_in_seconds,
+        workspace_id: workspace_id
+      )
     end
 
     # List uploaded files
@@ -278,7 +296,7 @@ module Anthropic
     # ```
     def retrieve_metadata(file_id : String, workspace_id : String? = nil) : FileMetadata
       headers = Anthropic.merge_workspace_header(nil, workspace_id)
-      response = @client.get("/v1/files/#{file_id}", nil, headers)
+      response = @client.get("/v1/files/#{Anthropic.encode_path_segment(file_id)}", nil, headers)
       FileMetadata.from_json(response.body)
     end
 
@@ -295,7 +313,7 @@ module Anthropic
     # ```
     def delete(file_id : String, workspace_id : String? = nil) : DeletedFile
       headers = Anthropic.merge_workspace_header(nil, workspace_id)
-      response = @client.delete("/v1/files/#{file_id}", headers)
+      response = @client.delete("/v1/files/#{Anthropic.encode_path_segment(file_id)}", headers)
       DeletedFile.from_json(response.body)
     end
 
@@ -313,7 +331,7 @@ module Anthropic
     def download(file_id : String, workspace_id : String? = nil) : IO::Memory
       headers = Anthropic.merge_workspace_header(nil, workspace_id) || {} of String => String
       headers["accept"] = "application/binary"
-      @client.get_raw("/v1/files/#{file_id}/content", headers)
+      @client.get_raw("/v1/files/#{Anthropic.encode_path_segment(file_id)}/content", headers)
     end
   end
 
@@ -392,7 +410,7 @@ module Anthropic
     # :ditto:
     def upload(
       file : IO,
-      filename : String = "file",
+      filename : String? = nil,
       content_type : String = "application/octet-stream",
       expires_in_seconds : Int32? = nil,
       betas : Array(String) = [] of String,
@@ -403,14 +421,34 @@ module Anthropic
         fields = {"expires_in_seconds" => expires.to_s}
       end
       response = @client.post_multipart(
-        "/v1/files?beta=true",
+        "/v1/files",
         file,
         filename,
         content_type,
         beta_headers(betas, workspace_id),
-        fields
+        fields,
+        beta: true
       )
       FileMetadata.from_json(response.body)
+    end
+
+    # :ditto:
+    def upload(
+      file : Bytes,
+      filename : String? = nil,
+      content_type : String = "application/octet-stream",
+      expires_in_seconds : Int32? = nil,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : FileMetadata
+      upload(
+        IO::Memory.new(file),
+        filename: filename,
+        content_type: content_type,
+        expires_in_seconds: expires_in_seconds,
+        betas: betas,
+        workspace_id: workspace_id
+      )
     end
 
     # List uploaded files
@@ -441,7 +479,7 @@ module Anthropic
       params["page"] = page if page
       params["scope_id"] = scope_id if scope_id
 
-      response = @client.get("/v1/files?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/files", params, beta_headers(betas, workspace_id))
       FileListResponse.from_json(response.body)
     end
 
@@ -457,7 +495,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : FileMetadata
-      response = @client.get("/v1/files/#{file_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/files/#{Anthropic.encode_path_segment(file_id)}", nil, beta_headers(betas, workspace_id))
       FileMetadata.from_json(response.body)
     end
 
@@ -481,7 +519,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : DeletedFile
-      response = @client.delete("/v1/files/#{file_id}?beta=true", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/files/#{Anthropic.encode_path_segment(file_id)}", beta_headers(betas, workspace_id))
       DeletedFile.from_json(response.body)
     end
 
@@ -501,18 +539,17 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : IO::Memory
-      headers = beta_headers(betas, workspace_id)
+      headers = beta_headers(betas, workspace_id) || {} of String => String
       headers["accept"] = "application/binary"
-      @client.get_raw("/v1/files/#{file_id}/content?beta=true", headers)
+      @client.get_raw("/v1/files/#{Anthropic.encode_path_segment(file_id)}/content", headers)
     end
 
     private def beta_headers(
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
-    ) : Hash(String, String)
-      merged = betas.dup
-      merged << BETA_HEADER unless merged.includes?(BETA_HEADER)
-      Anthropic.merge_workspace_header({"anthropic-beta" => merged.join(",")}, workspace_id) || {} of String => String
+    ) : Hash(String, String)?
+      base = betas.empty? ? nil : {"anthropic-beta" => betas.join(",")}
+      Anthropic.merge_workspace_header(base, workspace_id)
     end
   end
 end

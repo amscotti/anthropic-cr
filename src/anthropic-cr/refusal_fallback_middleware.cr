@@ -92,7 +92,8 @@ module Anthropic
     # The beta vs non-beta distinction is conveyed via the anthropic-beta header;
     # since this middleware is opt-in, intercepting both surfaces is correct.
     private def applies_to?(request : APIRequest) : Bool
-      request.method == "POST" &&
+      request.beta? &&
+        request.method == "POST" &&
         (request.path == "/v1/messages" || request.path.starts_with?("/v1/messages?")) &&
         !request.body.nil?
     end

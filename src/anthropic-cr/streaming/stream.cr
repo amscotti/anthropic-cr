@@ -195,25 +195,11 @@ module Anthropic
     # `Client#handle_error` so callers can rescue the same exception types
     # regardless of whether the failure occurs mid-stream or pre-stream.
     private def raise_stream_error(event : ErrorEvent) : Nil
-      type = event.error.type
-      message = event.error.message
-
-      error =
-        case type
-        when "invalid_request_error" then Anthropic::BadRequestError.new(message, error_type: type)
-        when "authentication_error"  then Anthropic::AuthenticationError.new(message, error_type: type)
-        when "permission_error"      then Anthropic::PermissionDeniedError.new(message, error_type: type)
-        when "not_found_error"       then Anthropic::NotFoundError.new(message, error_type: type)
-        when "rate_limit_error"      then Anthropic::RateLimitError.new(message, error_type: type)
-        when "request_too_large"     then Anthropic::PayloadTooLargeError.new(message, error_type: type)
-        when "overloaded_error"      then Anthropic::OverloadedError.new(message, error_type: type)
-        when "timeout_error",
-             "gateway_timeout_error" then Anthropic::GatewayTimeoutError.new(message, error_type: type)
-        when "api_error" then Anthropic::InternalServerError.new(message, error_type: type)
-        else                  Anthropic::APIError.new(message, error_type: type)
-        end
-
-      raise error
+      raise Anthropic.build_stream_api_error(
+        event.error.type,
+        event.error.message,
+        event.error.details,
+      )
     end
 
     # Convenience iterator for text only

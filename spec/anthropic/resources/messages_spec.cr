@@ -28,7 +28,10 @@ describe Anthropic::Messages do
       parsed.parsed_output.city.should eq("Paris")
       parsed.parsed_output.temperature_c.should eq(21)
       parsed.message.should be_a(Anthropic::Message)
-      capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::STRUCTURED_OUTPUT_BETA)
+      headers = capture.headers.not_nil!
+      if beta = headers["anthropic-beta"]?
+        beta.should_not contain(Anthropic::STRUCTURED_OUTPUT_BETA)
+      end
 
       body = JSON.parse(capture.body.not_nil!)
       body["output_config"]["format"]["type"].as_s.should eq("json_schema")
@@ -544,7 +547,9 @@ describe Anthropic::Messages do
       body["diagnostics"]["previous_message_id"].as_s.should eq("msg_123")
 
       headers = capture.headers.not_nil!
-      headers["anthropic-beta"].should contain(Anthropic::CACHE_DIAGNOSTICS_BETA)
+      if beta = headers["anthropic-beta"]?
+        beta.should_not contain(Anthropic::CACHE_DIAGNOSTICS_BETA)
+      end
     end
 
     it "parses diagnostics response correctly" do

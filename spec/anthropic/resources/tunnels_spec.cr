@@ -28,7 +28,7 @@ describe "MCP Tunnels" do
 
   describe Anthropic::BetaTunnels do
     it "creates a tunnel with display_name and mcp-tunnels beta header" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels?beta=true", tunnel_json)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels", tunnel_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       tunnel = client.beta.tunnels.create(display_name: "prod-gateway")
@@ -46,7 +46,7 @@ describe "MCP Tunnels" do
     end
 
     it "creates a tunnel without body fields when display_name omitted" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels?beta=true", tunnel_json)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels", tunnel_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       client.beta.tunnels.create
@@ -56,7 +56,7 @@ describe "MCP Tunnels" do
     end
 
     it "retrieves a tunnel by id" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/tunnels/tnl_01abc?beta=true")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/tunnels/tnl_01abc")
         .to_return(body: tunnel_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -67,7 +67,7 @@ describe "MCP Tunnels" do
     it "lists tunnels with pagination params" do
       list_json = %({"data":[#{tunnel_json}],"next_page":"cursor_2"})
       capture = RequestCapture.new
-      WebMock.stub(:get, /https:\/\/api\.anthropic\.com\/v1\/tunnels\?beta=true/)
+      WebMock.stub(:get, /https:\/\/api\.anthropic\.com\/v1\/tunnels/)
         .to_return do |request|
           capture.headers = request.headers
           capture.path = request.resource
@@ -87,7 +87,7 @@ describe "MCP Tunnels" do
 
     it "archives a tunnel" do
       archived = tunnel_json.sub(%("archived_at":null), %("archived_at":"2026-06-23T00:00:00Z"))
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels/tnl_01abc/archive?beta=true", archived)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels/tnl_01abc/archive", archived)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       tunnel = client.beta.tunnels.archive("tnl_01abc")
@@ -96,7 +96,7 @@ describe "MCP Tunnels" do
     end
 
     it "reveals a tunnel token" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels/tnl_01abc/reveal_token?beta=true", token_json)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels/tnl_01abc/reveal_token", token_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       token = client.beta.tunnels.reveal_token("tnl_01abc")
@@ -107,7 +107,7 @@ describe "MCP Tunnels" do
     end
 
     it "rotates a tunnel token with optional reason" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels/tnl_01abc/rotate_token?beta=true", token_json)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/tunnels/tnl_01abc/rotate_token", token_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       token = client.beta.tunnels.rotate_token("tnl_01abc", reason: "credential leak")
@@ -123,7 +123,7 @@ describe "MCP Tunnels" do
     it "creates a certificate with ca_certificate_pem" do
       capture = stub_and_capture(
         :post,
-        "https://api.anthropic.com/v1/tunnels/tnl_01abc/certificates?beta=true",
+        "https://api.anthropic.com/v1/tunnels/tnl_01abc/certificates",
         cert_json
       )
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -142,7 +142,7 @@ describe "MCP Tunnels" do
     end
 
     it "retrieves a certificate" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/tunnels/tnl_01abc/certificates/tcrt_01xyz?beta=true")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/tunnels/tnl_01abc/certificates/tcrt_01xyz")
         .to_return(body: cert_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -153,7 +153,7 @@ describe "MCP Tunnels" do
     it "lists certificates for a tunnel" do
       list_json = %({"data":[#{cert_json}],"next_page":null})
       capture = RequestCapture.new
-      WebMock.stub(:get, /https:\/\/api\.anthropic\.com\/v1\/tunnels\/tnl_01abc\/certificates\?beta=true/)
+      WebMock.stub(:get, /https:\/\/api\.anthropic\.com\/v1\/tunnels\/tnl_01abc\/certificates/)
         .to_return do |request|
           capture.headers = request.headers
           capture.path = request.resource
@@ -171,7 +171,7 @@ describe "MCP Tunnels" do
       archived = cert_json.sub(%("archived_at":null), %("archived_at":"2026-06-24T00:00:00Z"))
       capture = stub_and_capture(
         :post,
-        "https://api.anthropic.com/v1/tunnels/tnl_01abc/certificates/tcrt_01xyz/archive?beta=true",
+        "https://api.anthropic.com/v1/tunnels/tnl_01abc/certificates/tcrt_01xyz/archive",
         archived
       )
       client = Anthropic::Client.new(api_key: "sk-ant-test")

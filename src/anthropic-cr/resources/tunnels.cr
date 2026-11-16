@@ -50,7 +50,7 @@ module Anthropic
       params = {} of String => JSON::Any
       params["display_name"] = JSON::Any.new(display_name) if display_name
 
-      response = @client.post("/v1/tunnels?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels", params, beta_headers(betas, workspace_id))
       BetaTunnel.from_json(response.body)
     end
 
@@ -60,7 +60,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnel
-      response = @client.get("/v1/tunnels/#{tunnel_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}", nil, beta_headers(betas, workspace_id))
       BetaTunnel.from_json(response.body)
     end
 
@@ -77,7 +77,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/tunnels?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/tunnels", query, beta_headers(betas, workspace_id))
       BetaTunnelListResponse.from_json(response.body)
     end
 
@@ -88,7 +88,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnel
-      response = @client.post("/v1/tunnels/#{tunnel_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/archive", nil, beta_headers(betas, workspace_id))
       BetaTunnel.from_json(response.body)
     end
 
@@ -99,7 +99,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnelToken
-      response = @client.post("/v1/tunnels/#{tunnel_id}/reveal_token?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/reveal_token", nil, beta_headers(betas, workspace_id))
       BetaTunnelToken.from_json(response.body)
     end
 
@@ -114,7 +114,7 @@ module Anthropic
       params = {} of String => JSON::Any
       params["reason"] = JSON::Any.new(reason) if reason
 
-      response = @client.post("/v1/tunnels/#{tunnel_id}/rotate_token?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/rotate_token", params, beta_headers(betas, workspace_id))
       BetaTunnelToken.from_json(response.body)
     end
   end
@@ -152,7 +152,7 @@ module Anthropic
       params = {"ca_certificate_pem" => ca_certificate_pem}
 
       response = @client.post(
-        "/v1/tunnels/#{tunnel_id}/certificates?beta=true",
+        "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates",
         params,
         beta_headers(betas, workspace_id)
       )
@@ -167,7 +167,7 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaTunnelCertificate
       response = @client.get(
-        "/v1/tunnels/#{tunnel_id}/certificates/#{certificate_id}?beta=true",
+        "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates/#{Anthropic.encode_path_segment(certificate_id)}",
         nil,
         beta_headers(betas, workspace_id)
       )
@@ -188,7 +188,7 @@ module Anthropic
       query["page"] = page if page
 
       response = @client.get(
-        "/v1/tunnels/#{tunnel_id}/certificates?beta=true",
+        "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates",
         query,
         beta_headers(betas, workspace_id)
       )
@@ -203,7 +203,7 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaTunnelCertificate
       response = @client.post(
-        "/v1/tunnels/#{tunnel_id}/certificates/#{certificate_id}/archive?beta=true",
+        "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates/#{Anthropic.encode_path_segment(certificate_id)}/archive",
         nil,
         beta_headers(betas, workspace_id)
       )

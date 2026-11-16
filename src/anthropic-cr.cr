@@ -7,6 +7,8 @@ require "uuid"
 # Core modules
 require "./anthropic-cr/version"
 require "./anthropic-cr/errors"
+require "./anthropic-cr/error_classes"
+require "./anthropic-cr/pagination"
 require "./anthropic-cr/schema"
 require "./anthropic-cr/stainless_helper"
 require "./anthropic-cr/middleware"
@@ -14,7 +16,6 @@ require "./anthropic-cr/refusal_fallback_middleware"
 
 # Models
 require "./anthropic-cr/models/role"
-require "./anthropic-cr/models/completion"
 require "./anthropic-cr/models/content"
 require "./anthropic-cr/models/usage"
 require "./anthropic-cr/models/message"
@@ -53,7 +54,6 @@ require "./anthropic-cr/models/params"
 
 # Resources
 require "./anthropic-cr/resources/file_upload"
-require "./anthropic-cr/resources/completions"
 require "./anthropic-cr/resources/messages"
 require "./anthropic-cr/resources/batches"
 require "./anthropic-cr/resources/models"

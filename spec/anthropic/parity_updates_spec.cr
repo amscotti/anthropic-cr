@@ -220,7 +220,8 @@ describe "Opus 4.7 parity updates" do
   describe "Beta header constants" do
     it "exposes ADVISOR_TOOL_BETA and USER_PROFILES_BETA" do
       Anthropic::ADVISOR_TOOL_BETA.should eq("advisor-tool-2026-03-01")
-      Anthropic::USER_PROFILES_BETA.should eq("user-profiles-2026-03-24")
+      Anthropic::USER_PROFILES_BETA.should eq("user-profiles-2026-08-18")
+      Anthropic::USER_PROFILES_2026_03_24_BETA.should eq("user-profiles-2026-03-24")
     end
 
     it "exposes additional historical / newer beta headers" do
@@ -318,7 +319,7 @@ describe "Opus 4.7 parity updates" do
       )
 
       capture.headers.not_nil!["anthropic-user-profile-id"].should eq("uprof_01abc")
-      capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::USER_PROFILES_BETA)
+      capture.headers.not_nil!["anthropic-beta"]?.try(&.includes?(Anthropic::USER_PROFILES_BETA)).should_not be_true
       body = JSON.parse(capture.body.not_nil!)
       body.as_h.has_key?("user_profile_id").should be_false
     end
@@ -326,7 +327,7 @@ describe "Opus 4.7 parity updates" do
 
   describe Anthropic::BetaUserProfiles do
     it "creates a profile and POSTs external_id + metadata" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles?beta=true", Fixtures::Responses::USER_PROFILE)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/user_profiles", Fixtures::Responses::USER_PROFILE)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       profile = client.beta.user_profiles.create(
@@ -345,7 +346,7 @@ describe "Opus 4.7 parity updates" do
     end
 
     it "retrieves a profile" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/user_profiles/uprof_01abc?beta=true")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/user_profiles/uprof_01abc")
         .to_return(body: Fixtures::Responses::USER_PROFILE)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -354,7 +355,7 @@ describe "Opus 4.7 parity updates" do
     end
 
     it "lists profiles" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/user_profiles?beta=true&limit=20")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/user_profiles?limit=20")
         .to_return(body: Fixtures::Responses::USER_PROFILE_LIST)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -364,7 +365,7 @@ describe "Opus 4.7 parity updates" do
     end
 
     it "creates an enrollment URL" do
-      WebMock.stub(:post, "https://api.anthropic.com/v1/user_profiles/uprof_01abc/enrollment_url?beta=true")
+      WebMock.stub(:post, "https://api.anthropic.com/v1/user_profiles/uprof_01abc/enrollment_url")
         .to_return(body: Fixtures::Responses::USER_PROFILE_ENROLLMENT_URL)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 

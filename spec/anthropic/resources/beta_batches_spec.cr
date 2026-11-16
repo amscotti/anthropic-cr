@@ -3,7 +3,7 @@ require "../../spec_helper"
 describe Anthropic::BetaBatches do
   describe "#create" do
     it "creates a beta batch with required headers" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/batches?beta=true", Fixtures::Responses::BETA_BATCH_CREATED)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/batches", Fixtures::Responses::BETA_BATCH_CREATED)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       batch = client.beta.messages.batches.create(
@@ -26,7 +26,7 @@ describe Anthropic::BetaBatches do
     end
 
     it "merges request-derived beta headers for batch features" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/batches?beta=true", Fixtures::Responses::BETA_BATCH_CREATED)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/batches", Fixtures::Responses::BETA_BATCH_CREATED)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.beta.messages.batches.create(
@@ -51,7 +51,7 @@ describe Anthropic::BetaBatches do
     end
 
     it "supports current MCP batch request shapes" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/batches?beta=true", Fixtures::Responses::BETA_BATCH_CREATED)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/batches", Fixtures::Responses::BETA_BATCH_CREATED)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.beta.messages.batches.create(
@@ -102,7 +102,7 @@ describe Anthropic::BetaBatches do
 
   describe "#list" do
     it "lists beta batches" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/messages/batches?beta=true&limit=20")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/messages/batches?limit=20")
         .to_return(body: Fixtures::Responses::BETA_BATCH_LIST)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -115,7 +115,7 @@ describe Anthropic::BetaBatches do
 
   describe "#results" do
     it "streams beta batch results" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/messages/batches/msgbatch_01abc/results?beta=true")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/messages/batches/msgbatch_01abc/results")
         .to_return do |_request|
           HTTP::Client::Response.new(
             200,
@@ -171,10 +171,10 @@ end
 describe Anthropic::BetaBatchListResponse do
   describe "#auto_paging_all" do
     it "auto-paginates beta batch lists" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/messages/batches?beta=true&limit=20")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/messages/batches?limit=20")
         .to_return(body: %({"data":[{"id":"batch1","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":1,"errored":0,"canceled":0,"expired":0},"ended_at":"2025-01-01T01:00:00Z","created_at":"2025-01-01T00:00:00Z","expires_at":"2025-01-02T00:00:00Z","cancel_initiated_at":null,"results_url":null}],"has_more":true,"first_id":"batch1","last_id":"batch1"}))
 
-      WebMock.stub(:get, "https://api.anthropic.com/v1/messages/batches?beta=true&limit=20&after_id=batch1")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/messages/batches?limit=20&after_id=batch1")
         .to_return(body: %({"data":[{"id":"batch2","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":1,"errored":0,"canceled":0,"expired":0},"ended_at":"2025-01-01T02:00:00Z","created_at":"2025-01-01T00:30:00Z","expires_at":"2025-01-02T00:30:00Z","cancel_initiated_at":null,"results_url":null}],"has_more":false,"first_id":"batch2","last_id":"batch2"}))
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")

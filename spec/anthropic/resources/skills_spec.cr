@@ -68,18 +68,18 @@ end
 
 describe Anthropic::BetaSkills do
   it "lists skills with correct path" do
-    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/skills?beta=true&limit=20", Fixtures::Responses::SKILL_LIST)
+    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/skills?limit=20", Fixtures::Responses::SKILL_LIST)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     result = client.beta.skills.list
 
     result.data.size.should eq(2)
     headers = capture.headers.not_nil!
-    headers["anthropic-beta"].should contain("skills-2025-10-02")
+    headers.has_key?("anthropic-beta").should be_false
   end
 
   it "lists skills with source filter" do
-    stub_and_capture(:get, "https://api.anthropic.com/v1/skills?beta=true&limit=10&source=upload", Fixtures::Responses::SKILL_LIST)
+    stub_and_capture(:get, "https://api.anthropic.com/v1/skills?limit=10&source=upload", Fixtures::Responses::SKILL_LIST)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     result = client.beta.skills.list(limit: 10, source: "upload")
@@ -88,18 +88,18 @@ describe Anthropic::BetaSkills do
   end
 
   it "retrieves a skill" do
-    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/skills/skill_01abc?beta=true", Fixtures::Responses::SKILL_RESPONSE)
+    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/skills/skill_01abc", Fixtures::Responses::SKILL_RESPONSE)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     skill = client.beta.skills.retrieve("skill_01abc")
 
     skill.id.should eq("skill_01abc")
     headers = capture.headers.not_nil!
-    headers["anthropic-beta"].should contain("skills-2025-10-02")
+    headers.has_key?("anthropic-beta").should be_false
   end
 
   it "deletes a skill" do
-    stub_and_capture(:delete, "https://api.anthropic.com/v1/skills/skill_01abc?beta=true", Fixtures::Responses::SKILL_DELETED)
+    stub_and_capture(:delete, "https://api.anthropic.com/v1/skills/skill_01abc", Fixtures::Responses::SKILL_DELETED)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     result = client.beta.skills.delete("skill_01abc")
@@ -109,7 +109,7 @@ describe Anthropic::BetaSkills do
   end
 
   it "creates a skill with multipart upload" do
-    WebMock.stub(:post, "https://api.anthropic.com/v1/skills?beta=true")
+    WebMock.stub(:post, "https://api.anthropic.com/v1/skills")
       .to_return(body: Fixtures::Responses::SKILL_RESPONSE)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -127,7 +127,7 @@ end
 
 describe Anthropic::BetaSkillVersions do
   it "lists versions" do
-    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/skills/skill_01abc/versions?beta=true&limit=20", Fixtures::Responses::SKILL_VERSION_LIST)
+    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/skills/skill_01abc/versions?limit=20", Fixtures::Responses::SKILL_VERSION_LIST)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     result = client.beta.skills.versions.list(skill_id: "skill_01abc")
@@ -135,11 +135,11 @@ describe Anthropic::BetaSkillVersions do
     result.data.size.should eq(1)
     result.data[0].name.should eq("my-skill")
     headers = capture.headers.not_nil!
-    headers["anthropic-beta"].should contain("skills-2025-10-02")
+    headers.has_key?("anthropic-beta").should be_false
   end
 
   it "retrieves a version" do
-    stub_and_capture(:get, "https://api.anthropic.com/v1/skills/skill_01abc/versions/v1?beta=true", Fixtures::Responses::SKILL_VERSION_RESPONSE)
+    stub_and_capture(:get, "https://api.anthropic.com/v1/skills/skill_01abc/versions/v1", Fixtures::Responses::SKILL_VERSION_RESPONSE)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     version = client.beta.skills.versions.retrieve(skill_id: "skill_01abc", version: "v1")
@@ -149,7 +149,7 @@ describe Anthropic::BetaSkillVersions do
   end
 
   it "deletes a version" do
-    stub_and_capture(:delete, "https://api.anthropic.com/v1/skills/skill_01abc/versions/v1?beta=true", Fixtures::Responses::SKILL_VERSION_DELETED)
+    stub_and_capture(:delete, "https://api.anthropic.com/v1/skills/skill_01abc/versions/v1", Fixtures::Responses::SKILL_VERSION_DELETED)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     result = client.beta.skills.versions.delete(skill_id: "skill_01abc", version: "v1")
@@ -159,7 +159,7 @@ describe Anthropic::BetaSkillVersions do
   end
 
   it "creates a version with multipart upload" do
-    WebMock.stub(:post, "https://api.anthropic.com/v1/skills/skill_01abc/versions?beta=true")
+    WebMock.stub(:post, "https://api.anthropic.com/v1/skills/skill_01abc/versions")
       .to_return(body: Fixtures::Responses::SKILL_VERSION_RESPONSE)
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -270,7 +270,7 @@ end
 
 describe "Anthropic::BetaSkillVersions download" do
   it "downloads a version archive as binary" do
-    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/skills/skill_01abc/versions/sv_01abc/content?beta=true", "archive-bytes")
+    capture = stub_and_capture(:get, "https://api.anthropic.com/v1/skills/skill_01abc/versions/sv_01abc/content", "archive-bytes")
 
     client = Anthropic::Client.new(api_key: "sk-ant-test")
     archive = client.beta.skills.versions.download(skill_id: "skill_01abc", version: "sv_01abc")
@@ -278,6 +278,6 @@ describe "Anthropic::BetaSkillVersions download" do
     archive.to_s.should eq("archive-bytes")
     headers = capture.headers.not_nil!
     headers["accept"].should eq("application/binary")
-    headers["anthropic-beta"].should contain("skills-2025-10-02")
+    headers.has_key?("anthropic-beta").should be_false
   end
 end

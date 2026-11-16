@@ -343,6 +343,9 @@ module Anthropic
 
       getter type : String
       getter message : String
+
+      @[JSON::Field(emit_null: false)]
+      getter details : JSON::Any?
     end
   end
 

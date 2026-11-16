@@ -26,6 +26,7 @@ module Anthropic
 
   struct BetaMemoryStoreListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaManagedAgentsMemoryStore)
 
     # Opaque cursor for the next page, if any
@@ -68,6 +69,7 @@ module Anthropic
 
   struct BetaMemoryListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaManagedAgentsMemory)
 
     # Opaque cursor for the next page, if any
@@ -117,6 +119,7 @@ module Anthropic
 
   struct BetaMemoryVersionListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaManagedAgentsMemoryVersion)
 
     # Opaque cursor for the next page, if any

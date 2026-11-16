@@ -36,7 +36,7 @@ describe "Phase E3 additions" do
   describe "BetaVaultsCredentials injection scoping wiring" do
     it "posts injection_location and networking on credential create" do
       cred_json = %({"id":"cred_1","vault_id":"vault_1","auth":{"type":"environment_variable","name":"API_KEY"},"display_name":"key","metadata":{},"created_at":"","updated_at":""})
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/vaults/vault_1/credentials?beta=true", cred_json)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/vaults/vault_1/credentials", cred_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       client.beta.vaults.credentials.create(

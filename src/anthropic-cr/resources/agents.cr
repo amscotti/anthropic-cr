@@ -68,7 +68,7 @@ module Anthropic
       params["system"] = JSON::Any.new(system) if system
       params["tools"] = JSON.parse(tools.to_json) if tools
 
-      response = @client.post("/v1/agents?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/agents", params, beta_headers(betas, workspace_id))
       BetaAgent.from_json(response.body)
     end
 
@@ -82,7 +82,7 @@ module Anthropic
       query = {} of String => String
       query["version"] = version.to_s if version
 
-      response = @client.get("/v1/agents/#{agent_id}?beta=true", query.empty? ? nil : query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/agents/#{Anthropic.encode_path_segment(agent_id)}", query.empty? ? nil : query, beta_headers(betas, workspace_id))
       BetaAgent.from_json(response.body)
     end
 
@@ -117,7 +117,7 @@ module Anthropic
       params["system"] = JSON::Any.new(system) if system
       params["tools"] = JSON.parse(tools.to_json) if tools
 
-      response = @client.post("/v1/agents/#{agent_id}?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/agents/#{Anthropic.encode_path_segment(agent_id)}", params, beta_headers(betas, workspace_id))
       BetaAgent.from_json(response.body)
     end
 
@@ -137,7 +137,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/agents?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/agents", query, beta_headers(betas, workspace_id))
       BetaAgentListResponse.from_json(response.body)
     end
 
@@ -147,7 +147,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaAgent
-      response = @client.post("/v1/agents/#{agent_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/agents/#{Anthropic.encode_path_segment(agent_id)}/archive", nil, beta_headers(betas, workspace_id))
       BetaAgent.from_json(response.body)
     end
 
@@ -181,7 +181,7 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/agents/#{agent_id}/versions?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/agents/#{Anthropic.encode_path_segment(agent_id)}/versions", query, beta_headers(betas, workspace_id))
       BetaAgentListResponse.from_json(response.body)
     end
 

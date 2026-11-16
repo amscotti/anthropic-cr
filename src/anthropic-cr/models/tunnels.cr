@@ -82,6 +82,7 @@ module Anthropic
   # Page-cursor list response for tunnels (`data` + `next_page`).
   struct BetaTunnelListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaTunnel)
 
@@ -92,6 +93,7 @@ module Anthropic
   # Page-cursor list response for tunnel certificates (`data` + `next_page`).
   struct BetaTunnelCertificateListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaTunnelCertificate)
 

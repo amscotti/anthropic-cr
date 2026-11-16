@@ -116,7 +116,6 @@ crystal run examples/01_basic_message.cr
 
 | File | Description |
 |------|-------------|
-| `47_completions.cr` | Legacy Text Completions — `client.completions` create + streaming |
 | `48_organization.cr` | Organization Admin API — `client.beta.organization` overview |
 | `49_providers.cr` | Alternate providers — AWS / Google Cloud / Vertex clients |
 | `50_compaction_and_tools.cr` | Explicit compaction + runner tool changes |

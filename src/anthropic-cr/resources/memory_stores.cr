@@ -9,7 +9,6 @@ module Anthropic
       workspace_id : String? = nil,
     ) : Hash(String, String)
       merged_betas = betas.dup
-      merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
       merged_betas << AGENT_MEMORY_BETA unless merged_betas.includes?(AGENT_MEMORY_BETA)
       Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
@@ -34,13 +33,13 @@ module Anthropic
       params["description"] = description if description
       params["metadata"] = metadata if metadata
 
-      response = @client.post("/v1/memory_stores?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/memory_stores", params, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemoryStore.from_json(response.body)
     end
 
     # Retrieve a memory store by ID
     def retrieve(memory_store_id : String, betas : Array(String) = [] of String, workspace_id : String? = nil) : BetaManagedAgentsMemoryStore
-      response = @client.get("/v1/memory_stores/#{memory_store_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemoryStore.from_json(response.body)
     end
 
@@ -59,7 +58,7 @@ module Anthropic
       params["description"] = JSON::Any.new(description) if description
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
 
-      response = @client.post("/v1/memory_stores/#{memory_store_id}?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}", params, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemoryStore.from_json(response.body)
     end
 
@@ -75,19 +74,19 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/memory_stores?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/memory_stores", query, beta_headers(betas, workspace_id))
       BetaMemoryStoreListResponse.from_json(response.body)
     end
 
     # Delete a memory store
     def delete(memory_store_id : String, betas : Array(String) = [] of String, workspace_id : String? = nil) : BetaManagedAgentsDeletedMemoryStore
-      response = @client.delete("/v1/memory_stores/#{memory_store_id}?beta=true", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}", beta_headers(betas, workspace_id))
       BetaManagedAgentsDeletedMemoryStore.from_json(response.body)
     end
 
     # Archive a memory store
     def archive(memory_store_id : String, betas : Array(String) = [] of String, workspace_id : String? = nil) : BetaManagedAgentsMemoryStore
-      response = @client.post("/v1/memory_stores/#{memory_store_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/archive", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemoryStore.from_json(response.body)
     end
   end
@@ -102,7 +101,6 @@ module Anthropic
       workspace_id : String? = nil,
     ) : Hash(String, String)
       merged_betas = betas.dup
-      merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
       merged_betas << AGENT_MEMORY_BETA unless merged_betas.includes?(AGENT_MEMORY_BETA)
       Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
@@ -120,7 +118,7 @@ module Anthropic
         "content" => content,
       }
 
-      response = @client.post("/v1/memory_stores/#{memory_store_id}/memories?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/memories", params, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemory.from_json(response.body)
     end
 
@@ -131,7 +129,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsMemory
-      response = @client.get("/v1/memory_stores/#{memory_store_id}/memories/#{memory_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/memories/#{Anthropic.encode_path_segment(memory_id)}", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemory.from_json(response.body)
     end
 
@@ -145,7 +143,7 @@ module Anthropic
     ) : BetaManagedAgentsMemory
       params = {"content" => content}
 
-      response = @client.post("/v1/memory_stores/#{memory_store_id}/memories/#{memory_id}?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/memories/#{Anthropic.encode_path_segment(memory_id)}", params, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemory.from_json(response.body)
     end
 
@@ -160,7 +158,7 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/memory_stores/#{memory_store_id}/memories?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/memories", query, beta_headers(betas, workspace_id))
       BetaMemoryListResponse.from_json(response.body)
     end
 
@@ -171,7 +169,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsDeletedMemory
-      response = @client.delete("/v1/memory_stores/#{memory_store_id}/memories/#{memory_id}?beta=true", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/memories/#{Anthropic.encode_path_segment(memory_id)}", beta_headers(betas, workspace_id))
       BetaManagedAgentsDeletedMemory.from_json(response.body)
     end
   end
@@ -186,7 +184,6 @@ module Anthropic
       workspace_id : String? = nil,
     ) : Hash(String, String)
       merged_betas = betas.dup
-      merged_betas << MANAGED_AGENTS_BETA unless merged_betas.includes?(MANAGED_AGENTS_BETA)
       merged_betas << AGENT_MEMORY_BETA unless merged_betas.includes?(AGENT_MEMORY_BETA)
       Anthropic.merge_workspace_header({"anthropic-beta" => merged_betas.join(",")}, workspace_id) || {} of String => String
     end
@@ -198,7 +195,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsMemoryVersion
-      response = @client.get("/v1/memory_stores/#{memory_store_id}/versions/#{version_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/versions/#{Anthropic.encode_path_segment(version_id)}", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemoryVersion.from_json(response.body)
     end
 
@@ -213,7 +210,7 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/memory_stores/#{memory_store_id}/versions?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/versions", query, beta_headers(betas, workspace_id))
       BetaMemoryVersionListResponse.from_json(response.body)
     end
 
@@ -224,7 +221,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsMemoryVersion
-      response = @client.post("/v1/memory_stores/#{memory_store_id}/versions/#{version_id}/redact?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/memory_stores/#{Anthropic.encode_path_segment(memory_store_id)}/versions/#{Anthropic.encode_path_segment(version_id)}/redact", nil, beta_headers(betas, workspace_id))
       BetaManagedAgentsMemoryVersion.from_json(response.body)
     end
   end
