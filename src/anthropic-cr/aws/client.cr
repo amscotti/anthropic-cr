@@ -74,7 +74,7 @@ module Anthropic
         @aws_session_token = aws_session_token
         @aws_profile = aws_profile
 
-        env_key = api_key.is_a?(UnsetValue) && auth_token.is_a?(UnsetValue) ? ENV["ANTHROPIC_AWS_API_KEY"]? : nil
+        env_key = api_key.is_a?(UnsetValue) ? ENV["ANTHROPIC_AWS_API_KEY"]? : nil
         effective_api_key = api_key.is_a?(UnsetValue) ? nil : api_key
         @gateway_api_key, @credentials, @aws_region = self.class.resolve_auth(
           api_key: effective_api_key,
@@ -160,13 +160,13 @@ module Anthropic
           aws_profile,
         )
 
-        next_api_key = resolve_option_api_key(api_key, auth_token, aws_creds_touched)
+        next_api_key = resolve_option_api_key(api_key, aws_creds_touched)
         next_skip = skip_auth.nil? ? @skip_auth : skip_auth
         next_region = aws_region || @aws_region
 
         self.class.validate_auth_inputs!(
-          api_key: next_api_key,
-          auth_token: auth_token.is_a?(UnsetValue) ? nil : auth_token,
+          api_key: api_key.is_a?(UnsetValue) ? next_api_key : api_key,
+          auth_token: auth_token,
           aws_access_key: next_ak,
           aws_secret_key: next_sk,
           aws_session_token: next_st,
@@ -231,8 +231,14 @@ module Anthropic
         aws_session_token : String?,
         aws_profile : String?,
       ) : Nil
-        if api_key.is_a?(String) && auth_token.is_a?(String)
-          raise ArgumentError.new("Cannot provide both api_key and auth_token")
+        if !auth_token.is_a?(UnsetValue) && !auth_token.nil?
+          if api_key.is_a?(String)
+            raise ArgumentError.new("Cannot provide both api_key and auth_token")
+          end
+          raise ArgumentError.new(
+            "The `auth_token` option is not supported by Anthropic::AWS::Client; " \
+            "authentication uses an API key (`api_key`) or AWS credentials (SigV4)."
+          )
         end
         if aws_access_key.nil? != aws_secret_key.nil?
           raise ArgumentError.new("`aws_access_key` and `aws_secret_key` must be provided together.")
@@ -341,11 +347,9 @@ module Anthropic
 
       private def resolve_option_api_key(
         api_key : String | UnsetValue | Nil,
-        auth_token : String | UnsetValue | Nil,
         aws_creds_touched : Bool,
       ) : String?
         return api_key unless api_key.is_a?(UnsetValue)
-        return nil unless auth_token.is_a?(UnsetValue)
         return nil if aws_creds_touched
 
         @gateway_api_key
@@ -404,17 +408,18 @@ module Anthropic
         method_u = method.upcase
         reject_action_url_request!(method_u, path)
 
+        ctx_timeout, beta = current_request_context
         uri = URI.parse(@base_url)
         req_headers = headers(extra_headers, method: method_u)
         sign_headers!(method_u, path, req_headers, body)
 
-        return request_direct(method_u, path, body, uri, req_headers) if @middleware.empty?
+        return request_direct(method_u, path, body, uri, req_headers, timeout: ctx_timeout) if @middleware.empty?
 
-        api_request = APIRequest.new(method_u, path, req_headers, body)
+        api_request = APIRequest.new(method_u, path, req_headers, body, beta: beta)
         response = nil
         (@max_retries + 1).times do |attempt|
           begin
-            api_response = invoke_chain(api_request, uri)
+            api_response = invoke_chain(api_request, uri, timeout: ctx_timeout)
             response = to_http_response(api_response)
 
             if api_response.success? || !should_retry?(response)
@@ -543,7 +548,7 @@ module Anthropic
         send_signed_multipart(path, extra_headers) do |builder|
           form_fields.try &.each { |name, value| builder.field(name, value) }
           files.each do |upload|
-            metadata = HTTP::FormData::FileMetadata.new(filename: upload.filename)
+            metadata = HTTP::FormData::FileMetadata.new(filename: upload.filename || "")
             builder.file("files[]", upload.io, metadata, headers: HTTP::Headers{"Content-Type" => upload.content_type})
           end
         end

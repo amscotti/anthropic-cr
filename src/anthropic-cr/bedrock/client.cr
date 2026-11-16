@@ -405,6 +405,7 @@ module Anthropic
       private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
         validate_bedrock_path!(path)
 
+        ctx_timeout, beta = current_request_context
         method_u = method.upcase
         req_headers = headers(extra_headers, method: method_u)
         version = req_headers.delete("anthropic-version") || API_VERSION
@@ -413,13 +414,13 @@ module Anthropic
         uri = URI.parse(@base_url)
         sign_bedrock_headers!(method_u, req_path, req_headers, req_body)
 
-        return request_direct(method_u, req_path, req_body, uri, req_headers) if @middleware.empty?
+        return request_direct(method_u, req_path, req_body, uri, req_headers, timeout: ctx_timeout) if @middleware.empty?
 
-        api_request = APIRequest.new(method_u, req_path, req_headers, req_body)
+        api_request = APIRequest.new(method_u, req_path, req_headers, req_body, beta: beta)
         response = nil
         (@max_retries + 1).times do |attempt|
           begin
-            api_response = invoke_chain(api_request, uri)
+            api_response = invoke_chain(api_request, uri, timeout: ctx_timeout)
             response = to_http_response(api_response)
 
             if api_response.success? || !should_retry?(response)

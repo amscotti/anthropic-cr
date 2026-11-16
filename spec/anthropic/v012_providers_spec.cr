@@ -1,4 +1,16 @@
+require "socket"
 require "../spec_helper"
+
+private class ProviderBetaCaptureMiddleware
+  include Anthropic::Middleware
+
+  getter seen_beta = [] of Bool
+
+  def call(request : Anthropic::APIRequest, nxt : Anthropic::MiddlewareNext) : Anthropic::APIResponse
+    @seen_beta << request.beta?
+    nxt.call(request)
+  end
+end
 
 private def with_temp_env(vars : Hash(String, String?), &)
   saved = {} of String => String?
@@ -136,6 +148,27 @@ describe "v0.12.0 cloud providers parity (2026-10-21)" do
     it "rejects conflicting explicit auth arguments cleanly" do
       expect_raises(ArgumentError, /Cannot provide both api_key and auth_token/) do
         Anthropic::AWS::Client.new(api_key: "k", auth_token: "t", aws_region: "us-east-1")
+      end
+
+      expect_raises(ArgumentError, /auth_token/) do
+        Anthropic::AWS::Client.new(auth_token: "t", aws_region: "us-east-1")
+      end
+
+      aws_api_client = Anthropic::AWS::Client.new(api_key: "k", aws_region: "us-east-1", workspace_id: "ws_1")
+      expect_raises(ArgumentError, /Cannot provide both api_key and auth_token/) do
+        aws_api_client.with_options(auth_token: "t")
+      end
+      aws_api_client.with_options(auth_token: nil).api_key.should eq("k")
+
+      aws_sigv4_client = Anthropic::AWS::Client.new(aws_access_key: "ak", aws_secret_key: "sk", aws_region: "us-east-1")
+      expect_raises(ArgumentError, /auth_token/) do
+        aws_sigv4_client.with_options(auth_token: "t")
+      end
+
+      with_temp_env({"ANTHROPIC_AWS_API_KEY" => "env-aws-key"}) do
+        via_env = Anthropic::AWS::Client.new(auth_token: nil, aws_region: "us-east-1", workspace_id: "ws_1")
+        via_env.api_key_mode?.should be_true
+        via_env.api_key.should eq("env-aws-key")
       end
 
       expect_raises(ArgumentError, /provided together/) do
@@ -738,6 +771,97 @@ describe "v0.12.0 cloud providers parity (2026-10-21)" do
 
       gc = Anthropic::GoogleCloud::Client.new(project: "proj-1", workspace_id: "ws-1", skip_auth: true, base_url: "https://custom.gc.example")
       gc.with_options(project: "proj-2", workspace_id: "ws-2").messages.create(model: "claude-sonnet-5", max_tokens: 8, messages: [{role: "user", content: "hi"}])
+    end
+
+    it "propagates per-request beta and timeout context on AWS, Bedrock, and Mantle" do
+      aws_mw = ProviderBetaCaptureMiddleware.new
+      bedrock_mw = ProviderBetaCaptureMiddleware.new
+      mantle_mw = ProviderBetaCaptureMiddleware.new
+
+      WebMock.stub(:post, "https://aws-external-anthropic.us-east-1.api.aws/v1/messages")
+        .to_return(status: 200, body: Fixtures::Responses::MESSAGE_BASIC)
+      WebMock.stub(:post, /bedrock-runtime\.us-east-1\.amazonaws\.com\/model\//)
+        .to_return(status: 200, body: Fixtures::Responses::MESSAGE_BASIC)
+      WebMock.stub(:post, "https://bedrock-mantle.us-east-1.api.aws/anthropic/v1/messages")
+        .to_return(status: 200, body: Fixtures::Responses::MESSAGE_BASIC)
+
+      aws = Anthropic::AWS::Client.new(api_key: "aws-k", aws_region: "us-east-1", workspace_id: "ws_1", middleware: [aws_mw], max_retries: 0)
+      bedrock = Anthropic::Bedrock::Client.new(api_key: "br-k", aws_region: "us-east-1", middleware: [bedrock_mw], max_retries: 0)
+      mantle = Anthropic::Bedrock::MantleClient.new(api_key: "mt-k", aws_region: "us-east-1", middleware: [mantle_mw], max_retries: 0)
+
+      aws.beta.messages.create(model: "claude-sonnet-5", max_tokens: 8, messages: [{role: "user", content: "hi"}])
+      bedrock.beta.messages.create(model: "us.anthropic.claude-sonnet-5", max_tokens: 8, messages: [{role: "user", content: "hi"}])
+      mantle.beta.messages.create(model: "claude-sonnet-5", max_tokens: 8, messages: [{role: "user", content: "hi"}])
+
+      aws_mw.seen_beta.should eq([true])
+      bedrock_mw.seen_beta.should eq([true])
+      mantle_mw.seen_beta.should eq([true])
+
+      # Verify socket read timeout from request context is enforced on AWS, Bedrock, and Mantle.
+      WebMock.allow_net_connect = true
+      server = TCPServer.new("127.0.0.1", 0)
+      begin
+        port = server.local_address.port
+        3.times do
+          spawn do
+            begin
+              client_sock = server.accept
+              client_sock.gets
+              sleep(0.15.seconds)
+              client_sock.close
+            rescue
+            end
+          end
+        end
+
+        slow_aws = Anthropic::AWS::Client.new(
+          api_key: "aws-k",
+          aws_region: "us-east-1",
+          base_url: "http://127.0.0.1:#{port}",
+          max_retries: 0,
+        )
+        slow_bedrock = Anthropic::Bedrock::Client.new(
+          api_key: "br-k",
+          aws_region: "us-east-1",
+          base_url: "http://127.0.0.1:#{port}",
+          max_retries: 0,
+        )
+        slow_mantle = Anthropic::Bedrock::MantleClient.new(
+          api_key: "mt-k",
+          aws_region: "us-east-1",
+          base_url: "http://127.0.0.1:#{port}",
+          max_retries: 0,
+        )
+
+        [slow_aws, slow_bedrock, slow_mantle].each do |slow_client|
+          expect_raises(Anthropic::APITimeoutError) do
+            slow_client.post("/v1/messages", {"model" => "claude-sonnet-5"}, timeout: 0.03.seconds)
+          end
+        end
+      ensure
+        server.close
+        WebMock.allow_net_connect = false
+      end
+    end
+
+    it "emits empty filename for unnamed FileUpload parts under AWS SigV4 post_multipart_files" do
+      captured_body = ""
+      WebMock.stub(:post, "https://aws-external-anthropic.us-east-1.api.aws/v1/skills").to_return do |req|
+        captured_body = req.body.to_s
+        HTTP::Client::Response.new(200, body: %({"id":"skill_1"}))
+      end
+
+      client = Anthropic::AWS::Client.new(
+        aws_access_key: "AKIA_TEST",
+        aws_secret_key: "secret_test",
+        aws_region: "us-east-1",
+        workspace_id: "ws_1",
+      )
+
+      upload = Anthropic::FileUpload.new(io: IO::Memory.new("skill-bytes"), filename: nil)
+      client.post_multipart_files("/v1/skills", [upload]).status_code.should eq(200)
+      captured_body.should contain("filename=\"\"")
+      captured_body.should contain("skill-bytes")
     end
   end
 end

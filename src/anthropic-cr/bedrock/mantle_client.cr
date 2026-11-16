@@ -478,6 +478,7 @@ module Anthropic
       private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
         validate_mantle_path!(path)
 
+        ctx_timeout, beta = current_request_context
         method_u = method.upcase
         req_path = with_path_prefix(path)
         uri = URI.parse(@base_url)
@@ -485,13 +486,13 @@ module Anthropic
         req_body = move_user_profile_id_to_body!(method_u, path, req_headers, body)
         apply_sig_v4!(req_headers, method_u, req_path, req_body)
 
-        return request_direct(method_u, req_path, req_body, uri, req_headers) if @middleware.empty?
+        return request_direct(method_u, req_path, req_body, uri, req_headers, timeout: ctx_timeout) if @middleware.empty?
 
-        api_request = APIRequest.new(method_u, req_path, req_headers, req_body)
+        api_request = APIRequest.new(method_u, req_path, req_headers, req_body, beta: beta)
         response = nil
         (@max_retries + 1).times do |attempt|
           begin
-            api_response = invoke_chain(api_request, uri)
+            api_response = invoke_chain(api_request, uri, timeout: ctx_timeout)
             response = to_http_response(api_response)
 
             if api_response.success? || !should_retry?(response)
