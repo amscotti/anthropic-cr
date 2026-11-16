@@ -700,42 +700,15 @@ module Anthropic
         raise ArgumentError.new("compact_before_next_turn requires a beta tool runner (use_beta: true)")
       end
 
-      # Compaction turns sample no reply, so a structured-output format
-      # is incompatible with them; effort and task budgets carry over.
-      output_config = @output_config
-      if (config = output_config) && config.format
-        output_config = OutputConfig.new(effort: config.effort, task_budget: config.task_budget)
-      end
-
+      output_config = compaction_output_config
       pre_state = @thread.try(&.capture_state)
-      response = if thread = @thread
-                   thread.send(
-                     compaction: compaction,
-                     output_config: output_config,
-                     extra_headers: StainlessHelper.header(StainlessHelper::BETA_TOOL_RUNNER)
-                   )
-                 else
-                   create_message(
-                     @current_messages,
-                     max_tokens: @max_tokens,
-                     tools: @tools,
-                     system: @system,
-                     speed: @speed,
-                     thinking: @thinking,
-                     output_config: output_config,
-                     inference_geo: @inference_geo,
-                     container: @container,
-                     compaction: compaction
-                   )
-                 end
+      response = execute_compaction_request(compaction, output_config)
       @pending_compaction = nil
 
       @last_response = response
       sync_container_after_turn(response.container_id)
 
-      summary = response.content.compact_map { |block| block.as?(CompactionContent) }.first?
-      has_summary = summary && (!(summary.content || "").empty? || !(summary.encrypted_content || "").empty?)
-      if has_summary
+      if compaction_has_summary?(response)
         replacement = [MessageParam.new(role: Role::Assistant, content: response.content)]
         if thread = @thread
           thread.reset_history(replacement)
@@ -750,6 +723,48 @@ module Anthropic
         Log.for("anthropic-cr.tool_runner").warn { "Compaction produced no summary; keeping the conversation as it is." }
         nil
       end
+    end
+
+    # Compaction turns sample no reply, so a structured-output format
+    # is incompatible with them; effort and task budgets carry over.
+    private def compaction_output_config : OutputConfig?
+      config = @output_config
+      return config unless config && config.format
+
+      (config.effort || config.task_budget) ? OutputConfig.new(effort: config.effort, task_budget: config.task_budget) : nil
+    end
+
+    private def execute_compaction_request(compaction : CompactionParam, output_config : OutputConfig?) : Message
+      inline_beta = history_has_tool_changes?
+      if thread = @thread
+        thread.send(
+          betas: inline_beta ? with_inline_tools_beta : UNSET,
+          compaction: compaction,
+          output_config: output_config,
+          extra_headers: StainlessHelper.header(StainlessHelper::BETA_TOOL_RUNNER)
+        )
+      else
+        create_message(
+          @current_messages,
+          max_tokens: @max_tokens,
+          tools: @tools,
+          system: @system,
+          speed: @speed,
+          thinking: @thinking,
+          output_config: output_config,
+          inference_geo: @inference_geo,
+          container: @container,
+          betas: inline_beta ? with_inline_tools_beta : nil,
+          compaction: compaction
+        )
+      end
+    end
+
+    private def compaction_has_summary?(response : Message) : Bool
+      summary = response.content.compact_map { |block| block.as?(CompactionContent) }.first?
+      return false unless summary
+
+      !(summary.content || "").empty? || !(summary.encrypted_content || "").empty?
     end
 
     private def execute_tools(tool_uses : Array(ToolUseContent)) : Array(ToolResultContent)
@@ -907,16 +922,19 @@ module Anthropic
 
     private def sync_container_after_turn(container_id : String?) : Nil
       if thread = @thread
-        thread_container = thread.params[:container]
-        @container = thread_container unless thread_container.nil?
+        @container = thread.params[:container]
+      else
+        update_container(container_id)
       end
-      update_container(container_id)
     end
 
     private def update_container(container_id : String?)
-      return unless container_id
+      return if container_id.nil? || container_id.empty?
 
-      @container = container_id
+      current = @container
+      if current.nil? || current.is_a?(ContainerConfig) || (current.is_a?(String) && current.empty?)
+        @container = container_id
+      end
     end
 
     private def non_beta_container_id(container : String | ContainerConfig?) : String?

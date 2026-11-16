@@ -13,6 +13,7 @@ module Anthropic
     getter anchor_mode : BetaMessageThread::AnchorMode
     getter previous_message_id : String?
     getter last_recorded_reply_id : String?
+    getter container : String | ContainerConfig?
 
     def initialize(
       @stored_messages : Array(MessageParam),
@@ -20,6 +21,7 @@ module Anthropic
       @anchor_mode : BetaMessageThread::AnchorMode,
       @previous_message_id : String?,
       @last_recorded_reply_id : String?,
+      @container : String | ContainerConfig?,
     )
     end
   end
@@ -530,7 +532,7 @@ module Anthropic
         messages: messages,
         tools: @tools || [] of Tool,
         max_iterations: max_iterations,
-        system: @system.is_a?(String) ? @system.as(String) : nil,
+        system: @system,
         speed: @speed,
         thinking: @thinking,
         output_config: @output_config,
@@ -562,7 +564,8 @@ module Anthropic
         staged_messages: self.class.deep_copy_messages(@staged_messages),
         anchor_mode: @anchor_mode,
         previous_message_id: @previous_message_id,
-        last_recorded_reply_id: @last_recorded_reply_id
+        last_recorded_reply_id: @last_recorded_reply_id,
+        container: @container
       )
     end
 
@@ -573,6 +576,7 @@ module Anthropic
       @anchor_mode = snapshot.anchor_mode
       @previous_message_id = snapshot.previous_message_id
       @last_recorded_reply_id = snapshot.last_recorded_reply_id
+      @container = snapshot.container
     end
 
     private def perform_send_for_schema(
@@ -855,7 +859,12 @@ module Anthropic
     end
 
     private def adopt_container(container_id : String?) : Nil
-      @container = container_id if container_id
+      return if container_id.nil? || container_id.empty?
+
+      current = @container
+      if current.nil? || current.is_a?(ContainerConfig) || (current.is_a?(String) && current.empty?)
+        @container = container_id
+      end
     end
 
     private def build_turn_request(
@@ -869,8 +878,11 @@ module Anthropic
       effective_compaction = compaction_override.is_a?(UnsetValue) ? @compaction : compaction_override
       base_output_config = output_config_override.is_a?(UnsetValue) ? @output_config : output_config_override
 
-      output_format = @output_schema.try { |schema| OutputFormat.from_output_schema(schema) }
+      output_format = effective_compaction ? nil : @output_schema.try { |schema| OutputFormat.from_output_schema(schema) }
       resolved_oc = merge_output_config(base_output_config, @effort, output_format)
+      if effective_compaction && (config = resolved_oc) && config.format
+        resolved_oc = (config.effort || config.task_budget) ? OutputConfig.new(effort: config.effort, task_budget: config.task_budget) : nil
+      end
 
       tool_definitions = build_tool_definitions
       wire_thread : BetaThreadParam? = nil

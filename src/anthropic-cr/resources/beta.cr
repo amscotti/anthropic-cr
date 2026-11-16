@@ -265,7 +265,7 @@ module Anthropic
       tools : Enumerable(Tool),
       betas : Array(String) = [] of String,
       max_iterations : Int32 = 10,
-      system : String? = nil,
+      system : SystemPrompt? = nil,
       speed : String? = nil,
       thinking : ThinkingConfig? = nil,
       output_config : OutputConfig? = nil,

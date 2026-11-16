@@ -671,6 +671,151 @@ describe "v0.12.0 Messages, Threads, Toolsets & Runner Parity" do
       JSON.parse(bodies[2]).as_h.has_key?("compaction").should be_true
     end
 
+    it "preserves Array(TextContent) system prompt across thread.tool_runner, count_tokens, and runner.params" do
+      captured_bodies = [] of String
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |req|
+        captured_bodies << req.body.to_s
+        HTTP::Client::Response.new(200, body: Fixtures::Responses::MESSAGE_BASIC, headers: HTTP::Headers{"Content-Type" => "application/json"})
+      end
+      count_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages/count_tokens", Fixtures::Responses::TOKEN_COUNT_WITH_CACHE)
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      sys_blocks = [Anthropic::TextContent.new(text: "Cached sys", cache_control: Anthropic::CacheControl.ephemeral)]
+      thread = client.beta.messages.thread(
+        model: Anthropic::Model::CLAUDE_SONNET_4_6,
+        max_tokens: 64,
+        system: sys_blocks,
+        messages: [Anthropic::MessageParam.user("Hi")]
+      )
+      runner = thread.tool_runner
+      runner.params[:system].should be_a(Array(Anthropic::TextContent))
+
+      runner.next_message
+      JSON.parse(captured_bodies[0])["system"][0]["text"].as_s.should eq("Cached sys")
+
+      runner.count_tokens
+      JSON.parse(count_capture.body.not_nil!)["system"][0]["text"].as_s.should eq("Cached sys")
+    end
+
+    it "omits output_config.format and retains inline-tools beta during compaction_turn with tool-change history" do
+      # 1) Threaded runner initialized from a thread with output_schema + effort
+      bodies = [] of String
+      headers_list = [] of HTTP::Headers
+      tool_turn = {
+        id: "msg_tu", type: "message", role: "assistant",
+        content: [{type: "tool_use", id: "tu_1", name: "ping", input: {} of String => JSON::Any}],
+        model: "claude-sonnet-4-6", stop_reason: "tool_use", stop_sequence: nil,
+        usage: {input_tokens: 5, output_tokens: 5},
+      }.to_json
+      queue = [tool_turn, Fixtures::Responses::MESSAGE_WITH_SIGNED_COMPACTION, Fixtures::Responses::MESSAGE_BASIC]
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |req|
+        bodies << req.body.to_s
+        headers_list << req.headers
+        HTTP::Client::Response.new(200, body: queue.shift, headers: HTTP::Headers{"Content-Type" => "application/json"})
+      end
+
+      ping = Anthropic.tool(name: "ping", description: "Ping", schema: {} of String => Anthropic::Schema::Property) { |_| "pong" }
+      extra = Anthropic.tool(name: "extra", description: "Extra", schema: {} of String => Anthropic::Schema::Property) { |_| "ok" }
+      schema = Anthropic.output_schema(type: V012StructuredCity, name: "city")
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      thread = client.beta.messages.thread(
+        model: Anthropic::Model::CLAUDE_SONNET_4_6,
+        max_tokens: 128,
+        output_schema: schema,
+        effort: "high",
+        tools: [ping],
+        messages: [Anthropic::MessageParam.user("hi")]
+      )
+      runner = thread.tool_runner
+      runner.add_tools(extra)
+      runner.next_message
+      runner.compact_before_next_turn
+      runner.next_message
+
+      comp_body = JSON.parse(bodies[1])
+      comp_body["compaction"]["type"].as_s.should eq("summarize")
+      comp_body["output_config"]["effort"].as_s.should eq("high")
+      comp_body["output_config"].as_h.has_key?("format").should be_false
+      headers_list[1]["anthropic-beta"].should contain(Anthropic::INLINE_TOOLS_2026_09_15_BETA)
+
+      # 2) Unthreaded runner compaction_turn also retains inline-tools beta
+      WebMock.reset
+      bodies2 = [] of String
+      headers2 = [] of HTTP::Headers
+      queue2 = [tool_turn, Fixtures::Responses::MESSAGE_WITH_SIGNED_COMPACTION]
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |req|
+        bodies2 << req.body.to_s
+        headers2 << req.headers
+        HTTP::Client::Response.new(200, body: queue2.shift, headers: HTTP::Headers{"Content-Type" => "application/json"})
+      end
+      unthreaded = client.beta.messages.tool_runner(
+        model: Anthropic::Model::CLAUDE_SONNET_4_6,
+        max_tokens: 64,
+        messages: [Anthropic::MessageParam.user("hi")],
+        tools: [ping],
+        thread: false
+      )
+      unthreaded.add_tools(extra)
+      unthreaded.next_message
+      unthreaded.compact_before_next_turn
+      unthreaded.next_message
+      headers2[1]["anthropic-beta"].should contain(Anthropic::INLINE_TOOLS_2026_09_15_BETA)
+    end
+
+    it "preserves non-empty caller-pinned container strings while adopting non-empty container IDs when unset or empty" do
+      bodies = [] of String
+      reply_with_empty = {
+        id: "msg_c1", type: "message", role: "assistant",
+        content: [{type: "text", text: "One"}], model: "claude-sonnet-4-6",
+        stop_reason: "end_turn", stop_sequence: nil,
+        container: {id: "", expires_at: "2026-12-01T00:00:00Z"},
+        usage: {input_tokens: 1, output_tokens: 1},
+      }.to_json
+      reply_with_server = {
+        id: "msg_c2", type: "message", role: "assistant",
+        content: [{type: "text", text: "Two"}], model: "claude-sonnet-4-6",
+        stop_reason: "end_turn", stop_sequence: nil,
+        container: {id: "cntr_server_99", expires_at: "2026-12-01T00:00:00Z"},
+        usage: {input_tokens: 1, output_tokens: 1},
+      }.to_json
+
+      queue = [reply_with_empty, reply_with_server, Fixtures::Responses::MESSAGE_BASIC]
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return do |req|
+        bodies << req.body.to_s
+        HTTP::Client::Response.new(200, body: queue.shift, headers: HTTP::Headers{"Content-Type" => "application/json"})
+      end
+
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      # 1) Pinned string is preserved even when server returns empty or another ID
+      pinned = client.beta.messages.thread(
+        model: Anthropic::Model::CLAUDE_SONNET_4_6,
+        max_tokens: 64,
+        container: "cntr_pinned",
+        messages: [Anthropic::MessageParam.user("First")]
+      )
+      pinned.send
+      pinned.params[:container].should eq("cntr_pinned")
+      pinned.send("Second")
+      pinned.params[:container].should eq("cntr_pinned")
+      JSON.parse(bodies[1])["container"].as_s.should eq("cntr_pinned")
+
+      # 2) Unset container ignores empty "" and adopts non-empty ID once
+      bodies.clear
+      queue = [reply_with_empty, reply_with_server, Fixtures::Responses::MESSAGE_BASIC]
+      unpinned = client.beta.messages.thread(
+        model: Anthropic::Model::CLAUDE_SONNET_4_6,
+        max_tokens: 64,
+        messages: [Anthropic::MessageParam.user("First")]
+      )
+      unpinned.send
+      unpinned.params[:container].should be_nil
+      unpinned.send("Second")
+      unpinned.params[:container].should eq("cntr_server_99")
+      unpinned.send("Third")
+      JSON.parse(bodies[2])["container"].as_s.should eq("cntr_server_99")
+    end
+
     it "sanitizes unpaired UTF-16 surrogate sequences, deep-copies initial messages, and supports push_messages & set_messages_params" do
       bodies = [] of String
       responses = [
