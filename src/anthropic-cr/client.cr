@@ -316,8 +316,9 @@ module Anthropic
       timeout : Time::Span? = nil,
       beta : Bool = false,
     ) : HTTP::Client::Response
+      full_path = append_query_params(path, merge_query(params))
       with_request_context(timeout, beta) do
-        request("GET", path, nil, extra_headers, query: params)
+        request("GET", full_path, nil, extra_headers)
       end
     end
 
@@ -330,8 +331,9 @@ module Anthropic
       beta : Bool = false,
     ) : HTTP::Client::Response
       body_str = body.nil? ? "{}" : body.to_json
+      full_path = apply_default_query(path)
       with_request_context(timeout, beta) do
-        request("POST", path, body_str, extra_headers)
+        request("POST", full_path, body_str, extra_headers)
       end
     end
 
@@ -341,8 +343,9 @@ module Anthropic
       timeout : Time::Span? = nil,
       beta : Bool = false,
     ) : HTTP::Client::Response
+      full_path = apply_default_query(path)
       with_request_context(timeout, beta) do
-        request("DELETE", path, nil, extra_headers)
+        request("DELETE", full_path, nil, extra_headers)
       end
     end
 
@@ -351,15 +354,14 @@ module Anthropic
       path : String,
       body,
       extra_headers : Hash(String, String)? = nil,
-      timeout : Time::Span? = nil,
-      beta : Bool = false,
       &
     )
+      ctx_timeout, _ = current_request_context
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
-      hdrs = with_request_context(timeout, beta) { headers(extra_headers, method: "POST") }
+      hdrs = headers(extra_headers, method: "POST")
 
-      with_http_client(uri, timeout: timeout) do |client|
+      with_http_client(uri, timeout: ctx_timeout) do |client|
         body_str = body.nil? ? "{}" : body.to_json
         client.post(path, headers: hdrs, body: body_str) do |response|
           handle_error(response) unless response.success?
@@ -375,15 +377,14 @@ module Anthropic
     def get_stream(
       path : String,
       extra_headers : Hash(String, String)? = nil,
-      timeout : Time::Span? = nil,
-      beta : Bool = false,
       &
     )
+      ctx_timeout, _ = current_request_context
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
-      hdrs = with_request_context(timeout, beta) { headers(extra_headers, method: "GET") }
+      hdrs = headers(extra_headers, method: "GET")
 
-      with_http_client(uri, timeout: timeout) do |client|
+      with_http_client(uri, timeout: ctx_timeout) do |client|
         client.get(path, headers: hdrs) do |response|
           handle_error(response) unless response.success?
           yield response
@@ -399,16 +400,15 @@ module Anthropic
     def get_raw(
       path : String,
       extra_headers : Hash(String, String)? = nil,
-      timeout : Time::Span? = nil,
-      beta : Bool = false,
     ) : IO::Memory
+      ctx_timeout, _ = current_request_context
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
       io = IO::Memory.new
 
       # Don't set content-type for downloads
-      hdrs = with_request_context(timeout, beta) { headers(extra_headers, content_type: nil, method: "GET") }
-      response = execute_http_with_redirects("GET", path, nil, uri, hdrs, timeout: timeout)
+      hdrs = headers(extra_headers, content_type: nil, method: "GET")
+      response = execute_http_with_redirects("GET", path, nil, uri, hdrs, timeout: ctx_timeout)
       handle_error(response) unless response.success?
       io.write(response.body.to_slice)
       io.rewind
@@ -428,13 +428,12 @@ module Anthropic
       content_type : String = "application/octet-stream",
       extra_headers : Hash(String, String)? = nil,
       form_fields : Hash(String, String)? = nil,
-      timeout : Time::Span? = nil,
-      beta : Bool = false,
     ) : HTTP::Client::Response
+      ctx_timeout, _ = current_request_context
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
 
-      with_http_client(uri, timeout: timeout) do |client|
+      with_http_client(uri, timeout: ctx_timeout) do |client|
         # Build multipart body using Crystal's standard FormData builder
         body_io = IO::Memory.new
         builder = HTTP::FormData::Builder.new(body_io)
@@ -449,7 +448,7 @@ module Anthropic
         builder.finish
 
         body_io.rewind
-        hdrs = with_request_context(timeout, beta) { headers(extra_headers, content_type: builder.content_type, method: "POST") }
+        hdrs = headers(extra_headers, content_type: builder.content_type, method: "POST")
 
         response = client.post(path, headers: hdrs, body: body_io)
         handle_error(response) unless response.success?
@@ -469,13 +468,12 @@ module Anthropic
       files : Array(FileUpload),
       form_fields : Hash(String, String)? = nil,
       extra_headers : Hash(String, String)? = nil,
-      timeout : Time::Span? = nil,
-      beta : Bool = false,
     ) : HTTP::Client::Response
+      ctx_timeout, _ = current_request_context
       uri = URI.parse(@base_url)
       path = apply_default_query(path)
 
-      with_http_client(uri, timeout: timeout) do |client|
+      with_http_client(uri, timeout: ctx_timeout) do |client|
         # Build multipart body using Crystal's standard FormData builder
         body_io = IO::Memory.new
         builder = HTTP::FormData::Builder.new(body_io)
@@ -495,7 +493,7 @@ module Anthropic
         builder.finish
 
         # Headers for multipart using unified helper
-        hdrs = with_request_context(timeout, beta) { headers(extra_headers, content_type: builder.content_type, method: "POST") }
+        hdrs = headers(extra_headers, content_type: builder.content_type, method: "POST")
 
         body_io.rewind
         response = client.post(path, headers: hdrs, body: body_io)
@@ -510,10 +508,9 @@ module Anthropic
       raise APIConnectionError.new("Connection failed: #{ex.message}", cause: ex)
     end
 
-    private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil, query : QueryParams? = nil) : HTTP::Client::Response
+    private def request(method : String, path : String, body : String? = nil, extra_headers : Hash(String, String)? = nil) : HTTP::Client::Response
       timeout, beta = current_request_context
       uri = URI.parse(@base_url)
-      path = append_query_params(path, merge_query(query))
       req_headers = headers(extra_headers, method: method)
 
       # Fast path: no middleware — send directly with the existing retry loop.
@@ -827,7 +824,7 @@ module Anthropic
         end
       end
 
-      socket = open_proxy_tunnel(uri, proxy_uri)
+      socket = open_proxy_tunnel(uri, proxy_uri, active_timeout)
       begin
         tls = OpenSSL::SSL::Socket::Client.new(socket, sync_close: true, hostname: uri.host)
         client = HTTP::Client.new(tls, uri.host || "", uri.port || 443)
@@ -848,15 +845,16 @@ module Anthropic
     # Open a TCP connection to *proxy_uri* and issue the `CONNECT`
     # handshake for *uri*. Returns the tunneled socket with the proxy's
     # response headers consumed, ready for the TLS handshake.
-    private def open_proxy_tunnel(uri : URI, proxy_uri : URI) : TCPSocket
+    private def open_proxy_tunnel(uri : URI, proxy_uri : URI, timeout : Time::Span? = nil) : TCPSocket
       host = proxy_uri.host
       if host.nil? || host.empty?
         raise ArgumentError.new("Invalid proxy URL (missing host): #{proxy_uri}")
       end
       port = proxy_uri.port || (proxy_uri.scheme == "https" ? 443 : 80)
 
-      socket = TCPSocket.new(host, port, connect_timeout: @timeout)
-      socket.read_timeout = @timeout
+      active_timeout = timeout || @timeout
+      socket = TCPSocket.new(host, port, connect_timeout: active_timeout)
+      socket.read_timeout = active_timeout
 
       target = "#{uri.host}:#{uri.port || 443}"
       socket << "CONNECT #{target} HTTP/1.1\r\n"
@@ -921,11 +919,12 @@ module Anthropic
     end
 
     private def with_request_context(timeout : Time::Span?, beta : Bool, &)
-      return yield if timeout.nil? && !beta
-
-      contexts = (@request_contexts ||= {} of UInt64 => {Time::Span?, Bool})
+      contexts = @request_contexts
       fiber_id = Fiber.current.object_id
-      previous = contexts[fiber_id]?
+      previous = contexts.try(&.[]?(fiber_id))
+      return yield if previous.nil? && timeout.nil? && !beta
+
+      contexts ||= (@request_contexts = {} of UInt64 => {Time::Span?, Bool})
       contexts[fiber_id] = {timeout, beta}
       begin
         yield

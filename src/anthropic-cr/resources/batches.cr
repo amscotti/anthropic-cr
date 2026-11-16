@@ -144,7 +144,7 @@ module Anthropic
 
     def results(batch_id : String, betas : Array(String) = [] of String, &)
       encoded_id = Anthropic.encode_path_segment(batch_id)
-      @client.get_stream("/v1/messages/batches/#{encoded_id}/results", beta_headers(betas), beta: true) do |response|
+      @client.get_stream("/v1/messages/batches/#{encoded_id}/results", beta_headers(betas)) do |response|
         response.body_io.each_line do |line|
           next if line.empty?
           yield BatchResult.from_json(line)

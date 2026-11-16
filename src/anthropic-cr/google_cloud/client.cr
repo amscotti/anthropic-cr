@@ -136,11 +136,12 @@ module Anthropic
       def post_multipart(
         path : String,
         file : IO,
-        filename : String,
+        filename : String? = nil,
         content_type : String = "application/octet-stream",
         extra_headers : Hash(String, String)? = nil,
+        form_fields : Hash(String, String)? = nil,
       ) : HTTP::Client::Response
-        super(gateway_path(path), file, filename, content_type, extra_headers)
+        super(gateway_path(path), file, filename, content_type, extra_headers, form_fields)
       end
 
       def post_multipart_files(

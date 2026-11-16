@@ -34,7 +34,7 @@ module Anthropic
       params["description"] = JSON::Any.new(description) if description
       params["scope"] = JSON::Any.new(scope) if scope
 
-      response = @client.post("/v1/environments", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/environments", params, beta_headers(betas, workspace_id), beta: true)
       BetaEnvironment.from_json(response.body)
     end
 
@@ -44,7 +44,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaEnvironment
-      response = @client.get("/v1/environments/#{Anthropic.encode_path_segment(environment_id)}", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/environments/#{Anthropic.encode_path_segment(environment_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaEnvironment.from_json(response.body)
     end
 
@@ -67,7 +67,7 @@ module Anthropic
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
       params["scope"] = JSON::Any.new(scope) if scope
 
-      response = @client.post("/v1/environments/#{Anthropic.encode_path_segment(environment_id)}", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/environments/#{Anthropic.encode_path_segment(environment_id)}", params, beta_headers(betas, workspace_id), beta: true)
       BetaEnvironment.from_json(response.body)
     end
 
@@ -83,7 +83,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/environments", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/environments", query, beta_headers(betas, workspace_id), beta: true)
       BetaEnvironmentListResponse.from_json(response.body)
     end
 
@@ -93,7 +93,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaEnvironmentDeleteResponse
-      response = @client.delete("/v1/environments/#{Anthropic.encode_path_segment(environment_id)}", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/environments/#{Anthropic.encode_path_segment(environment_id)}", beta_headers(betas, workspace_id), beta: true)
       BetaEnvironmentDeleteResponse.from_json(response.body)
     end
 
@@ -103,7 +103,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaEnvironment
-      response = @client.post("/v1/environments/#{Anthropic.encode_path_segment(environment_id)}/archive", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/environments/#{Anthropic.encode_path_segment(environment_id)}/archive", nil, beta_headers(betas, workspace_id), beta: true)
       BetaEnvironment.from_json(response.body)
     end
   end
@@ -137,7 +137,8 @@ module Anthropic
       response = @client.get(
         "/v1/environments/#{Anthropic.encode_path_segment(environment_id)}/work/#{Anthropic.encode_path_segment(work_id)}",
         nil,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaSelfHostedWork.from_json(response.body)
     end
@@ -156,7 +157,8 @@ module Anthropic
       response = @client.post(
         "/v1/environments/#{Anthropic.encode_path_segment(environment_id)}/work/#{Anthropic.encode_path_segment(work_id)}",
         body,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaSelfHostedWork.from_json(response.body)
     end
@@ -174,7 +176,8 @@ module Anthropic
       response = @client.get(
         "/v1/environments/#{Anthropic.encode_path_segment(environment_id)}/work",
         query,
-        beta_headers(betas)
+        beta_headers(betas),
+        beta: true
       )
       BetaSelfHostedWorkListResponse.from_json(response.body)
     end
@@ -189,7 +192,8 @@ module Anthropic
       response = @client.post(
         "/v1/environments/#{Anthropic.encode_path_segment(environment_id)}/work/#{Anthropic.encode_path_segment(work_id)}/ack",
         nil,
-        beta_headers(betas)
+        beta_headers(betas),
+        beta: true
       )
       BetaSelfHostedWork.from_json(response.body)
     end
@@ -208,7 +212,7 @@ module Anthropic
       params.add("expected_last_heartbeat", expected_last_heartbeat) if expected_last_heartbeat
       path = "#{path}?#{params}" unless params.empty?
 
-      response = @client.post(path, nil, beta_headers(betas))
+      response = @client.post(path, nil, beta_headers(betas), beta: true)
       BetaSelfHostedWorkHeartbeatResponse.from_json(response.body)
     end
 
@@ -230,7 +234,7 @@ module Anthropic
       headers = beta_headers(betas)
       headers[WORKER_ID_HEADER] = anthropic_worker_id if anthropic_worker_id
 
-      response = @client.get(path, nil, headers)
+      response = @client.get(path, nil, headers, beta: true)
       return nil if response.body.blank?
       BetaSelfHostedWork.from_json(response.body)
     end
@@ -244,7 +248,8 @@ module Anthropic
       response = @client.get(
         "/v1/environments/#{Anthropic.encode_path_segment(environment_id)}/work/stats",
         nil,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaSelfHostedWorkQueueStats.from_json(response.body)
     end
@@ -262,7 +267,8 @@ module Anthropic
       response = @client.post(
         "/v1/environments/#{Anthropic.encode_path_segment(environment_id)}/work/#{Anthropic.encode_path_segment(work_id)}/stop",
         body,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaSelfHostedWork.from_json(response.body)
     end

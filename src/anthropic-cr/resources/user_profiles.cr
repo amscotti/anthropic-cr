@@ -15,7 +15,7 @@ module Anthropic
   # specific end user of your application. Accessible via
   # `client.beta.user_profiles`.
   #
-  # Requires the beta header `user-profiles-2026-03-24`. When the resource
+  # Requires the beta header `user-profiles-2026-08-18`. When the resource
   # methods are called, the header is applied automatically.
   struct BetaUserProfile
     include JSON::Serializable
@@ -192,7 +192,7 @@ module Anthropic
       end
       body["external_user_details"] = JSON.parse(external_user_details.to_json) if external_user_details
 
-      response = @client.post("/v1/user_profiles", body, beta_headers(!external_user_details.nil?, betas, workspace_id))
+      response = @client.post("/v1/user_profiles", body, beta_headers(!external_user_details.nil?, betas, workspace_id), beta: true)
       BetaUserProfile.from_json(response.body)
     end
 
@@ -202,7 +202,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaUserProfile
-      response = @client.get("/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}", nil, beta_headers(false, betas, workspace_id))
+      response = @client.get("/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}", nil, beta_headers(false, betas, workspace_id), beta: true)
       BetaUserProfile.from_json(response.body)
     end
 
@@ -236,7 +236,7 @@ module Anthropic
       end
       body["external_user_details"] = JSON.parse(external_user_details.to_json) if external_user_details
 
-      response = @client.post("/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}", body, beta_headers(!external_user_details.nil?, betas, workspace_id))
+      response = @client.post("/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}", body, beta_headers(!external_user_details.nil?, betas, workspace_id), beta: true)
       BetaUserProfile.from_json(response.body)
     end
 
@@ -257,7 +257,7 @@ module Anthropic
       path += "&order_by=#{URI.encode_path_segment(order_by)}" if order_by
       path += "&page=#{URI.encode_path_segment(page)}" if page
 
-      response = @client.get(path, nil, beta_headers(false, betas, workspace_id))
+      response = @client.get(path, nil, beta_headers(false, betas, workspace_id), beta: true)
       BetaUserProfileListResponse.from_json(response.body)
     end
 
@@ -272,7 +272,8 @@ module Anthropic
       response = @client.post(
         "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}/enrollment_url",
         {} of String => JSON::Any,
-        beta_headers(false, betas, workspace_id)
+        beta_headers(false, betas, workspace_id),
+        beta: true
       )
       BetaUserProfileEnrollmentURL.from_json(response.body)
     end

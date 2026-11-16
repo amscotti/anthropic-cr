@@ -19,7 +19,7 @@ module Anthropic
     # Retrieve information about the organization associated with the
     # authenticated API key.
     def retrieve : BetaOrganization
-      response = @client.get("/v1/organizations/me")
+      response = @client.get("/v1/organizations/me", beta: true)
       BetaOrganization.from_json(response.body)
     end
 
@@ -67,7 +67,7 @@ module Anthropic
 
     # Retrieve an API key by ID.
     def retrieve(api_key_id : String) : BetaAPIKey
-      response = @client.get("/v1/organizations/api_keys/#{Anthropic.encode_path_segment(api_key_id)}")
+      response = @client.get("/v1/organizations/api_keys/#{Anthropic.encode_path_segment(api_key_id)}", beta: true)
       BetaAPIKey.from_json(response.body)
     end
 
@@ -81,7 +81,7 @@ module Anthropic
       body["name"] = JSON::Any.new(name) if name
       body["status"] = JSON::Any.new(status) if status
 
-      response = @client.post("/v1/organizations/api_keys/#{Anthropic.encode_path_segment(api_key_id)}", body)
+      response = @client.post("/v1/organizations/api_keys/#{Anthropic.encode_path_segment(api_key_id)}", body, beta: true)
       BetaAPIKey.from_json(response.body)
     end
 
@@ -93,7 +93,7 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/api_keys", query)
+      response = @client.get("/v1/organizations/api_keys", query, beta: true)
       BetaAPIKeyListResponse.from_json(response.body)
     end
   end
@@ -117,13 +117,13 @@ module Anthropic
       body["display_name"] = JSON::Any.new(display_name) if display_name
       body["geo"] = JSON::Any.new(geo) if geo
 
-      response = @client.post("/v1/organizations/external_keys", body)
+      response = @client.post("/v1/organizations/external_keys", body, beta: true)
       BetaExternalKey.from_json(response.body)
     end
 
     # Retrieve an external key by ID.
     def retrieve(external_key_id : String) : BetaExternalKey
-      response = @client.get("/v1/organizations/external_keys/#{Anthropic.encode_path_segment(external_key_id)}")
+      response = @client.get("/v1/organizations/external_keys/#{Anthropic.encode_path_segment(external_key_id)}", beta: true)
       BetaExternalKey.from_json(response.body)
     end
 
@@ -139,7 +139,7 @@ module Anthropic
       body["geo"] = JSON::Any.new(geo) if geo
       body["provider_config"] = JSON.parse(provider_config.to_json) if provider_config
 
-      response = @client.post("/v1/organizations/external_keys/#{Anthropic.encode_path_segment(external_key_id)}", body)
+      response = @client.post("/v1/organizations/external_keys/#{Anthropic.encode_path_segment(external_key_id)}", body, beta: true)
       BetaExternalKey.from_json(response.body)
     end
 
@@ -151,13 +151,13 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/external_keys", query)
+      response = @client.get("/v1/organizations/external_keys", query, beta: true)
       BetaExternalKeyListResponse.from_json(response.body)
     end
 
     # Delete an external key.
     def delete(external_key_id : String) : BetaDeletedExternalKey
-      response = @client.delete("/v1/organizations/external_keys/#{Anthropic.encode_path_segment(external_key_id)}")
+      response = @client.delete("/v1/organizations/external_keys/#{Anthropic.encode_path_segment(external_key_id)}", beta: true)
       BetaDeletedExternalKey.from_json(response.body)
     end
 
@@ -165,7 +165,8 @@ module Anthropic
     def validate(external_key_id : String) : BetaExternalKeyValidation
       response = @client.post(
         "/v1/organizations/external_keys/#{Anthropic.encode_path_segment(external_key_id)}/validate",
-        {} of String => JSON::Any
+        {} of String => JSON::Any,
+        beta: true
       )
       BetaExternalKeyValidation.from_json(response.body)
     end
@@ -187,13 +188,13 @@ module Anthropic
       body["role"] = JSON::Any.new(role)
       body["rbac_group_ids"] = JSON.parse(rbac_group_ids.to_json) if rbac_group_ids
 
-      response = @client.post("/v1/organizations/invites", body)
+      response = @client.post("/v1/organizations/invites", body, beta: true)
       BetaOrganizationInvite.from_json(response.body)
     end
 
     # Retrieve an invite by ID.
     def retrieve(invite_id : String) : BetaOrganizationInvite
-      response = @client.get("/v1/organizations/invites/#{Anthropic.encode_path_segment(invite_id)}")
+      response = @client.get("/v1/organizations/invites/#{Anthropic.encode_path_segment(invite_id)}", beta: true)
       BetaOrganizationInvite.from_json(response.body)
     end
 
@@ -205,13 +206,13 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/invites", query)
+      response = @client.get("/v1/organizations/invites", query, beta: true)
       BetaOrganizationInviteListResponse.from_json(response.body)
     end
 
     # Delete (revoke) an invite.
     def delete(invite_id : String) : BetaDeletedInvite
-      response = @client.delete("/v1/organizations/invites/#{Anthropic.encode_path_segment(invite_id)}")
+      response = @client.delete("/v1/organizations/invites/#{Anthropic.encode_path_segment(invite_id)}", beta: true)
       BetaDeletedInvite.from_json(response.body)
     end
   end
@@ -223,7 +224,7 @@ module Anthropic
 
     # Retrieve a user by ID.
     def retrieve(user_id : String) : BetaOrganizationUser
-      response = @client.get("/v1/organizations/users/#{Anthropic.encode_path_segment(user_id)}")
+      response = @client.get("/v1/organizations/users/#{Anthropic.encode_path_segment(user_id)}", beta: true)
       BetaOrganizationUser.from_json(response.body)
     end
 
@@ -231,7 +232,7 @@ module Anthropic
     def update(user_id : String, role : String) : BetaOrganizationUser
       body = {"role" => JSON::Any.new(role)}
 
-      response = @client.post("/v1/organizations/users/#{Anthropic.encode_path_segment(user_id)}", body)
+      response = @client.post("/v1/organizations/users/#{Anthropic.encode_path_segment(user_id)}", body, beta: true)
       BetaOrganizationUser.from_json(response.body)
     end
 
@@ -243,13 +244,13 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/users", query)
+      response = @client.get("/v1/organizations/users", query, beta: true)
       BetaOrganizationUserListResponse.from_json(response.body)
     end
 
     # Remove a user from the organization.
     def remove(user_id : String) : BetaDeletedOrganizationUser
-      response = @client.delete("/v1/organizations/users/#{Anthropic.encode_path_segment(user_id)}")
+      response = @client.delete("/v1/organizations/users/#{Anthropic.encode_path_segment(user_id)}", beta: true)
       BetaDeletedOrganizationUser.from_json(response.body)
     end
   end
@@ -271,7 +272,7 @@ module Anthropic
       query["model"] = model if model
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/rate_limits", query)
+      response = @client.get("/v1/organizations/rate_limits", query, beta: true)
       BetaOrganizationRateLimitListResponse.from_json(response.body)
     end
   end
@@ -283,7 +284,7 @@ module Anthropic
 
     # Retrieve the current compliance settings.
     def retrieve : BetaComplianceSettings
-      response = @client.get("/v1/organizations/compliance_settings")
+      response = @client.get("/v1/organizations/compliance_settings", beta: true)
       BetaComplianceSettings.from_json(response.body)
     end
 
@@ -293,7 +294,7 @@ module Anthropic
     def update(state : JSON::Any | Hash(String, JSON::Any)) : BetaComplianceSettings
       body = {"state" => JSON.parse(state.to_json)}
 
-      response = @client.post("/v1/organizations/compliance_settings", body)
+      response = @client.post("/v1/organizations/compliance_settings", body, beta: true)
       BetaComplianceSettings.from_json(response.body)
     end
   end
@@ -330,13 +331,13 @@ module Anthropic
       body["external_key_id"] = JSON::Any.new(external_key_id) if external_key_id
       body["tags"] = JSON.parse(tags.to_json) if tags
 
-      response = @client.post("/v1/organizations/workspaces", body)
+      response = @client.post("/v1/organizations/workspaces", body, beta: true)
       BetaWorkspace.from_json(response.body)
     end
 
     # Retrieve a workspace by ID.
     def retrieve(workspace_id : String) : BetaWorkspace
-      response = @client.get("/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}")
+      response = @client.get("/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}", beta: true)
       BetaWorkspace.from_json(response.body)
     end
 
@@ -357,7 +358,7 @@ module Anthropic
       body["external_key_id"] = JSON::Any.new(external_key_id) if external_key_id
       body["tags"] = JSON.parse(tags.to_json) if tags
 
-      response = @client.post("/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}", body)
+      response = @client.post("/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}", body, beta: true)
       BetaWorkspace.from_json(response.body)
     end
 
@@ -369,7 +370,7 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/workspaces", query)
+      response = @client.get("/v1/organizations/workspaces", query, beta: true)
       BetaWorkspaceListResponse.from_json(response.body)
     end
 
@@ -377,7 +378,8 @@ module Anthropic
     def archive(workspace_id : String) : BetaWorkspace
       response = @client.post(
         "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/archive",
-        {} of String => JSON::Any
+        {} of String => JSON::Any,
+        beta: true
       )
       BetaWorkspace.from_json(response.body)
     end
@@ -391,7 +393,8 @@ module Anthropic
     # Retrieve a member by workspace and user ID.
     def retrieve(workspace_id : String, user_id : String) : BetaWorkspaceMember
       response = @client.get(
-        "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/members/#{Anthropic.encode_path_segment(user_id)}"
+        "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/members/#{Anthropic.encode_path_segment(user_id)}",
+        beta: true
       )
       BetaWorkspaceMember.from_json(response.body)
     end
@@ -402,7 +405,8 @@ module Anthropic
 
       response = @client.post(
         "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/members/#{Anthropic.encode_path_segment(user_id)}",
-        body
+        body,
+        beta: true
       )
       BetaWorkspaceMember.from_json(response.body)
     end
@@ -418,7 +422,8 @@ module Anthropic
 
       response = @client.get(
         "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/members",
-        query
+        query,
+        beta: true
       )
       BetaWorkspaceMemberListResponse.from_json(response.body)
     end
@@ -432,7 +437,8 @@ module Anthropic
 
       response = @client.post(
         "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/members",
-        body
+        body,
+        beta: true
       )
       BetaWorkspaceMember.from_json(response.body)
     end
@@ -440,7 +446,8 @@ module Anthropic
     # Remove a user from a workspace.
     def remove(workspace_id : String, user_id : String) : BetaDeletedWorkspaceMember
       response = @client.delete(
-        "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/members/#{Anthropic.encode_path_segment(user_id)}"
+        "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/members/#{Anthropic.encode_path_segment(user_id)}",
+        beta: true
       )
       BetaDeletedWorkspaceMember.from_json(response.body)
     end
@@ -462,7 +469,8 @@ module Anthropic
 
       response = @client.get(
         "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/rate_limits",
-        query
+        query,
+        beta: true
       )
       BetaOrganizationRateLimitListResponse.from_json(response.body)
     end
@@ -476,7 +484,8 @@ module Anthropic
     # Retrieve a workspace service account by workspace and account ID.
     def retrieve(workspace_id : String, service_account_id : String) : BetaServiceAccountWorkspaceMember
       response = @client.get(
-        "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}"
+        "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}",
+        beta: true
       )
       BetaServiceAccountWorkspaceMember.from_json(response.body)
     end
@@ -491,7 +500,8 @@ module Anthropic
 
       response = @client.post(
         "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}",
-        body
+        body,
+        beta: true
       )
       BetaServiceAccountWorkspaceMember.from_json(response.body)
     end
@@ -507,7 +517,8 @@ module Anthropic
 
       response = @client.get(
         "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/service_accounts",
-        query
+        query,
+        beta: true
       )
       BetaServiceAccountWorkspaceMemberListResponse.from_json(response.body)
     end
@@ -525,7 +536,8 @@ module Anthropic
 
       response = @client.post(
         "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/service_accounts",
-        body
+        body,
+        beta: true
       )
       BetaServiceAccountWorkspaceMember.from_json(response.body)
     end
@@ -533,7 +545,8 @@ module Anthropic
     # Remove a service account from a workspace.
     def remove(workspace_id : String, service_account_id : String) : BetaDeletedServiceAccountWorkspaceMember
       response = @client.delete(
-        "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}"
+        "/v1/organizations/workspaces/#{Anthropic.encode_path_segment(workspace_id)}/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}",
+        beta: true
       )
       BetaDeletedServiceAccountWorkspaceMember.from_json(response.body)
     end
@@ -562,13 +575,13 @@ module Anthropic
       when String    then body["organization_role"] = JSON::Any.new(role)
       end
 
-      response = @client.post("/v1/organizations/service_accounts", body)
+      response = @client.post("/v1/organizations/service_accounts", body, beta: true)
       BetaServiceAccount.from_json(response.body)
     end
 
     # Retrieve a service account by ID.
     def retrieve(service_account_id : String) : BetaServiceAccount
-      response = @client.get("/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}")
+      response = @client.get("/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}", beta: true)
       BetaServiceAccount.from_json(response.body)
     end
 
@@ -585,7 +598,7 @@ module Anthropic
       when String    then body["organization_role"] = JSON::Any.new(role)
       end
 
-      response = @client.post("/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}", body)
+      response = @client.post("/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}", body, beta: true)
       BetaServiceAccount.from_json(response.body)
     end
 
@@ -597,7 +610,7 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/service_accounts", query)
+      response = @client.get("/v1/organizations/service_accounts", query, beta: true)
       BetaServiceAccountListResponse.from_json(response.body)
     end
 
@@ -605,7 +618,8 @@ module Anthropic
     def archive(service_account_id : String) : BetaServiceAccount
       response = @client.post(
         "/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}/archive",
-        {} of String => JSON::Any
+        {} of String => JSON::Any,
+        beta: true
       )
       BetaServiceAccount.from_json(response.body)
     end
@@ -627,7 +641,8 @@ module Anthropic
 
       response = @client.get(
         "/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}/workspaces",
-        query
+        query,
+        beta: true
       )
       BetaServiceAccountWorkspaceMemberListResponse.from_json(response.body)
     end
@@ -645,7 +660,8 @@ module Anthropic
 
       response = @client.post(
         "/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}/workspaces",
-        body
+        body,
+        beta: true
       )
       BetaServiceAccountWorkspaceMember.from_json(response.body)
     end
@@ -653,7 +669,8 @@ module Anthropic
     # Remove a service account from a workspace.
     def remove(service_account_id : String, workspace_id : String) : BetaDeletedServiceAccountWorkspaceMember
       response = @client.delete(
-        "/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}/workspaces/#{Anthropic.encode_path_segment(workspace_id)}"
+        "/v1/organizations/service_accounts/#{Anthropic.encode_path_segment(service_account_id)}/workspaces/#{Anthropic.encode_path_segment(workspace_id)}",
+        beta: true
       )
       BetaDeletedServiceAccountWorkspaceMember.from_json(response.body)
     end
@@ -695,13 +712,13 @@ module Anthropic
       body["jwks"] = JSON.parse(jwks.to_json) if jwks
       max_jwt_lifetime_seconds.try { |secs| body["max_jwt_lifetime_seconds"] = JSON::Any.new(secs) }
 
-      response = @client.post("/v1/organizations/federation_issuers", body)
+      response = @client.post("/v1/organizations/federation_issuers", body, beta: true)
       BetaFederationIssuer.from_json(response.body)
     end
 
     # Retrieve a federation issuer by ID.
     def retrieve(federation_issuer_id : String) : BetaFederationIssuer
-      response = @client.get("/v1/organizations/federation_issuers/#{Anthropic.encode_path_segment(federation_issuer_id)}")
+      response = @client.get("/v1/organizations/federation_issuers/#{Anthropic.encode_path_segment(federation_issuer_id)}", beta: true)
       BetaFederationIssuer.from_json(response.body)
     end
 
@@ -723,7 +740,7 @@ module Anthropic
       max_jwt_lifetime_seconds.try { |secs| body["max_jwt_lifetime_seconds"] = JSON::Any.new(secs) }
       body["name"] = JSON::Any.new(name) if name
 
-      response = @client.post("/v1/organizations/federation_issuers/#{Anthropic.encode_path_segment(federation_issuer_id)}", body)
+      response = @client.post("/v1/organizations/federation_issuers/#{Anthropic.encode_path_segment(federation_issuer_id)}", body, beta: true)
       BetaFederationIssuer.from_json(response.body)
     end
 
@@ -737,7 +754,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s unless include_archived.nil?
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/federation_issuers", query)
+      response = @client.get("/v1/organizations/federation_issuers", query, beta: true)
       BetaFederationIssuerListResponse.from_json(response.body)
     end
 
@@ -745,7 +762,8 @@ module Anthropic
     def archive(federation_issuer_id : String) : BetaFederationIssuer
       response = @client.post(
         "/v1/organizations/federation_issuers/#{Anthropic.encode_path_segment(federation_issuer_id)}/archive",
-        {} of String => JSON::Any
+        {} of String => JSON::Any,
+        beta: true
       )
       BetaFederationIssuer.from_json(response.body)
     end
@@ -785,13 +803,13 @@ module Anthropic
       token_lifetime_seconds.try { |secs| body["token_lifetime_seconds"] = JSON::Any.new(secs) }
       body["workspace_id"] = JSON::Any.new(workspace_id) if workspace_id
 
-      response = @client.post("/v1/organizations/federation_rules", body)
+      response = @client.post("/v1/organizations/federation_rules", body, beta: true)
       BetaFederationRule.from_json(response.body)
     end
 
     # Retrieve a federation rule by ID.
     def retrieve(federation_rule_id : String) : BetaFederationRule
-      response = @client.get("/v1/organizations/federation_rules/#{Anthropic.encode_path_segment(federation_rule_id)}")
+      response = @client.get("/v1/organizations/federation_rules/#{Anthropic.encode_path_segment(federation_rule_id)}", beta: true)
       BetaFederationRule.from_json(response.body)
     end
 
@@ -819,7 +837,7 @@ module Anthropic
       token_lifetime_seconds.try { |secs| body["token_lifetime_seconds"] = JSON::Any.new(secs) }
       body["workspace_id"] = JSON::Any.new(workspace_id) if workspace_id
 
-      response = @client.post("/v1/organizations/federation_rules/#{Anthropic.encode_path_segment(federation_rule_id)}", body)
+      response = @client.post("/v1/organizations/federation_rules/#{Anthropic.encode_path_segment(federation_rule_id)}", body, beta: true)
       BetaFederationRule.from_json(response.body)
     end
 
@@ -835,7 +853,7 @@ module Anthropic
       query["issuer_id"] = issuer_id if issuer_id
       query["page"] = page if page
 
-      response = @client.get("/v1/organizations/federation_rules", query)
+      response = @client.get("/v1/organizations/federation_rules", query, beta: true)
       BetaFederationRuleListResponse.from_json(response.body)
     end
 
@@ -843,7 +861,8 @@ module Anthropic
     def archive(federation_rule_id : String) : BetaFederationRule
       response = @client.post(
         "/v1/organizations/federation_rules/#{Anthropic.encode_path_segment(federation_rule_id)}/archive",
-        {} of String => JSON::Any
+        {} of String => JSON::Any,
+        beta: true
       )
       BetaFederationRule.from_json(response.body)
     end
@@ -869,7 +888,8 @@ module Anthropic
       response = @client.get(
         "/v1/organizations/federation_rules/#{Anthropic.encode_path_segment(federation_rule_id)}/workspaces",
         query,
-        beta_headers(betas)
+        beta_headers(betas),
+        beta: true
       )
       BetaFederationRuleWorkspaceListResponse.from_json(response.body)
     end
@@ -886,7 +906,8 @@ module Anthropic
       response = @client.post(
         "/v1/organizations/federation_rules/#{Anthropic.encode_path_segment(federation_rule_id)}/workspaces",
         body,
-        beta_headers(betas)
+        beta_headers(betas),
+        beta: true
       )
       BetaFederationRuleWorkspace.from_json(response.body)
     end
@@ -901,7 +922,8 @@ module Anthropic
     ) : BetaDeletedFederationRuleWorkspace
       response = @client.delete(
         "/v1/organizations/federation_rules/#{Anthropic.encode_path_segment(federation_rule_id)}/workspaces/#{Anthropic.encode_path_segment(workspace_id)}",
-        beta_headers(betas)
+        beta_headers(betas),
+        beta: true
       )
       BetaDeletedFederationRuleWorkspace.from_json(response.body)
     end

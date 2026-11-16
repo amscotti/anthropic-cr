@@ -104,7 +104,7 @@ module Anthropic
 
     # Access beta Dreams API (memory consolidation, research preview).
     #
-    # Auto-merges `managed-agents-2026-04-01` and `dreaming-2026-04-21`.
+    # Auto-attaches `dreaming-2026-04-21`.
     # Research-preview access must be requested; without it the API returns 404.
     #
     # ```
@@ -497,7 +497,7 @@ module Anthropic
       merged = Anthropic.merge_workspace_header(merged, workspace_id)
       merged = merge_extra_headers(merged, extra_headers)
 
-      @client.post_stream("/v1/messages", params, merged, beta: true) do |response|
+      @client.post_stream("/v1/messages", params, merged) do |response|
         yield MessageStream.new(response)
       end
     end

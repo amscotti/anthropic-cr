@@ -325,7 +325,7 @@ module Anthropic
       params["page"] = page if page
       params["source"] = source if source
 
-      response = @client.get("/v1/skills", params, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/skills", params, beta_headers(betas, workspace_id), beta: true)
       SkillListResponse.from_json(response.body)
     end
 
@@ -335,7 +335,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : SkillResponse
-      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       SkillResponse.from_json(response.body)
     end
 
@@ -345,7 +345,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : SkillDeleteResponse
-      response = @client.delete("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}", beta_headers(betas, workspace_id), beta: true)
       SkillDeleteResponse.from_json(response.body)
     end
 
@@ -412,7 +412,7 @@ module Anthropic
       params = {"limit" => limit.to_s}
       params["page"] = page if page
 
-      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions", params, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions", params, beta_headers(betas, workspace_id), beta: true)
       SkillVersionListResponse.from_json(response.body)
     end
 
@@ -423,7 +423,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : SkillVersionResponse
-      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}", nil, beta_headers(betas, workspace_id), beta: true)
       SkillVersionResponse.from_json(response.body)
     end
 
@@ -434,7 +434,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : SkillVersionDeleteResponse
-      response = @client.delete("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/skills/#{Anthropic.encode_path_segment(skill_id)}/versions/#{Anthropic.encode_path_segment(version)}", beta_headers(betas, workspace_id), beta: true)
       SkillVersionDeleteResponse.from_json(response.body)
     end
 

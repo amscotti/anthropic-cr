@@ -1011,7 +1011,7 @@ module Anthropic
     error_code : String?,
     details_any : JSON::Any?,
   ) : ErrorDetails | JSON::Any?
-    return nil unless details_any
+    return nil if details_any.nil? || details_any.raw.nil?
 
     if error_code && (parser = ERROR_DETAILS_PARSERS[error_code]?)
       begin

@@ -3,9 +3,9 @@ module Anthropic
   #
   # An asynchronous memory-consolidation job that reads a memory store plus
   # session transcripts and writes consolidated memories into a new output
-  # memory store. Dream endpoints require both beta headers (auto-attached):
-  # `managed-agents-2026-04-01` and `dreaming-2026-04-21`. Research-preview
-  # access must be requested separately; without it the API returns 404.
+  # memory store. Dream endpoints require the beta header `dreaming-2026-04-21`
+  # (auto-attached). Research-preview access must be requested separately;
+  # without it the API returns 404.
   #
   # ```
   # dream = client.beta.dreams.create(
@@ -24,7 +24,6 @@ module Anthropic
 
     private def beta_headers(betas : Array(String) = [] of String) : Hash(String, String)
       merged = betas.dup
-      # Official docs require both; managed-agents alone does not unlock Dreams.
       merged << DREAMING_BETA unless merged.includes?(DREAMING_BETA)
       {"anthropic-beta" => merged.join(",")}
     end
@@ -55,7 +54,7 @@ module Anthropic
       params["output_behavior"] = JSON.parse(output_behavior.to_json) if output_behavior
 
       headers = Anthropic.merge_workspace_header(beta_headers(betas), workspace_id)
-      response = @client.post("/v1/dreams", params, headers)
+      response = @client.post("/v1/dreams", params, headers, beta: true)
       BetaDream.from_json(response.body)
     end
 
@@ -64,7 +63,7 @@ module Anthropic
       dream_id : String,
       betas : Array(String) = [] of String,
     ) : BetaDream
-      response = @client.get("/v1/dreams/#{Anthropic.encode_path_segment(dream_id)}", nil, beta_headers(betas))
+      response = @client.get("/v1/dreams/#{Anthropic.encode_path_segment(dream_id)}", nil, beta_headers(betas), beta: true)
       BetaDream.from_json(response.body)
     end
 
@@ -89,7 +88,7 @@ module Anthropic
       query["page"] = page if page
       query["statuses"] = statuses if statuses && !statuses.empty?
 
-      response = @client.get("/v1/dreams", query, beta_headers(betas))
+      response = @client.get("/v1/dreams", query, beta_headers(betas), beta: true)
       BetaDreamListResponse.from_json(response.body)
     end
 
@@ -98,7 +97,7 @@ module Anthropic
       dream_id : String,
       betas : Array(String) = [] of String,
     ) : BetaDream
-      response = @client.post("/v1/dreams/#{Anthropic.encode_path_segment(dream_id)}/archive", nil, beta_headers(betas))
+      response = @client.post("/v1/dreams/#{Anthropic.encode_path_segment(dream_id)}/archive", nil, beta_headers(betas), beta: true)
       BetaDream.from_json(response.body)
     end
 
@@ -107,7 +106,7 @@ module Anthropic
       dream_id : String,
       betas : Array(String) = [] of String,
     ) : BetaDream
-      response = @client.post("/v1/dreams/#{Anthropic.encode_path_segment(dream_id)}/cancel", nil, beta_headers(betas))
+      response = @client.post("/v1/dreams/#{Anthropic.encode_path_segment(dream_id)}/cancel", nil, beta_headers(betas), beta: true)
       BetaDream.from_json(response.body)
     end
   end

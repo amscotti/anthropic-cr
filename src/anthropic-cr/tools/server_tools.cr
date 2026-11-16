@@ -188,8 +188,8 @@ module Anthropic
   # Dreams (memory consolidation) beta header.
   #
   # Research-preview API: request/response shapes may change without a
-  # deprecation period. Required by `client.beta.dreams.*` together with
-  # `MANAGED_AGENTS_BETA` (both auto-attached). Access is separately gated.
+  # deprecation period. Required by `client.beta.dreams.*` (auto-attached).
+  # Access is separately gated.
   DREAMING_BETA = "dreaming-2026-04-21"
 
   # MCP Tunnels beta header (research preview).

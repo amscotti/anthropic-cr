@@ -50,7 +50,7 @@ module Anthropic
       params = {} of String => JSON::Any
       params["display_name"] = JSON::Any.new(display_name) if display_name
 
-      response = @client.post("/v1/tunnels", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels", params, beta_headers(betas, workspace_id), beta: true)
       BetaTunnel.from_json(response.body)
     end
 
@@ -60,7 +60,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnel
-      response = @client.get("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaTunnel.from_json(response.body)
     end
 
@@ -77,7 +77,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/tunnels", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/tunnels", query, beta_headers(betas, workspace_id), beta: true)
       BetaTunnelListResponse.from_json(response.body)
     end
 
@@ -88,7 +88,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnel
-      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/archive", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/archive", nil, beta_headers(betas, workspace_id), beta: true)
       BetaTunnel.from_json(response.body)
     end
 
@@ -99,7 +99,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnelToken
-      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/reveal_token", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/reveal_token", nil, beta_headers(betas, workspace_id), beta: true)
       BetaTunnelToken.from_json(response.body)
     end
 
@@ -114,7 +114,7 @@ module Anthropic
       params = {} of String => JSON::Any
       params["reason"] = JSON::Any.new(reason) if reason
 
-      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/rotate_token", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/rotate_token", params, beta_headers(betas, workspace_id), beta: true)
       BetaTunnelToken.from_json(response.body)
     end
   end
@@ -154,7 +154,8 @@ module Anthropic
       response = @client.post(
         "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates",
         params,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaTunnelCertificate.from_json(response.body)
     end
@@ -169,7 +170,8 @@ module Anthropic
       response = @client.get(
         "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates/#{Anthropic.encode_path_segment(certificate_id)}",
         nil,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaTunnelCertificate.from_json(response.body)
     end
@@ -190,7 +192,8 @@ module Anthropic
       response = @client.get(
         "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates",
         query,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaTunnelCertificateListResponse.from_json(response.body)
     end
@@ -205,7 +208,8 @@ module Anthropic
       response = @client.post(
         "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates/#{Anthropic.encode_path_segment(certificate_id)}/archive",
         nil,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaTunnelCertificate.from_json(response.body)
     end

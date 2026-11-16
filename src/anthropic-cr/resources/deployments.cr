@@ -50,7 +50,7 @@ module Anthropic
       params["schedule"] = schedule.is_a?(JSON::Any) ? schedule : JSON.parse(schedule.to_json) if schedule
       params["vault_ids"] = JSON.parse(vault_ids.to_json) if vault_ids
 
-      response = @client.post("/v1/deployments", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/deployments", params, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -60,7 +60,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
-      response = @client.get("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -90,7 +90,7 @@ module Anthropic
       params["schedule"] = schedule.is_a?(JSON::Any) ? schedule : JSON.parse(schedule.to_json) if schedule
       params["vault_ids"] = JSON.parse(vault_ids.to_json) if vault_ids
 
-      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}", params, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -114,7 +114,7 @@ module Anthropic
       query["page"] = page if page
       query["status"] = status if status
 
-      response = @client.get("/v1/deployments", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/deployments", query, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeploymentListResponse.from_json(response.body)
     end
 
@@ -124,7 +124,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
-      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}/archive", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}/archive", nil, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -134,7 +134,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
-      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}/pause", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}/pause", nil, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -144,7 +144,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsDeployment
-      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}/unpause", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}/unpause", nil, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeployment.from_json(response.body)
     end
 
@@ -154,7 +154,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsDeploymentRun
-      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}/run", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/deployments/#{Anthropic.encode_path_segment(deployment_id)}/run", nil, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeploymentRun.from_json(response.body)
     end
   end
@@ -181,7 +181,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsDeploymentRun
-      response = @client.get("/v1/deployment_runs/#{Anthropic.encode_path_segment(deployment_run_id)}", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/deployment_runs/#{Anthropic.encode_path_segment(deployment_run_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeploymentRun.from_json(response.body)
     end
 
@@ -209,7 +209,7 @@ module Anthropic
       query["page"] = page if page
       query["trigger_type"] = trigger_type if trigger_type
 
-      response = @client.get("/v1/deployment_runs", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/deployment_runs", query, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsDeploymentRunListResponse.from_json(response.body)
     end
   end

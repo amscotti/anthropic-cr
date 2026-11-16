@@ -426,8 +426,7 @@ module Anthropic
         filename,
         content_type,
         beta_headers(betas, workspace_id),
-        fields,
-        beta: true
+        fields
       )
       FileMetadata.from_json(response.body)
     end
@@ -479,7 +478,7 @@ module Anthropic
       params["page"] = page if page
       params["scope_id"] = scope_id if scope_id
 
-      response = @client.get("/v1/files", params, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/files", params, beta_headers(betas, workspace_id), beta: true)
       FileListResponse.from_json(response.body)
     end
 
@@ -495,7 +494,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : FileMetadata
-      response = @client.get("/v1/files/#{Anthropic.encode_path_segment(file_id)}", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/files/#{Anthropic.encode_path_segment(file_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       FileMetadata.from_json(response.body)
     end
 
@@ -519,7 +518,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : DeletedFile
-      response = @client.delete("/v1/files/#{Anthropic.encode_path_segment(file_id)}", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/files/#{Anthropic.encode_path_segment(file_id)}", beta_headers(betas, workspace_id), beta: true)
       DeletedFile.from_json(response.body)
     end
 

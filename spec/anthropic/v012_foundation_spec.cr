@@ -1,5 +1,21 @@
 require "../spec_helper"
 
+private class V012ContextProbeMiddleware
+  include Anthropic::Middleware
+
+  getter seen : Array({String, Bool, String?}) = [] of {String, Bool, String?}
+  property nested_hook : Proc(Nil)?
+
+  def call(request : Anthropic::APIRequest, nxt : Anthropic::MiddlewareNext) : Anthropic::APIResponse
+    @seen << {request.path, request.beta?, request.headers["x-stainless-timeout"]?}
+    if request.beta? && (hook = @nested_hook)
+      @nested_hook = nil
+      hook.call
+    end
+    nxt.call(request)
+  end
+end
+
 private def save_env(*names : String, &)
   saved = {} of String => String?
   names.each { |name| saved[name] = ENV[name]? }
@@ -235,6 +251,123 @@ describe "v0.12.0 core foundation (2026-10-21)" do
       beta_headers = beta_capture.headers.not_nil!
       beta_headers["x-stainless-helper"].should contain(Anthropic::StainlessHelper::FALLBACK_REFUSAL_MIDDLEWARE)
     end
+
+    it "resets nested request context without leaking outer beta? or timeout and tags beta resources accurately" do
+      probe = V012ContextProbeMiddleware.new
+      client = Anthropic::Client.new(api_key: "sk-test", timeout: nil, middleware: [probe])
+
+      probe.nested_hook = -> do
+        WebMock.stub(:get, "https://api.anthropic.com/v1/models?limit=20").to_return(
+          status: 200,
+          body: Fixtures::Responses::MODEL_LIST,
+        )
+        client.models.list
+        nil
+      end
+
+      WebMock.stub(:get, "https://api.anthropic.com/v1/files?limit=20").to_return(
+        status: 200,
+        body: %({"data":[],"has_more":false}),
+      )
+      WebMock.stub(:get, "https://api.anthropic.com/v1/skills?limit=20").to_return(
+        status: 200,
+        body: %({"data":[],"has_more":false}),
+      )
+      WebMock.stub(:get, "https://api.anthropic.com/v1/user_profiles?limit=20").to_return(
+        status: 200,
+        body: %({"data":[],"next_page":null}),
+      )
+      WebMock.stub(:get, "https://api.anthropic.com/v1/memory_stores?limit=20").to_return(
+        status: 200,
+        body: %({"data":[],"next_page":null}),
+      )
+      WebMock.stub(:post, "https://api.anthropic.com/v1/messages").to_return(
+        status: 200,
+        body: Fixtures::Responses::MESSAGE_BASIC,
+      )
+
+      # Trigger an outer per-request timeout + beta: true context, and invoke GA models.list inside middleware
+      client.post("/v1/messages", {"ping" => true}, timeout: 12.seconds, beta: true)
+      probe.seen.should eq([
+        {"/v1/messages", true, "12"},
+        {"/v1/models?limit=20", false, nil},
+      ])
+
+      probe.seen.clear
+      client.files.list
+      client.beta.files.list
+      client.skills.list
+      client.beta.skills.list
+      client.beta.user_profiles.list
+      client.beta.memory_stores.list
+
+      probe.seen.map { |entry| {entry[0], entry[1]} }.should eq([
+        {"/v1/files?limit=20", false},
+        {"/v1/files?limit=20", true},
+        {"/v1/skills?limit=20", false},
+        {"/v1/skills?limit=20", true},
+        {"/v1/user_profiles?limit=20", true},
+        {"/v1/memory_stores?limit=20", true},
+      ])
+    end
+
+    it "preserves virtual dispatch to GoogleCloud and Bedrock provider overrides across get, stream, and multipart" do
+      gc_models_cap = nil
+      WebMock.stub(:get, "https://claude.googleapis.com/v1alpha/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/models?limit=20").to_return do |req|
+        gc_models_cap = req
+        HTTP::Client::Response.new(200, body: Fixtures::Responses::MODEL_LIST)
+      end
+
+      gc_files_cap = nil
+      WebMock.stub(:post, "https://claude.googleapis.com/v1alpha/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/files").to_return do |req|
+        gc_files_cap = req
+        HTTP::Client::Response.new(
+          200,
+          body: %({"id":"file_gc_1","type":"file","filename":"upload.bin","mime_type":"application/octet-stream","size_bytes":5,"created_at":"2026-10-21T00:00:00Z","downloadable":false}),
+        )
+      end
+
+      gc_client = Anthropic::GoogleCloud::Client.new(
+        project: "proj",
+        location: "us-central1",
+        workspace_id: "ws",
+        skip_auth: true,
+      )
+      gc_client.models.list
+      gc_models_cap.not_nil!.uri.path.should eq("/v1alpha/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/models")
+
+      gc_client.files.upload(IO::Memory.new("hello"), expires_in_seconds: 3600)
+      gc_files_req = gc_files_cap.not_nil!
+      gc_files_req.uri.path.should eq("/v1alpha/projects/proj/locations/us-central1/workspaces/ws/invoke/v1/files")
+      gc_files_req.body.to_s.should contain("expires_in_seconds")
+
+      frame = Anthropic::Bedrock::EventStream.encode_chunk_event(%({"type":"message_stop"}))
+      bedrock_cap = nil
+      WebMock.stub(:post, /bedrock-runtime\.us-east-1\.amazonaws\.com\/model\//).to_return do |req|
+        bedrock_cap = req
+        HTTP::Client::Response.new(
+          200,
+          headers: HTTP::Headers{"Content-Type" => "application/vnd.amazon.eventstream"},
+          body_io: IO::Memory.new(frame),
+        )
+      end
+
+      bedrock_client = Anthropic::Bedrock::Client.new(
+        aws_access_key: "AKIAEXAMPLE",
+        aws_secret_key: "secret",
+        aws_region: "us-east-1",
+      )
+      beta_events = [] of Anthropic::AnyStreamEvent
+      bedrock_client.beta.messages.stream(
+        model: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        max_tokens: 16,
+        messages: [{role: "user", content: "hi"}],
+      ) { |event| beta_events << event }
+
+      bedrock_cap.not_nil!.uri.path.should contain("/invoke-with-response-stream")
+      beta_events.size.should eq(1)
+      beta_events[0].should be_a(Anthropic::MessageStopEvent)
+    end
   end
 
   describe "path segment validation, query encoding, pagination, uploads, helpers, schema" do
@@ -442,7 +575,7 @@ describe "v0.12.0 core foundation (2026-10-21)" do
       stream_err.error_code.should eq("compaction_unavailable")
     end
 
-    it "guards non-object body['error'] payloads safely without raising TypeCastError" do
+    it "guards non-object body['error'] payloads and null details safely without raising TypeCastError" do
       ["oops", %({"error":"string"}), %({"error":[1,2]}), %({"error":null})].each do |raw|
         err = Anthropic.build_api_error(400, raw)
         err.class.should eq(Anthropic::BadRequestError)
@@ -450,6 +583,12 @@ describe "v0.12.0 core foundation (2026-10-21)" do
         err.error_code.should be_nil
         err.details.should be_nil
       end
+
+      null_details = Anthropic.build_api_error(400, %({"error":{"type":"invalid_request_error","message":"bad","details":null}}))
+      null_details.class.should eq(Anthropic::BadRequestError)
+      null_details.api_message.should eq("bad")
+      null_details.error_code.should be_nil
+      null_details.details.should be_nil
     end
   end
 
