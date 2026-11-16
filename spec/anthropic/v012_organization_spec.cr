@@ -437,7 +437,7 @@ describe "Organization Admin v0.12.0 & 2026-10-21 Parity" do
 
       eff_cap = stub_and_capture(
         :get,
-        "https://api.anthropic.com/v1/organizations/spend_limits/effective?period=monthly&user_ids%5B%5D=user_1",
+        "https://api.anthropic.com/v1/organizations/spend_limits/effective?period%5B%5D=monthly&user_ids%5B%5D=user_1",
         %({"data":[#{summary_json}],"next_page":null})
       )
       stub_and_capture(:get, "https://api.anthropic.com/v1/organizations/spend_limit_increase_requests?status%5B%5D=pending", %({"data":[#{req_json}],"next_page":null}))
@@ -1065,6 +1065,134 @@ describe "Organization Admin v0.12.0 & 2026-10-21 Parity" do
       )
       client.beta.organization.webhooks.retrieve("wh/1 test").id.should eq("wh/1 test")
       cap.headers.not_nil!["anthropic-beta"].should eq(Anthropic::WEBHOOKS_BETA)
+    end
+  end
+
+  describe "Nullable parity and multi-value query params" do
+    it "handles nullable scan assessment, plugin components, marketplace status, skill share_status, implicit, and poll_status" do
+      scan = Anthropic::BetaPluginContentScan.from_json(%({"assessment":null,"reason":null,"status":"processing"}))
+      scan.assessment.should be_nil
+      scan.status.should eq("processing")
+
+      plugin = Anthropic::BetaPlugin.from_json(%({
+        "id": "plugin_2",
+        "components": null,
+        "content_scan": null,
+        "created_at": "2026-10-21T00:00:00Z",
+        "created_by": null,
+        "description": null,
+        "display_name": null,
+        "latest_version_id": "pv_1",
+        "manifest_version": null,
+        "marketplace_id": "mp_1",
+        "name": "empty",
+        "organization_installation_preference": null,
+        "organization_installation_preference_inherited": null,
+        "owner": {"type": "user", "user_id": "user_1"},
+        "reach": null,
+        "served_version_id": "pv_1",
+        "served_version_pinned": false,
+        "type": "plugin",
+        "updated_at": "2026-10-21T00:00:00Z"
+      }))
+      plugin.components.should be_nil
+
+      version = Anthropic::BetaPluginVersion.from_json(%({
+        "id": "pv_1",
+        "components": null,
+        "content_scan": null,
+        "created_at": "2026-10-21T00:00:00Z",
+        "created_by": null,
+        "description": null,
+        "display_name": null,
+        "manifest_version": null,
+        "plugin_id": "plugin_2",
+        "reach": null,
+        "release_notes": null,
+        "type": "plugin_version"
+      }))
+      version.components.should be_nil
+
+      mp = Anthropic::BetaPluginMarketplace.from_json(%({
+        "id": "mp_2",
+        "created_at": "2026-10-21T00:00:00Z",
+        "default_installation_preference": null,
+        "last_sync_ended_at": null,
+        "last_sync_read_sha": null,
+        "name": "Personal",
+        "owner": {"type": "user", "user_id": "user_1"},
+        "source": "manual",
+        "sync_status": null,
+        "type": "plugin_marketplace"
+      }))
+      mp.default_installation_preference.should be_nil
+      mp.sync_status.should be_nil
+
+      skill = Anthropic::AnalyticsSkillActivity.from_json(%({
+        "attributed_list_price": null,
+        "chat_metrics": {"distinct_conversation_skill_used_count": 0},
+        "claude_code_metrics": {"distinct_session_skill_used_count": 0},
+        "cowork_metrics": {"distinct_session_skill_used_count": 0},
+        "currency": null,
+        "distinct_user_count": 1,
+        "enable_count": null,
+        "estimated_overage_spend": null,
+        "invocation_count": null,
+        "office_metrics": {"excel":{"distinct_session_skill_used_count":0},"outlook":{"distinct_session_skill_used_count":0},"powerpoint":{"distinct_session_skill_used_count":0},"word":{"distinct_session_skill_used_count":0}},
+        "share_status": null,
+        "skill_display_name": null,
+        "skill_name": "internal"
+      }))
+      skill.share_status.should be_nil
+
+      member = Anthropic::ServiceAccountWorkspaceMember.from_json(%({
+        "created_by_actor_id": null,
+        "implicit": null,
+        "service_account_id": "sa_1",
+        "type": "service_account_workspace_member",
+        "workspace_id": "ws_1",
+        "workspace_role": "workspace_developer"
+      }))
+      member.implicit.should be_nil
+      member.implicit?.should be_false
+
+      issuer = Anthropic::FederationIssuer.from_json(%({
+        "id": "iss_2",
+        "archived_at": null,
+        "archived_by_actor_id": null,
+        "check_jti": false,
+        "created_at": "2026-10-21T00:00:00Z",
+        "created_by_actor_id": null,
+        "issuer_url": "https://issuer.test",
+        "jwks": {"type": "inline", "keys": []},
+        "jwks_polling_disabled_at": null,
+        "max_jwt_lifetime_seconds": 3600,
+        "name": "inline",
+        "poll_status": null,
+        "type": "federation_issuer",
+        "updated_at": "2026-10-21T00:00:00Z",
+        "updated_by_actor_id": null
+      }))
+      issuer.poll_status.should be_nil
+
+      poll = Anthropic::FederationIssuerPollStatus.from_json(%({"consecutive_failures":0,"last_fetched_at":null,"next_poll_at":null}))
+      poll.last_fetched_at.should be_nil
+      poll.next_poll_at.should be_nil
+    end
+
+    it "supports array period filters on spend_limits.effective and explicit null content_mode on traces params" do
+      stub_and_capture(
+        :get,
+        "https://api.anthropic.com/v1/organizations/spend_limits/effective?period%5B%5D=daily&period%5B%5D=monthly",
+        %({"data":[],"next_page":null})
+      )
+      client = Anthropic::Client.new(api_key: "sk-ant-test")
+      client.organization.spend_limits.effective.list(period: ["daily", "monthly"]).data.should be_empty
+
+      traces = Anthropic::BetaTelemetryDestinationTracesParams.new(content_mode: nil)
+      parsed = JSON.parse(traces.to_json)
+      parsed.as_h.has_key?("content_mode").should be_true
+      parsed["content_mode"].raw.should be_nil
     end
   end
 end

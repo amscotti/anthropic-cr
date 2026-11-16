@@ -178,13 +178,13 @@ module Anthropic
 
   # Trace configuration parameters for telemetry destination create/update.
   struct BetaTelemetryDestinationTracesParams
-    getter content_mode : String?
+    getter content_mode : String | OrganizationUnset | Nil
     getter enabled : Bool?
     getter endpoint_url : String | OrganizationUnset | Nil
     getter max_content_bytes : Int64 | OrganizationUnset | Nil
 
     def initialize(
-      @content_mode : String? = nil,
+      @content_mode : String | OrganizationUnset | Nil = ORGANIZATION_UNSET,
       @enabled : Bool? = nil,
       @endpoint_url : String | OrganizationUnset | Nil = ORGANIZATION_UNSET,
       @max_content_bytes : Int64 | OrganizationUnset | Nil = ORGANIZATION_UNSET,
@@ -193,7 +193,7 @@ module Anthropic
 
     def to_json(builder : JSON::Builder) : Nil
       builder.object do
-        if cm = @content_mode
+        unless (cm = @content_mode).is_a?(OrganizationUnset)
           builder.field("content_mode", cm)
         end
         unless (enabled = @enabled).nil?

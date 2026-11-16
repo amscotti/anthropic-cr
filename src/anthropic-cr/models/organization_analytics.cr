@@ -889,8 +889,8 @@ module Anthropic
     @[JSON::Field(key: "office_metrics")]
     getter office_metrics : AnalyticsSkillOfficeMetrics
 
-    @[JSON::Field(key: "share_status")]
-    getter share_status : String
+    @[JSON::Field(key: "share_status", emit_null: false)]
+    getter share_status : String?
 
     @[JSON::Field(key: "skill_display_name", emit_null: false)]
     getter skill_display_name : String?

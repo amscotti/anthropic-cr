@@ -102,13 +102,16 @@ module Anthropic
     def list(
       limit : Int32? = nil,
       page : String? = nil,
-      period : String? = nil,
+      period : String | Array(String) | Nil = nil,
       user_ids : Array(String)? = nil,
     ) : SpendSummaryListResponse
       query = {} of String => (String | Array(String))
       OrganizationHelpers.set_query(query, "limit", limit)
       OrganizationHelpers.set_query(query, "page", page)
-      OrganizationHelpers.set_query(query, "period", period)
+      case period
+      when String        then query["period"] = [period]
+      when Array(String) then query["period"] = period
+      end
       OrganizationHelpers.set_query(query, "user_ids", user_ids)
 
       response = @client.get("/v1/organizations/spend_limits/effective", query, beta: @beta)

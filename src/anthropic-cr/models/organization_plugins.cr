@@ -48,7 +48,8 @@ module Anthropic
   struct BetaPluginContentScan
     include JSON::Serializable
 
-    getter assessment : String
+    @[JSON::Field(emit_null: false)]
+    getter assessment : String?
 
     @[JSON::Field(emit_null: false)]
     getter reason : String?
@@ -249,7 +250,9 @@ module Anthropic
     include JSON::Serializable
 
     getter id : String
-    getter components : Array(BetaPluginComponent)
+
+    @[JSON::Field(emit_null: false)]
+    getter components : Array(BetaPluginComponent)?
 
     @[JSON::Field(key: "content_scan", emit_null: false)]
     getter content_scan : BetaPluginContentScan?
@@ -312,7 +315,9 @@ module Anthropic
     include JSON::Serializable
 
     getter id : String
-    getter components : Array(BetaPluginComponent)
+
+    @[JSON::Field(emit_null: false)]
+    getter components : Array(BetaPluginComponent)?
 
     @[JSON::Field(key: "content_scan", emit_null: false)]
     getter content_scan : BetaPluginContentScan?
@@ -400,8 +405,8 @@ module Anthropic
     @[JSON::Field(key: "created_at")]
     getter created_at : String
 
-    @[JSON::Field(key: "default_installation_preference")]
-    getter default_installation_preference : String
+    @[JSON::Field(key: "default_installation_preference", emit_null: false)]
+    getter default_installation_preference : String?
 
     @[JSON::Field(key: "last_sync_ended_at", emit_null: false)]
     getter last_sync_ended_at : String?
@@ -416,8 +421,8 @@ module Anthropic
 
     getter source : String
 
-    @[JSON::Field(key: "sync_status")]
-    getter sync_status : String
+    @[JSON::Field(key: "sync_status", emit_null: false)]
+    getter sync_status : String?
 
     getter type : String = "plugin_marketplace"
   end

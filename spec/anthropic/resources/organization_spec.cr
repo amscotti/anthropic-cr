@@ -152,7 +152,7 @@ describe Anthropic::BetaOrganizations do
       name: "main"
     )
     created_issuer.issuer_url.should eq("https://issuer.test")
-    created_issuer.poll_status.consecutive_failures.should eq(0)
+    created_issuer.poll_status.not_nil!.consecutive_failures.should eq(0)
 
     rule = %({"id":"rule_1","applies_to_all_workspaces":true,"archived_at":null,"archived_by_actor_id":null,"attributes":null,"created_at":"2026-01-01T00:00:00Z","created_by_actor_id":null,"description":null,"issuer_id":"iss_1","issuer_name":null,"match":{"audience":"ci"},"name":"ci-rule","oauth_scope":"ci:run","target":{"type":"service_account","service_account_id":"sa_1"},"token_lifetime_seconds":3600,"type":"federation_rule","updated_at":"2026-01-01T00:00:00Z","updated_by_actor_id":null,"workspace_id":null,"workspace_ids":[]})
     capture = stub_and_capture(:post, "https://api.anthropic.com/v1/organizations/federation_rules", rule)

@@ -1029,7 +1029,8 @@ module Anthropic
     @[JSON::Field(key: "created_by_actor_id", emit_null: false)]
     getter created_by_actor_id : String? = nil
 
-    getter? implicit : Bool
+    @[JSON::Field(emit_null: false)]
+    getter implicit : Bool?
 
     @[JSON::Field(key: "service_account_id")]
     getter service_account_id : String
@@ -1042,6 +1043,10 @@ module Anthropic
 
     @[JSON::Field(key: "workspace_role")]
     getter workspace_role : String
+
+    def implicit? : Bool
+      @implicit == true
+    end
   end
 
   alias ServiceAccountWorkspaceMember = BetaServiceAccountWorkspaceMember
@@ -1083,11 +1088,11 @@ module Anthropic
     @[JSON::Field(key: "consecutive_failures")]
     getter consecutive_failures : Int64
 
-    @[JSON::Field(key: "last_fetched_at")]
-    getter last_fetched_at : String
+    @[JSON::Field(key: "last_fetched_at", emit_null: false)]
+    getter last_fetched_at : String?
 
-    @[JSON::Field(key: "next_poll_at")]
-    getter next_poll_at : String
+    @[JSON::Field(key: "next_poll_at", emit_null: false)]
+    getter next_poll_at : String?
   end
 
   alias FederationIssuerPollStatus = BetaFederationIssuerPollStatus
@@ -1129,8 +1134,8 @@ module Anthropic
 
     getter name : String
 
-    @[JSON::Field(key: "poll_status")]
-    getter poll_status : BetaFederationIssuerPollStatus
+    @[JSON::Field(key: "poll_status", emit_null: false)]
+    getter poll_status : BetaFederationIssuerPollStatus?
 
     # Object type. Always `"federation_issuer"`.
     getter type : String = "federation_issuer"
