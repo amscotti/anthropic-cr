@@ -39,11 +39,21 @@ module Anthropic
     CLAUDE_OPUS_4_7 = "claude-opus-4-7"
 
     # Claude 4.6
-    CLAUDE_OPUS_4_6   = "claude-opus-4-6"
+    CLAUDE_OPUS_4_6 = "claude-opus-4-6"
+    # Claude 5.5 models
+    CLAUDE_SONNET_5_5 = "claude-sonnet-5-5"
+    CLAUDE_HAIKU_5_5  = "claude-haiku-5-5"
+
+    # Claude 5.2 models
+    CLAUDE_FABLE_5_2  = "claude-fable-5-2"
+    CLAUDE_MYTHOS_5_2 = "claude-mythos-5-2"
+
     CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
 
     # Claude 4.5 models
-    CLAUDE_OPUS_4_5   = "claude-opus-4-5-20251101"
+    CLAUDE_OPUS_4_5 = "claude-opus-4-5-20251101"
+
+    # @deprecated Reaches end-of-life on November 30th, 2026. Migrate to claude-sonnet-4-6 or newer.
     CLAUDE_SONNET_4_5 = "claude-sonnet-4-5-20250929"
     CLAUDE_HAIKU_4_5  = "claude-haiku-4-5-20251001"
 
@@ -78,9 +88,12 @@ module Anthropic
   MODEL_SHORTHANDS = {
     :sonnet     => Model::CLAUDE_SONNET_5,
     :sonnet_5   => Model::CLAUDE_SONNET_5,
+    :sonnet_5_5 => Model::CLAUDE_SONNET_5_5,
     :fable      => Model::CLAUDE_FABLE_5,
     :fable_5    => Model::CLAUDE_FABLE_5,
     :fable_5_1  => Model::CLAUDE_FABLE_5_1,
+    :fable_5_2  => Model::CLAUDE_FABLE_5_2,
+    :mythos_5_2 => Model::CLAUDE_MYTHOS_5_2,
     :mythos_5_1 => Model::CLAUDE_MYTHOS_5_1,
     :mythos     => Model::CLAUDE_MYTHOS_5,
     :mythos_5   => Model::CLAUDE_MYTHOS_5,
@@ -90,6 +103,7 @@ module Anthropic
     :opus_4_8   => Model::CLAUDE_OPUS_4_8,
     :opus_4_7   => Model::CLAUDE_OPUS_4_7,
     :haiku      => Model::CLAUDE_HAIKU_4_5,
+    :haiku_5_5  => Model::CLAUDE_HAIKU_5_5,
     :opus_4_6   => Model::CLAUDE_OPUS_4_6,
     :sonnet_4_6 => Model::CLAUDE_SONNET_4_6,
     :opus_4_5   => Model::CLAUDE_OPUS_4_5,
@@ -105,6 +119,20 @@ module Anthropic
     )
   end
 
+  module ModelLine
+    HAIKU  = "haiku"
+    SONNET = "sonnet"
+    OPUS   = "opus"
+    FABLE  = "fable"
+    MYTHOS = "mythos"
+  end
+
+  module ModelLifecycle
+    ACTIVE     = "active"
+    DEPRECATED = "deprecated"
+    RETIRED    = "retired"
+  end
+
   struct CapabilitySupport
     include JSON::Serializable
 
@@ -115,6 +143,13 @@ module Anthropic
     include JSON::Serializable
 
     getter adaptive : CapabilitySupport
+
+    @[JSON::Field(key: "between_tools", emit_null: false)]
+    getter between_tools : CapabilitySupport?
+
+    @[JSON::Field(emit_null: false)]
+    getter disabled : CapabilitySupport?
+
     getter enabled : CapabilitySupport
   end
 
@@ -166,6 +201,22 @@ module Anthropic
     getter? supported : Bool
   end
 
+  struct ServerToolsCapability
+    include JSON::Serializable
+
+    @[JSON::Field(key: "code_execution")]
+    getter code_execution : CapabilitySupport
+
+    getter? supported : Bool
+
+    @[JSON::Field(key: "web_search")]
+    getter web_search : CapabilitySupport
+
+    def supported : Bool
+      @supported
+    end
+  end
+
   struct ModelCapabilities
     include JSON::Serializable
 
@@ -188,6 +239,9 @@ module Anthropic
 
     @[JSON::Field(key: "pdf_input")]
     getter pdf_input : CapabilitySupport
+
+    @[JSON::Field(key: "server_tools", emit_null: false)]
+    getter server_tools : ServerToolsCapability?
 
     @[JSON::Field(key: "structured_outputs")]
     getter structured_outputs : CapabilitySupport
@@ -214,6 +268,21 @@ module Anthropic
     # Timestamp when the model was created
     @[JSON::Field(key: "created_at")]
     getter created_at : String?
+
+    # Timestamp of the model's most recent deprecation (`nil` while active)
+    @[JSON::Field(key: "deprecated_at", emit_null: false)]
+    getter deprecated_at : String?
+
+    # Current lifecycle stage (`"active"`, `"deprecated"`, or `"retired"`)
+    getter lifecycle : String = ModelLifecycle::ACTIVE
+
+    # Model line (`"opus"`, `"sonnet"`, `"haiku"`, `"fable"`, `"mythos"`, or `nil`)
+    @[JSON::Field(emit_null: false)]
+    getter line : String?
+
+    # Scheduled retirement timestamp (`nil` while active or unscheduled)
+    @[JSON::Field(key: "retires_at", emit_null: false)]
+    getter retires_at : String?
 
     @[JSON::Field(emit_null: false)]
     getter capabilities : ModelCapabilities?

@@ -1,140 +1,205 @@
 module Anthropic
-  # Trust grant attached to a `BetaUserProfile`.
-  #
-  # `status` is one of `"active"`, `"pending"`, or `"rejected"`.
-  struct BetaUserProfileTrustGrant
-    include JSON::Serializable
+  # Union of values accepted for `external_user_details` on user profile create/update.
+  alias UserProfileExternalUserDetailsParamLike = UserProfileExternalUserDetails | BetaUserProfileExternalUserDetails | Hash(String, JSON::Any) | JSON::Any
 
-    getter status : String
+  # :nodoc:
+  # Shared request-shaping helpers for GA and Beta user profile resources.
+  module UserProfileRequestHelper
+    def self.build_write_body(
+      access_type : String | JSON::Any | Nil = nil,
+      external_id : String? = nil,
+      external_user_details : UserProfileExternalUserDetailsParamLike? = nil,
+      external_user_onboarded_at : String? = nil,
+      metadata : Hash(String, String)? = nil,
+      name : String | JSON::Any | Nil = nil,
+    ) : Hash(String, JSON::Any)
+      body = {} of String => JSON::Any
+      body["external_id"] = JSON::Any.new(external_id) if external_id
+      body["metadata"] = JSON.parse(metadata.to_json) if metadata
+      append_json_or_string(body, "access_type", access_type)
+      append_json_or_string(body, "name", name)
+      if onboarded = external_user_onboarded_at
+        body["external_user_onboarded_at"] = JSON::Any.new(onboarded)
+      end
+      body["external_user_details"] = JSON.parse(external_user_details.to_json) if external_user_details
+      body
+    end
 
-    def initialize(@status : String)
+    def self.build_list_query(
+      limit : Int32,
+      order : String? = nil,
+      order_by : String? = nil,
+      page : String? = nil,
+      enforcement_status : Array(String)? = nil,
+    ) : Hash(String, Client::QueryParamValue)
+      query = {} of String => Client::QueryParamValue
+      query["limit"] = limit.to_s
+      query["order"] = order if order
+      query["order_by"] = order_by if order_by
+      query["page"] = page if page
+      query["enforcement_status"] = enforcement_status if enforcement_status
+      query
+    end
+
+    private def self.append_json_or_string(
+      body : Hash(String, JSON::Any),
+      key : String,
+      value : String | JSON::Any | Nil,
+    ) : Nil
+      case value
+      when String
+        body[key] = JSON::Any.new(value)
+      when JSON::Any
+        body[key] = value
+      end
     end
   end
 
-  # A user profile scopes per-user state (memory, trust grants, etc.) to a
-  # specific end user of your application. Accessible via
-  # `client.beta.user_profiles`.
-  #
-  # Requires the beta header `user-profiles-2026-03-24`. When the resource
-  # methods are called, the header is applied automatically.
-  struct BetaUserProfile
-    include JSON::Serializable
+  # Action URLs sub-resource for GA `UserProfiles` (`client.user_profiles.action_urls`).
+  class UserProfileActionURLs
+    def initialize(@client : Client)
+    end
 
-    # Unique identifier prefixed `uprof_`.
-    getter id : String
-
-    # Object type. Always `"user_profile"`.
-    getter type : String
-
-    @[JSON::Field(key: "created_at")]
-    getter created_at : String
-
-    @[JSON::Field(key: "updated_at")]
-    getter updated_at : String
-
-    # Free-form metadata attached to the profile.
-    getter metadata : Hash(String, String)
-
-    # Trust grants keyed by grant name. Keys omitted when no grant is active.
-    @[JSON::Field(key: "trust_grants")]
-    getter trust_grants : Hash(String, BetaUserProfileTrustGrant)
-
-    # Optional platform-assigned external identifier (not enforced unique).
-    @[JSON::Field(key: "external_id", emit_null: false)]
-    getter external_id : String?
-
-    # How the platform uses the API on behalf of the entity this profile
-    # represents: `"application"` or `"passthrough"`.
-    @[JSON::Field(key: "access_type", emit_null: false)]
-    getter access_type : String?
-
-    # Real-world name of the entity this profile represents.
-    @[JSON::Field(emit_null: false)]
-    getter name : String?
-
-    # RFC 3339 timestamp recording when the end user completed onboarding.
-    @[JSON::Field(key: "external_user_onboarded_at", emit_null: false)]
-    getter external_user_onboarded_at : String?
-
-    # Details about the end user, as the platform states them, when supplied.
-    @[JSON::Field(key: "external_user_details", emit_null: false)]
-    getter external_user_details : BetaUserProfileExternalUserDetails?
-  end
-
-  # Details about the entity a profile represents, as the platform states
-  # them. Anthropic does not verify them. Every field is optional on
-  # requests; responses carry every field, `nil` until the platform
-  # supplies a value.
-  struct BetaUserProfileExternalUserDetails
-    include JSON::Serializable
-
-    # Account status: `"active"`, `"suspended"`, or `"blocked"`.
-    @[JSON::Field(key: "account_status", emit_null: false)]
-    getter account_status : String?
-
-    # Entity type: `"individual"`, `"business"`, `"non_profit"`, or `"government"`.
-    @[JSON::Field(key: "entity_type", emit_null: false)]
-    getter entity_type : String?
-
-    # ISO 3166-1 alpha-2 country code, when supplied.
-    @[JSON::Field(emit_null: false)]
-    getter country : String?
-
-    # Hash of the end user's email, when supplied.
-    @[JSON::Field(key: "email_hash", emit_null: false)]
-    getter email_hash : String?
-
-    # Hash of the end user's name, when supplied.
-    @[JSON::Field(key: "name_hash", emit_null: false)]
-    getter name_hash : String?
-
-    # RFC 3339 timestamp recording when the end user onboarded.
-    @[JSON::Field(key: "onboarded_at", emit_null: false)]
-    getter onboarded_at : String?
-
-    # Caller-supplied reference identifier for the end user.
-    @[JSON::Field(key: "reference_id", emit_null: false)]
-    getter reference_id : String?
-
-    def initialize(
-      @account_status : String? = nil,
-      @entity_type : String? = nil,
-      @country : String? = nil,
-      @email_hash : String? = nil,
-      @name_hash : String? = nil,
-      @onboarded_at : String? = nil,
-      @reference_id : String? = nil,
-    )
+    # Create an action URL (for example end-user enrollment) for a user profile.
+    def create(
+      user_profile_id : String,
+      action : UserProfileEnrollEndUserAction | BetaUserProfileEnrollEndUserAction | Hash(String, String) | Hash(String, JSON::Any) | JSON::Any,
+      workspace_id : String? = nil,
+    ) : UserProfileActionURL
+      body = {"action" => JSON.parse(action.to_json)}
+      response = @client.post(
+        "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}/action_urls",
+        body,
+        Anthropic.merge_workspace_header(nil, workspace_id)
+      )
+      UserProfileActionURL.from_json(response.body)
     end
   end
 
-  # Access-type values for `BetaUserProfile#access_type`.
-  module UserProfileAccessType
-    APPLICATION = "application"
-    PASSTHROUGH = "passthrough"
+  # GA User Profiles API (`client.user_profiles`) for creating and managing
+  # per-end-user profiles, enforcement state, and program enrollments.
+  class UserProfiles
+    def initialize(@client : Client)
+    end
+
+    # Access action URLs sub-resource (`client.user_profiles.action_urls`).
+    def action_urls : UserProfileActionURLs
+      UserProfileActionURLs.new(@client)
+    end
+
+    # Create a new GA user profile.
+    def create(
+      access_type : String? = nil,
+      external_user_details : UserProfileExternalUserDetailsParamLike? = nil,
+      metadata : Hash(String, String)? = nil,
+      name : String? = nil,
+      workspace_id : String? = nil,
+    ) : UserProfile
+      body = UserProfileRequestHelper.build_write_body(
+        access_type: access_type,
+        external_user_details: external_user_details,
+        metadata: metadata,
+        name: name
+      )
+      response = @client.post("/v1/user_profiles", body, Anthropic.merge_workspace_header(nil, workspace_id))
+      UserProfile.from_json(response.body)
+    end
+
+    # Retrieve a GA user profile by ID.
+    def retrieve(
+      user_profile_id : String,
+      workspace_id : String? = nil,
+    ) : UserProfile
+      response = @client.get(
+        "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}",
+        nil,
+        Anthropic.merge_workspace_header(nil, workspace_id)
+      )
+      UserProfile.from_json(response.body)
+    end
+
+    # Update an existing GA user profile.
+    def update(
+      user_profile_id : String,
+      access_type : String | JSON::Any | Nil = nil,
+      external_user_details : UserProfileExternalUserDetailsParamLike? = nil,
+      metadata : Hash(String, String)? = nil,
+      name : String | JSON::Any | Nil = nil,
+      workspace_id : String? = nil,
+    ) : UserProfile
+      body = UserProfileRequestHelper.build_write_body(
+        access_type: access_type,
+        external_user_details: external_user_details,
+        metadata: metadata,
+        name: name
+      )
+      response = @client.post(
+        "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}",
+        body,
+        Anthropic.merge_workspace_header(nil, workspace_id)
+      )
+      UserProfile.from_json(response.body)
+    end
+
+    # List GA user profiles with optional `enforcement_status` filter and pagination.
+    def list(
+      enforcement_status : Array(String)? = nil,
+      limit : Int32 = 20,
+      order : String? = nil,
+      order_by : String? = nil,
+      page : String? = nil,
+      workspace_id : String? = nil,
+    ) : UserProfileListResponse
+      query = UserProfileRequestHelper.build_list_query(
+        limit: limit,
+        order: order,
+        order_by: order_by,
+        page: page,
+        enforcement_status: enforcement_status
+      )
+      response = @client.get("/v1/user_profiles", query, Anthropic.merge_workspace_header(nil, workspace_id))
+      UserProfileListResponse.from_json(response.body)
+    end
+
+    # Delete a GA user profile.
+    def delete(
+      user_profile_id : String,
+      workspace_id : String? = nil,
+    ) : DeletedUserProfile
+      response = @client.delete(
+        "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}",
+        Anthropic.merge_workspace_header(nil, workspace_id)
+      )
+      DeletedUserProfile.from_json(response.body)
+    end
   end
 
-  # Enrollment URL response for a user profile.
-  struct BetaUserProfileEnrollmentURL
-    include JSON::Serializable
+  # Action URLs sub-resource for Beta `BetaUserProfiles`
+  # (`client.beta.user_profiles.action_urls`).
+  class BetaUserProfileActionURLs
+    def initialize(@client : Client)
+    end
 
-    getter type : String
+    # Create an action URL for a user profile (beta).
+    def create(
+      user_profile_id : String,
+      action : BetaUserProfileEnrollEndUserAction | UserProfileEnrollEndUserAction | Hash(String, String) | Hash(String, JSON::Any) | JSON::Any,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : BetaUserProfileActionURL
+      merged = betas.dup
+      merged << USER_PROFILES_BETA unless merged.includes?(USER_PROFILES_BETA)
+      headers = Anthropic.merge_workspace_header({"anthropic-beta" => merged.join(",")}, workspace_id) || {} of String => String
+      body = {"action" => JSON.parse(action.to_json)}
 
-    @[JSON::Field(key: "expires_at")]
-    getter expires_at : String
-
-    getter url : String
-  end
-
-  # Paginated list of user profiles.
-  struct BetaUserProfileListResponse
-    include JSON::Serializable
-
-    getter data : Array(BetaUserProfile)
-
-    # Opaque cursor for the next page, if any
-    @[JSON::Field(key: "next_page")]
-    getter next_page : String?
+      response = @client.post(
+        "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}/action_urls",
+        body,
+        headers,
+        beta: true
+      )
+      BetaUserProfileActionURL.from_json(response.body)
+    end
   end
 
   # User Profiles API (beta) for creating and managing per-end-user state.
@@ -165,6 +230,11 @@ module Anthropic
     def initialize(@client : Client)
     end
 
+    # Access action URLs sub-resource (`client.beta.user_profiles.action_urls`).
+    def action_urls : BetaUserProfileActionURLs
+      BetaUserProfileActionURLs.new(@client)
+    end
+
     # Create a new user profile.
     #
     # `external_user_details` is accepted under the
@@ -177,21 +247,20 @@ module Anthropic
       access_type : String? = nil,
       name : String? = nil,
       external_user_onboarded_at : String? = nil,
-      external_user_details : BetaUserProfileExternalUserDetails | Hash(String, JSON::Any)? = nil,
+      external_user_details : UserProfileExternalUserDetailsParamLike? = nil,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaUserProfile
-      body = {} of String => JSON::Any
-      body["external_id"] = JSON::Any.new(external_id) if external_id
-      body["metadata"] = JSON.parse(metadata.to_json) if metadata
-      body["access_type"] = JSON::Any.new(access_type) if access_type
-      body["name"] = JSON::Any.new(name) if name
-      if onboarded = external_user_onboarded_at
-        body["external_user_onboarded_at"] = JSON::Any.new(onboarded)
-      end
-      body["external_user_details"] = JSON.parse(external_user_details.to_json) if external_user_details
+      body = UserProfileRequestHelper.build_write_body(
+        access_type: access_type,
+        external_id: external_id,
+        external_user_details: external_user_details,
+        external_user_onboarded_at: external_user_onboarded_at,
+        metadata: metadata,
+        name: name
+      )
 
-      response = @client.post("/v1/user_profiles?beta=true", body, beta_headers(!external_user_details.nil?, betas, workspace_id))
+      response = @client.post("/v1/user_profiles", body, beta_headers(!external_user_details.nil?, betas, workspace_id), beta: true)
       BetaUserProfile.from_json(response.body)
     end
 
@@ -201,11 +270,11 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaUserProfile
-      response = @client.get("/v1/user_profiles/#{user_profile_id}?beta=true", nil, beta_headers(false, betas, workspace_id))
+      response = @client.get("/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}", nil, beta_headers(false, betas, workspace_id), beta: true)
       BetaUserProfile.from_json(response.body)
     end
 
-    # Update metadata or external_id for an existing user profile.
+    # Update metadata, name, access_type, or external details for an existing user profile.
     #
     # To remove a metadata key, set its value to an empty string. Keys not
     # provided are left unchanged.
@@ -218,28 +287,27 @@ module Anthropic
       user_profile_id : String,
       external_id : String? = nil,
       metadata : Hash(String, String)? = nil,
-      access_type : String? = nil,
-      name : String? = nil,
+      access_type : String | JSON::Any | Nil = nil,
+      name : String | JSON::Any | Nil = nil,
       external_user_onboarded_at : String? = nil,
-      external_user_details : BetaUserProfileExternalUserDetails | Hash(String, JSON::Any)? = nil,
+      external_user_details : UserProfileExternalUserDetailsParamLike? = nil,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaUserProfile
-      body = {} of String => JSON::Any
-      body["external_id"] = JSON::Any.new(external_id) if external_id
-      body["metadata"] = JSON.parse(metadata.to_json) if metadata
-      body["access_type"] = JSON::Any.new(access_type) if access_type
-      body["name"] = JSON::Any.new(name) if name
-      if onboarded = external_user_onboarded_at
-        body["external_user_onboarded_at"] = JSON::Any.new(onboarded)
-      end
-      body["external_user_details"] = JSON.parse(external_user_details.to_json) if external_user_details
+      body = UserProfileRequestHelper.build_write_body(
+        access_type: access_type,
+        external_id: external_id,
+        external_user_details: external_user_details,
+        external_user_onboarded_at: external_user_onboarded_at,
+        metadata: metadata,
+        name: name
+      )
 
-      response = @client.post("/v1/user_profiles/#{user_profile_id}?beta=true", body, beta_headers(!external_user_details.nil?, betas, workspace_id))
+      response = @client.post("/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}", body, beta_headers(!external_user_details.nil?, betas, workspace_id), beta: true)
       BetaUserProfile.from_json(response.body)
     end
 
-    # List user profiles with optional pagination.
+    # List user profiles with optional `enforcement_status` filter and pagination.
     #
     # `order` may be `"asc"` or `"desc"`. `order_by` selects the sort key
     # (e.g. `"name"`).
@@ -248,16 +316,34 @@ module Anthropic
       order : String? = nil,
       order_by : String? = nil,
       page : String? = nil,
+      enforcement_status : Array(String)? = nil,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaUserProfileListResponse
-      path = "/v1/user_profiles?beta=true&limit=#{limit}"
-      path += "&order=#{URI.encode_path_segment(order)}" if order
-      path += "&order_by=#{URI.encode_path_segment(order_by)}" if order_by
-      path += "&page=#{URI.encode_path_segment(page)}" if page
+      query = UserProfileRequestHelper.build_list_query(
+        limit: limit,
+        order: order,
+        order_by: order_by,
+        page: page,
+        enforcement_status: enforcement_status
+      )
 
-      response = @client.get(path, nil, beta_headers(false, betas, workspace_id))
+      response = @client.get("/v1/user_profiles", query, beta_headers(false, betas, workspace_id), beta: true)
       BetaUserProfileListResponse.from_json(response.body)
+    end
+
+    # Delete a user profile (beta).
+    def delete(
+      user_profile_id : String,
+      betas : Array(String) = [] of String,
+      workspace_id : String? = nil,
+    ) : BetaDeletedUserProfile
+      response = @client.delete(
+        "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}",
+        beta_headers(false, betas, workspace_id),
+        beta: true
+      )
+      BetaDeletedUserProfile.from_json(response.body)
     end
 
     # Create an enrollment URL for the given user profile.
@@ -269,9 +355,10 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaUserProfileEnrollmentURL
       response = @client.post(
-        "/v1/user_profiles/#{user_profile_id}/enrollment_url?beta=true",
+        "/v1/user_profiles/#{Anthropic.encode_path_segment(user_profile_id)}/enrollment_url",
         {} of String => JSON::Any,
-        beta_headers(false, betas, workspace_id)
+        beta_headers(false, betas, workspace_id),
+        beta: true
       )
       BetaUserProfileEnrollmentURL.from_json(response.body)
     end

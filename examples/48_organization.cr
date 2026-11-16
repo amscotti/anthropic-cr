@@ -1,11 +1,13 @@
 require "../src/anthropic-cr"
 require "dotenv"
 
-# Organization Admin API example (beta)
+# Organization Admin API example (GA `client.organization` + beta extensions)
 #
 # Manage API keys, invites, users, workspaces, service accounts,
-# federation, rate limits, and compliance settings via
-# `client.beta.organization`.
+# federation, rate limits, compliance settings, RBAC groups/roles,
+# spend limits, and analytics via GA `client.organization` (and beta-only
+# plugins, telemetry destinations, webhooks, and claude_tag via
+# `client.beta.organization`).
 #
 # NOTE: these endpoints require an Admin API key or an organization-scoped
 # key. A standard key gets an `Anthropic::AuthenticationError`, rescued
@@ -17,7 +19,7 @@ require "dotenv"
 Dotenv.load if File.exists?(".env")
 
 client = Anthropic::Client.new
-org_api = client.beta.organization
+org_api = client.organization
 
 begin
   org = org_api.retrieve

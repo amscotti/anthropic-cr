@@ -67,12 +67,16 @@ module Anthropic
         not_supported("dreams")
       end
 
+      def organization : Anthropic::BetaOrganizations
+        not_supported("organization")
+      end
+
       def tunnels : Anthropic::BetaTunnels
         not_supported("tunnels")
       end
 
       private def not_supported(feature : String) : NoReturn
-        raise NotImplementedError.new(
+        raise ::NotImplementedError.new(
           "Bedrock does not support beta.#{feature}. Only client.beta.messages is available " \
           "(matching the official Anthropic Bedrock SDKs)."
         )

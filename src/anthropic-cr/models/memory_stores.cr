@@ -5,8 +5,8 @@ module Anthropic
     getter id : String
     getter name : String
     getter type : String = "memory_store"
-    getter description : String?
-    getter metadata : Hash(String, String)?
+    getter description : String? = nil
+    getter metadata : Hash(String, String)? = nil
 
     @[JSON::Field(key: "created_at")]
     getter created_at : String
@@ -15,7 +15,12 @@ module Anthropic
     getter updated_at : String
 
     @[JSON::Field(key: "archived_at")]
-    getter archived_at : String?
+    getter archived_at : String? = nil
+
+    # Whether this memory store has been archived.
+    def archived? : Bool
+      !archived_at.nil?
+    end
   end
 
   struct BetaManagedAgentsDeletedMemoryStore
@@ -26,6 +31,7 @@ module Anthropic
 
   struct BetaMemoryStoreListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaManagedAgentsMemoryStore)
 
     # Opaque cursor for the next page, if any
@@ -68,6 +74,7 @@ module Anthropic
 
   struct BetaMemoryListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaManagedAgentsMemory)
 
     # Opaque cursor for the next page, if any
@@ -117,6 +124,7 @@ module Anthropic
 
   struct BetaMemoryVersionListResponse
     include JSON::Serializable
+    include PageCursorMethods
     getter data : Array(BetaManagedAgentsMemoryVersion)
 
     # Opaque cursor for the next page, if any

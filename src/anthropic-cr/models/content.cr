@@ -231,8 +231,24 @@ module Anthropic
     getter name : String
     getter input : JSON::Any
 
-    def initialize(@id : String, @name : String, @input : JSON::Any)
+    @[JSON::Field(key: "toolset_name", emit_null: false)]
+    getter toolset_name : String?
+
+    @[JSON::Field(key: "caller", converter: Anthropic::ToolCallerConverter, emit_null: false)]
+    getter caller_info : ToolCaller?
+
+    def initialize(
+      @id : String,
+      @name : String,
+      @input : JSON::Any,
+      @toolset_name : String? = nil,
+      @caller_info : ToolCaller? = nil,
+    )
       @type = "tool_use"
+    end
+
+    def caller : String?
+      @caller_info.try(&.type)
     end
 
     # Parse input into a typed struct
@@ -285,11 +301,15 @@ module Anthropic
     @[JSON::Field(key: "cache_control", emit_null: false)]
     getter cache_control : CacheControl?
 
+    @[JSON::Field(key: "toolset_name", emit_null: false)]
+    getter toolset_name : String?
+
     def initialize(
       @tool_use_id : String,
       @content : String | Array(ToolResultBlockContent)? = nil,
       @is_error : Bool? = nil,
       @cache_control : CacheControl? = nil,
+      @toolset_name : String? = nil,
     )
       @type = "tool_result"
     end
@@ -877,7 +897,7 @@ module Anthropic
     end
   end
 
-  alias ToolResultBlockContent = TextContent | ImageContent | DocumentContent | SearchResultContent | ToolReferenceContent
+  alias ToolResultBlockContent = TextContent | ImageContent | DocumentContent | SearchResultContent | ToolReferenceContent | BrowserStateContent
 
   module ToolResultBlockContentConverter
     def self.from_json(pull : JSON::PullParser) : ToolResultBlockContent
@@ -896,6 +916,8 @@ module Anthropic
         SearchResultContent.from_json(raw)
       when "tool_reference"
         ToolReferenceContent.from_json(raw)
+      when "browser_state"
+        BrowserStateContent.from_json(raw)
       else
         TextContent.new(text: raw)
       end
@@ -1518,6 +1540,11 @@ module Anthropic
     # Lets the model decide how much thinking to use based on the task.
     def self.adaptive(display : String? = nil) : self
       new(type: "adaptive", display: display)
+    end
+
+    # Interleaved thinking evaluated only between tool calls.
+    def self.between_tools : self
+      new(type: "between_tools")
     end
   end
 

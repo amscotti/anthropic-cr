@@ -28,7 +28,10 @@ describe Anthropic::Messages do
       parsed.parsed_output.city.should eq("Paris")
       parsed.parsed_output.temperature_c.should eq(21)
       parsed.message.should be_a(Anthropic::Message)
-      capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::STRUCTURED_OUTPUT_BETA)
+      headers = capture.headers.not_nil!
+      if beta = headers["anthropic-beta"]?
+        beta.should_not contain(Anthropic::STRUCTURED_OUTPUT_BETA)
+      end
 
       body = JSON.parse(capture.body.not_nil!)
       body["output_config"]["format"]["type"].as_s.should eq("json_schema")
@@ -218,34 +221,19 @@ describe Anthropic::Messages do
       body["system"].as_s.should eq("You are a helpful assistant.")
     end
 
-    it "sends temperature" do
+    it "sends speed" do
       capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
         model: "claude-sonnet-4-6",
         max_tokens: 100,
-        temperature: 0.7,
+        speed: "fast",
         messages: [{role: "user", content: "Hello"}]
       )
 
       body = JSON.parse(capture.body.not_nil!)
-      body["temperature"].as_f.should eq(0.7)
-    end
-
-    it "sends top_p" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
-
-      client = Anthropic::Client.new(api_key: "sk-ant-test")
-      client.messages.create(
-        model: "claude-sonnet-4-6",
-        max_tokens: 100,
-        top_p: 0.9,
-        messages: [{role: "user", content: "Hello"}]
-      )
-
-      body = JSON.parse(capture.body.not_nil!)
-      body["top_p"].as_f.should eq(0.9)
+      body["speed"].as_s.should eq("fast")
     end
 
     it "sends stop_sequences" do
@@ -544,7 +532,9 @@ describe Anthropic::Messages do
       body["diagnostics"]["previous_message_id"].as_s.should eq("msg_123")
 
       headers = capture.headers.not_nil!
-      headers["anthropic-beta"].should contain(Anthropic::CACHE_DIAGNOSTICS_BETA)
+      if beta = headers["anthropic-beta"]?
+        beta.should_not contain(Anthropic::CACHE_DIAGNOSTICS_BETA)
+      end
     end
 
     it "parses diagnostics response correctly" do

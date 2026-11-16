@@ -29,34 +29,36 @@ message.text_blocks.each { |block| puts block.text }
 puts "-" * 50
 puts
 
-puts "Example: Temperature variation (creative vs analytical)..."
+puts "Example: Output effort variation (concise vs thorough)..."
 puts
 
-# Low temperature (analytical)
-puts "Low temperature (0.2) - more focused:"
+# Low effort (concise / fast)
+puts "Low effort - concise answer:"
 puts "-" * 50
-analytical = client.messages.create(
+concise = client.messages.create(
   model: Anthropic::Model::CLAUDE_SONNET_4_6,
-  max_tokens: 100,
-  temperature: 0.2,
+  max_tokens: 200,
+  system: "Answer directly in one short sentence.",
+  output_config: Anthropic::OutputConfig.new(effort: "low"),
   messages: [
     {role: "user", content: "What is 2+2?"},
   ]
 )
-analytical.text_blocks.each { |block| puts block.text }
+concise.text_blocks.each { |block| puts block.text }
 puts "-" * 50
 puts
 
-# High temperature (creative)
-puts "High temperature (1.0) - more creative:"
+# High effort (detailed / creative)
+puts "High effort - creative brainstorming:"
 puts "-" * 50
-creative = client.messages.create(
+detailed = client.messages.create(
   model: Anthropic::Model::CLAUDE_SONNET_4_6,
-  max_tokens: 100,
-  temperature: 1.0,
+  max_tokens: 300,
+  system: "You are a brand strategist who explains the story behind each name.",
+  output_config: Anthropic::OutputConfig.new(effort: "high"),
   messages: [
     {role: "user", content: "Give me a creative name for a coffee shop."},
   ]
 )
-creative.text_blocks.each { |block| puts block.text }
+detailed.text_blocks.each { |block| puts block.text }
 puts "-" * 50

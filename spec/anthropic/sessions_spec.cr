@@ -128,7 +128,7 @@ end
 describe "BetaSessionEvents#stream (end-to-end call)" do
   it "yields each session event as JSON::Any through the resource method" do
     body = "event: event_start\ndata: {\"type\":\"event_start\",\"event\":{\"id\":\"evt_1\",\"type\":\"agent.message\"}}\n\nevent: event_delta\ndata: {\"type\":\"event_delta\",\"event_id\":\"evt_1\",\"delta\":{\"content\":{\"text\":\"hi\",\"type\":\"text\"},\"type\":\"content_delta\",\"index\":0}}\n\n"
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?beta=true&event_deltas=agent.message")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/events/stream?event_deltas[]=agent.message")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -149,7 +149,7 @@ describe "BetaSessionEvents#stream (end-to-end call)" do
 
   it "streams thread events as JSON::Any" do
     body = "event: agent.message\ndata: {\"type\":\"agent.message\",\"id\":\"evt_9\",\"content\":[]}\n\n"
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/threads/thread_1/stream?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/threads/thread_1/stream")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -162,7 +162,7 @@ describe "BetaSessionEvents#stream (end-to-end call)" do
 
   it "passes event_deltas as repeated query params on thread stream" do
     body = "event: event_start\ndata: {\"type\":\"event_start\",\"event\":{\"id\":\"evt_t\",\"type\":\"agent.message\"}}\n\n"
-    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/threads/thread_1/stream?beta=true&event_deltas=agent.message")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/sessions/sess_1/threads/thread_1/stream?event_deltas[]=agent.message")
       .to_return(body: body, headers: {"Content-Type" => "text/event-stream"})
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 

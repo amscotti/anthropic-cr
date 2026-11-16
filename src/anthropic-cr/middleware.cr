@@ -48,14 +48,22 @@ module Anthropic
     getter headers : HTTP::Headers
     getter body : String?
     getter metadata : Hash(String, JSON::Any)
+    getter? beta : Bool
 
-    def initialize(@method : String, @path : String, @headers : HTTP::Headers, @body : String? = nil, @metadata = {} of String => JSON::Any)
+    def initialize(
+      @method : String,
+      @path : String,
+      @headers : HTTP::Headers,
+      @body : String? = nil,
+      @metadata = {} of String => JSON::Any,
+      @beta : Bool = false,
+    )
     end
 
     # Derive a copy with overridden fields. Passing `nil` (or omitting) a field
     # keeps the original value — a body cannot be cleared through this method.
-    def with(*, method : String? = nil, path : String? = nil, headers : HTTP::Headers? = nil, body : String? = nil) : APIRequest
-      APIRequest.new(method || @method, path || @path, headers || @headers, body || @body, @metadata)
+    def with(*, method : String? = nil, path : String? = nil, headers : HTTP::Headers? = nil, body : String? = nil, beta : Bool? = nil) : APIRequest
+      APIRequest.new(method || @method, path || @path, headers || @headers, body || @body, @metadata, beta.nil? ? @beta : beta)
     end
   end
 

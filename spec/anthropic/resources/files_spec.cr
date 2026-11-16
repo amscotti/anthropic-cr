@@ -101,12 +101,12 @@ describe Anthropic::Files do
     end
 
     it "passes ids, page, and workspace parameters" do
-      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/files?limit=20&ids=file_a&ids=file_b&page=cursor_1", Fixtures::Responses::FILE_LIST)
+      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/files?limit=20&ids[]=file_a&ids[]=file_b&page=cursor_1", Fixtures::Responses::FILE_LIST)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.files.list(ids: ["file_a", "file_b"], page: "cursor_1", workspace_id: "wrkspc_1")
 
-      capture.path.not_nil!.should contain("ids=file_a&ids=file_b")
+      capture.path.not_nil!.should contain("ids%5B%5D=file_a&ids%5B%5D=file_b")
       capture.path.not_nil!.should contain("page=cursor_1")
       capture.headers.not_nil!["anthropic-workspace-id"].should eq("wrkspc_1")
     end
@@ -181,8 +181,7 @@ end
 describe Anthropic::BetaFiles do
   describe "#list" do
     it "makes correct request to list files" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/files?beta=true&limit=20")
-        .with(headers: {"anthropic-beta" => "files-api-2025-04-14"})
+      WebMock.stub(:get, "https://api.anthropic.com/v1/files?limit=20")
         .to_return(body: Fixtures::Responses::FILE_LIST)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -192,8 +191,7 @@ describe Anthropic::BetaFiles do
     end
 
     it "passes limit parameter" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/files?beta=true&limit=5")
-        .with(headers: {"anthropic-beta" => "files-api-2025-04-14"})
+      WebMock.stub(:get, "https://api.anthropic.com/v1/files?limit=5")
         .to_return(body: Fixtures::Responses::FILE_LIST)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -203,8 +201,7 @@ describe Anthropic::BetaFiles do
     end
 
     it "passes pagination parameters" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/files?beta=true&limit=10&page=cursor_9")
-        .with(headers: {"anthropic-beta" => "files-api-2025-04-14"})
+      WebMock.stub(:get, "https://api.anthropic.com/v1/files?limit=10&page=cursor_9")
         .to_return(body: Fixtures::Responses::FILE_LIST)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -214,7 +211,7 @@ describe Anthropic::BetaFiles do
     end
 
     it "passes ids, page, scope, betas, and workspace parameters" do
-      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/files?beta=true&limit=20&ids=file_a&page=cursor_1&scope_id=scope_1", Fixtures::Responses::FILE_LIST)
+      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/files?limit=20&ids[]=file_a&page=cursor_1&scope_id=scope_1", Fixtures::Responses::FILE_LIST)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.beta.files.list(
@@ -225,20 +222,18 @@ describe Anthropic::BetaFiles do
         workspace_id: "wrkspc_1"
       )
 
-      capture.path.not_nil!.should contain("beta=true")
-      capture.path.not_nil!.should contain("ids=file_a")
+      capture.path.not_nil!.should_not contain("beta=true")
+      capture.path.not_nil!.should contain("ids%5B%5D=file_a")
       capture.path.not_nil!.should contain("scope_id=scope_1")
       headers = capture.headers.not_nil!
-      headers["anthropic-beta"].should contain("custom-beta")
-      headers["anthropic-beta"].should contain("files-api-2025-04-14")
+      headers["anthropic-beta"].should eq("custom-beta")
       headers["anthropic-workspace-id"].should eq("wrkspc_1")
     end
   end
 
   describe "#retrieve_metadata" do
     it "makes correct request to retrieve file metadata" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/files/file_01abc123?beta=true")
-        .with(headers: {"anthropic-beta" => "files-api-2025-04-14"})
+      WebMock.stub(:get, "https://api.anthropic.com/v1/files/file_01abc123")
         .to_return(body: Fixtures::Responses::FILE_METADATA)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -249,8 +244,7 @@ describe Anthropic::BetaFiles do
     end
 
     it "keeps retrieve as an alias" do
-      WebMock.stub(:get, "https://api.anthropic.com/v1/files/file_01abc123?beta=true")
-        .with(headers: {"anthropic-beta" => "files-api-2025-04-14"})
+      WebMock.stub(:get, "https://api.anthropic.com/v1/files/file_01abc123")
         .to_return(body: Fixtures::Responses::FILE_METADATA)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -260,8 +254,7 @@ describe Anthropic::BetaFiles do
 
   describe "#delete" do
     it "makes correct request to delete file" do
-      WebMock.stub(:delete, "https://api.anthropic.com/v1/files/file_01abc123?beta=true")
-        .with(headers: {"anthropic-beta" => "files-api-2025-04-14"})
+      WebMock.stub(:delete, "https://api.anthropic.com/v1/files/file_01abc123")
         .to_return(body: Fixtures::Responses::FILE_DELETED)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
@@ -274,7 +267,7 @@ describe Anthropic::BetaFiles do
 
   describe "#download" do
     it "makes correct request to download file content" do
-      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/files/file_01abc123/content?beta=true", "Hello, this is file content!")
+      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/files/file_01abc123/content", "Hello, this is file content!")
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       content = client.beta.files.download("file_01abc123")
@@ -283,13 +276,13 @@ describe Anthropic::BetaFiles do
       content.to_s.should eq("Hello, this is file content!")
       headers = capture.headers.not_nil!
       headers["accept"].should eq("application/binary")
-      headers["anthropic-beta"].should contain("files-api-2025-04-14")
+      headers.has_key?("anthropic-beta").should be_false
     end
   end
 
   describe "#upload" do
     it "posts to the beta endpoint with expiry" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/files?beta=true", Fixtures::Responses::FILE_METADATA)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/files", Fixtures::Responses::FILE_METADATA)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       file = client.beta.files.upload(
@@ -300,7 +293,7 @@ describe Anthropic::BetaFiles do
 
       file.id.should eq("file_01abc123")
       capture.body.not_nil!.should contain("expires_in_seconds")
-      capture.headers.not_nil!["anthropic-beta"].should contain("files-api-2025-04-14")
+      capture.headers.not_nil!.has_key?("anthropic-beta").should be_false
     end
   end
 end

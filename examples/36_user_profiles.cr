@@ -1,16 +1,13 @@
 require "../src/anthropic-cr"
 require "dotenv"
 
-# User Profiles API example (beta)
+# User Profiles API example (GA `client.user_profiles` + beta `client.beta.user_profiles`)
 #
 # User profiles scope per-end-user state (memory, trust grants, etc.) to a
-# specific user of your application. Once you have a profile id you can
-# pass it via `user_profile_id:` on beta `messages.create` calls so that
-# per-user features attach to the right end user.
-#
-# Requires the beta header `user-profiles-2026-03-24`, which the SDK adds
-# automatically when you call `client.beta.user_profiles` or pass
-# `user_profile_id:` to a beta message call.
+# specific user of your application. As of v0.12.0 (`2026-10-21`), core User
+# Profiles management and `action_urls` are GA via `client.user_profiles`, while
+# `client.beta.user_profiles` (`user-profiles-2026-08-18` / `2026-09-04`)
+# preserves legacy `external_id` and `create_enrollment_url` helpers.
 #
 # Run with:
 #   crystal run examples/36_user_profiles.cr

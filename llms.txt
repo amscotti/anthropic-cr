@@ -5,14 +5,14 @@ This document provides comprehensive information for working with the anthropic-
 ## Library Metadata
 
 - **Library name:** `anthropic-cr`
-- **Current version:** 0.11.0
-- **Anthropic API version:** `2023-06-01`
+- **Current version:** 0.12.0
+- **Anthropic API version:** `2026-10-21`
 - **Crystal requirement:** `>= 1.18.2`
 - **Repository:** https://github.com/amscotti/anthropic-cr
 - **License:** MIT
 - **Top-level module:** `Anthropic` (note: *not* `Anthropic::CR`)
 - **Entry point:** `src/anthropic-cr.cr`
-- **Tracks:** late-September 2026 release of the official Python (1.8.0) / Ruby (1.73.0) / TypeScript (0.128.0) SDKs
+- **Tracks:** `2026-10-21` release of the official Python (2.8.0) / Ruby (2.8.0) / TypeScript (1.8.0) SDKs
 
 ### Terminology / Synonyms
 
@@ -26,6 +26,26 @@ The following terms are used interchangeably in this document and in the SDK. Us
 - "messages API" = "chat completions" (Anthropic's equivalent of chat completions)
 - "SSE" = "Server-Sent Events" = "streaming"
 - "task budget" = "token task budget" = "session budget"
+
+## What's New in 0.12.0 (November 2026)
+
+Tracks the `2026-10-21` release of the official Python (2.8.0), Ruby (2.8.0), and TypeScript (1.8.0) SDKs.
+
+### Breaking changes (`2026-10-21`)
+- `Client::API_VERSION` bumped to `"2026-10-21"`. API key auth sends `Authorization: Bearer <api_key>` instead of `x-api-key`; passing both `api_key` and `auth_token` explicitly raises `ArgumentError`.
+- `?beta=true` query strings removed from all beta endpoints (`BetaRefusalFallbackMiddleware` matches `request.beta?`).
+- Removed `client.completions` (`/v1/complete`), sampling params (`temperature`, `top_k`, `top_p`), and client-side `CompactionConfig` (server-side `SummarizeCompaction` / `compact_before_next_turn` remain).
+- Renamed 413 `PayloadTooLargeError` to `ContentTooLargeError` (keeping `alias PayloadTooLargeError = ContentTooLargeError`); added `RequestTimeoutError` (408), `PreconditionFailedError` (412), `RequestHeaderFieldsTooLargeError` (431), `ClientClosedRequestError` (499), `HTTPNotImplementedError < InternalServerError` (501 — never `Anthropic::NotImplementedError`), `ServiceUnavailableError` (503), `ConfigurationError`, and reparented `504`/`529` under `InternalServerError`.
+- Removed `betas:` from GA `client.models.{list,retrieve}`; stopped auto-attaching `STRUCTURED_OUTPUT_BETA`, `CACHE_DIAGNOSTICS_BETA`, and `USER_PROFILES_BETA` on GA `Messages`/`Batches`; `BetaFiles`/`BetaSkills` no longer force-attach beta headers; `BetaDreams` sends only `DREAMING_BETA` and `BetaMemoryStores` sends only `AGENT_MEMORY_BETA`.
+- `GoogleCloud::Client` derived invoke URL switched from `/v1alpha/` to `/v1/`; `Bedrock::Client` and `Vertex::Client` read `anthropic-version` (`2026-10-21`) into body `"anthropic_version"` and delete the outbound header.
+
+### New features & GA graduations
+- **Models**: `CLAUDE_SONNET_5_5`, `CLAUDE_HAIKU_5_5`, `CLAUDE_FABLE_5_2`, `CLAUDE_MYTHOS_5_2` (+ shorthands); `CLAUDE_SONNET_4_5` deprecated (EOL Nov 30, 2026); `ModelInfo` `lifecycle`/`line`/`deprecated_at`/`retires_at`; `Models#list(lifecycle:)`; `ServerToolsCapability`; `ThinkingTypes#between_tools`/`#disabled`; `ThinkingConfig.between_tools`; GA `speed`.
+- **Beta Message Threads (`message-threads-2026-08-12`)**: `client.beta.messages.thread(...)` / `BetaMessageThread` (`append`, `update`, `fork`, `send`, `parse`, `stream`, `open_stream`, `tool_runner`, container adoption, `cache_control`-stripping replay recovery, `continue_unthreaded`), default threading in `BetaMessages#tool_runner` (`thread: false` opts out), `BetaThreadParam` on `BetaMessages`/`BetaBatchRequestParams`.
+- **Browser & Computer Toolsets (`20260801`)**: `BrowserToolset20260801`, `ComputerToolset20260801`, typed `BrowserToolUse`/`ComputerToolUse` action parsers, `toolset_name` propagation, and `BrowserStateContent`.
+- **GA User Profiles (`client.user_profiles`)**: Full CRUD + `delete` + `action_urls.create`, enforcement actions, `cyber`/`efs` programs, `user_profile.*` webhook events; `BetaUserProfiles` updated with `delete` & `action_urls.create`.
+- **GA & Beta Organization Admin**: GA `client.organization` (+ `rbac_groups`, `rbac_roles`, `spend_limits.effective`/`increase_requests`, enterprise `analytics`), plus Beta `client.beta.organization` (`users.sign_out`, `spend_limits` CRUD, `analytics.{usage,cost}` + `ReportPageCursor`, `plugins` & `plugin_marketplaces`, `telemetry_destinations`, `webhooks`, `claude_tag`).
+- **Errors, Managed Agents, & Cloud Providers**: `APIError#api_message`/`error_code`/`details` and 98-entry `ERROR_CLASSES`; Managed Agents `execution_identity`, `multiagent_20261001`, `workflow_run.*` events, idle `refusal` + `SessionRunner` fix, `BetaTunnel#transport`; `supports_message_threads?` and `with_options` across all 5 provider clients (`Bedrock`/`Mantle`/`Vertex` raise `::NotImplementedError` on `user_profiles` & `organization`; `GoogleCloud::Client` routes `/v1/{organizations/,user_profiles}` to `claudeOrganization/invoke` without `workspace_id`).
 
 ## What's New in 0.11.0 (September 2026)
 
@@ -218,7 +238,9 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - Models API for listing/retrieving models (rich capabilities including `xhigh` effort)
 - Beta Files API for file uploads/downloads
 - Beta Skills API (full CRUD for skills and skill versions via `client.beta.skills`)
-- **Beta User Profiles API** — create / retrieve / update / list + enrollment URLs via `client.beta.user_profiles`; `user_profile_id:` sent as the `anthropic-user-profile-id` request header on beta messages
+- **GA User Profiles API** — create / retrieve / update / list / delete + `action_urls.create` via `client.user_profiles` (`client.beta.user_profiles` keeps beta `external_id` / `create_enrollment_url`); `user_profile_id:` sent via `anthropic-user-profile-id` header
+- **GA & Beta Organization Admin API** — GA `client.organization` + Beta `client.beta.organization` extensions
+- **Beta Message Threads & Toolsets** — `BetaMessageThread` (`client.beta.messages.thread`), `BrowserToolset20260801`, `ComputerToolset20260801`, `BrowserStateContent`
 - **Managed Agents API** — full environments, memory stores, agents, vaults/credentials, stateful sessions, threads, events, deployments, deployment runs, dreams, MCP tunnels, and secure webhook verification via `client.beta`
 - **Server-side refusal fallbacks** — `fallbacks:` (array chain or `"default"`) + `server-side-fallback-2026-07-01` beta; object-form credit tokens; client-side fallbacks via `Anthropic::BetaRefusalFallbackMiddleware` (`fallback-credit-2026-07-01`)
 - **Tool addition / removal** — mid-conversation `tool_addition` / `tool_removal` blocks; tool runner folds them into available tools
@@ -250,11 +272,11 @@ The anthropic-cr library is an unofficial Anthropic API client for Crystal. It p
 - Compaction streaming delta for context management
 - Usage enrichments: CacheCreation breakdown (ephemeral TTL tokens), `inference_geo` on Usage
 - Legacy tool versions (October 2024): `BashToolLegacy`, `TextEditorToolLegacy`, `ComputerUseToolLegacy`
-- **Full error hierarchy** — `BadRequestError` (400), `AuthenticationError` (401), `PermissionDeniedError` (403), `NotFoundError` (404), `ConflictError` (409), `PayloadTooLargeError` (413), `UnprocessableEntityError` (422), `RateLimitError` (429), `InternalServerError` (5xx), `GatewayTimeoutError` (504), `OverloadedError` (529) — all carry `error_type` parsed from the `error.type` envelope
+- **Full error hierarchy** — `BadRequestError` (400), `AuthenticationError` (401), `PermissionDeniedError` (403), `NotFoundError` (404), `RequestTimeoutError` (408), `ConflictError` (409), `PreconditionFailedError` (412), `ContentTooLargeError` (413, alias `PayloadTooLargeError`), `UnprocessableEntityError` (422), `RateLimitError` (429), `RequestHeaderFieldsTooLargeError` (431), `ClientClosedRequestError` (499), `InternalServerError` (500+), `HTTPNotImplementedError` (501), `ServiceUnavailableError` (503), `GatewayTimeoutError` (504), `OverloadedError` (529), and 98-entry `(status, error_code)` subclass dispatch (`ERROR_CLASSES`) carrying `error_type`, `api_message`, `error_code`, `details`, and `request_id`
 - **Structured `stop_details`** — `RefusalStopDetails` plus `GenericStopDetails` fallback for future variants
 - Comprehensive error handling with automatic retries (408, 409, 429, 5xx, 529)
 
-**Status**: Feature complete for core functionality. Tracks late-September 2026 (Python 1.8.0 / Ruby 1.73.0 / TypeScript 0.128.0).
+**Status**: Feature complete for core functionality. Tracks `2026-10-21` (Python 2.8.0 / Ruby 2.8.0 / TypeScript 1.8.0).
 
 ---
 
@@ -312,16 +334,21 @@ end
 
 ```
 src/anthropic-cr/
-├── client.cr              # HTTP client with retry logic
-├── errors.cr              # Error hierarchy (APIError, RateLimitError, PayloadTooLargeError, OverloadedError, GatewayTimeoutError, etc.)
+├── client.cr              # HTTP client with retry logic (API_VERSION 2026-10-21, Bearer auth)
+├── errors.cr              # Core error hierarchy (APIError, ConfigurationError, ContentTooLargeError, HTTPNotImplementedError, etc.)
+├── error_classes.cr       # 98-entry (status, error_code) subclass & ErrorDetails dispatch
+├── pagination.cr          # PageCursorMethods & ReportPageCursor(T)
 ├── schema.cr              # Schema DSL for tool definitions
+├── threads.cr             # BetaMessageThread state & replay recovery
 ├── models/                # Type definitions
 │   ├── content.cr         # Content block types (Text, Image, Tool, Citation variants, Advisor blocks, etc.)
 │   ├── message.cr         # Message, MessageParam, RefusalStopDetails, GenericStopDetails, StopDetails union
-│   ├── params.cr          # Request parameter structs (includes BetaTokenTaskBudget)
+│   ├── params.cr          # Request parameter structs (includes BetaTokenTaskBudget, speed, thread)
 │   ├── role.cr            # Role enum
 │   ├── usage.cr           # Usage struct
-│   └── model_info.cr      # Model information (includes xhigh effort capability)
+│   ├── user_profiles.cr   # GA UserProfile models (enforcement actions, cyber/efs programs)
+│   ├── organization*.cr   # GA & Beta Organization Admin, RBAC, SpendLimits, Analytics, Plugins, Extensions
+│   └── model_info.cr      # Model information (lifecycle, line, capabilities incl. server_tools & between_tools)
 ├── resources/             # API resources
 │   ├── file_upload.cr     # FileUpload struct for multipart uploads
 │   ├── messages.cr        # Messages API
@@ -329,15 +356,17 @@ src/anthropic-cr/
 │   ├── models.cr          # Models API
 │   ├── files.cr           # Files API (beta)
 │   ├── skills.cr          # Skills API (beta)
-│   ├── user_profiles.cr   # User Profiles API (beta)
+│   ├── user_profiles.cr   # User Profiles API (GA + beta)
+│   ├── organization*.cr   # Organization Admin API (GA + beta)
 │   └── beta.cr            # Beta namespace for beta features
 ├── streaming/             # SSE streaming
-│   ├── events.cr          # Event types (includes encrypted_content on CompactionDelta)
+│   ├── events.cr          # Event types (includes encrypted_content on CompactionDelta, UnknownStreamEvent)
 │   └── stream.cr          # MessageStream with iterators; raises typed APIError on SSE error events
 ├── tools/                 # Tool system
 │   ├── tool.cr            # Tool base class, InlineTool, TypedTool
 │   ├── tool_choice.cr     # ToolChoice types
-│   ├── server_tools.cr    # Server-side tools (WebSearch, AdvisorTool, all code_execution / text_editor variants, etc.)
+│   ├── server_tools.cr    # Server-side tools & all beta constants
+│   ├── toolsets.cr        # BrowserToolset20260801, ComputerToolset20260801, BrowserStateContent
 │   └── runner.cr          # Automatic tool execution loop
 └── version.cr
 ```
@@ -397,12 +426,15 @@ client = Anthropic::Client.new(
 # Core resources
 client.messages             # Messages API
 client.models               # Models API
+client.user_profiles        # GA User Profiles API
+client.organization         # GA Organization Admin API
 client.beta                 # Beta namespace
-client.beta.messages        # Beta Messages API (tool_runner, user_profile_id, task_budget, etc.)
+client.beta.messages        # Beta Messages API (thread, tool_runner, task_budget, etc.)
 client.beta.models          # Beta Models API
 client.beta.files           # Beta Files API
 client.beta.skills          # Beta Skills API
 client.beta.user_profiles   # Beta User Profiles API
+client.beta.organization    # Beta Organization Admin API (+ plugins, telemetry, webhooks, claude_tag)
 ```
 
 ### Custom Base URL (Alternative Providers)
@@ -508,18 +540,18 @@ client.messages.create(
   max_tokens: Int32,                    # Maximum tokens to generate
   messages: Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
   system: String | Array(TextContent)?, # System prompt
-  temperature: Float64?,                # Temperature (0.0-1.0)
-  top_p: Float64?,                      # Top-p sampling
-  top_k: Int32?,                        # Top-k sampling
   tools: Array(Tool)?,                  # User-defined tools
-  server_tools: Array(ServerTool)?,     # Server-side tools (WebSearch, etc.)
+  server_tools: Array(ServerTool)?,     # Server-side tools (WebSearch, BrowserToolset20260801, etc.)
   tool_choice: ToolChoice?,             # How to use tools
   stop_sequences: Array(String)?,       # Stop sequences
   metadata: Metadata?,                    # Request metadata (user_id)
   service_tier: String?,                # Service tier
-  thinking: ThinkingConfig?,            # Extended thinking configuration
+  speed: String?,                       # "standard" or "fast"
+  thinking: ThinkingConfig?,            # Extended thinking (enabled, adaptive, between_tools, disabled)
   output_config: OutputConfig?,         # Effort level and output format
-  inference_geo: String?                # Inference region (e.g. "us")
+  inference_geo: String?,               # Inference region (e.g. "us")
+  workspace_id: String?,                # Workspace ID header override
+  user_profile_id: String?              # User profile ID header override
 )
 ```
 
@@ -892,19 +924,19 @@ while msg = runner.next_message
 end
 ```
 
-### With Auto-Compaction
+### With Server-Side Compaction & Message Threads
+
+`client.beta.messages.tool_runner` uses `BetaMessageThread` automatically when `client.supports_message_threads?` is true (`thread: false` opts out), and supports explicit server-side compaction via `compact_before_next_turn` and `SummarizeCompaction`:
 
 ```crystal
-compaction = Anthropic::CompactionConfig.enabled(threshold: 3000) do |before, after|
-  puts "Compacted: #{before} -> #{after} tokens"
-end
-
 runner = client.beta.messages.tool_runner(
-  model: Anthropic::Model::CLAUDE_SONNET_4_6,
+  model: Anthropic::Model::CLAUDE_SONNET_5_5,
   max_tokens: 1024,
   messages: messages,
-  tools: tools,
-  compaction: compaction
+  tools: tools
+)
+runner.compact_before_next_turn(
+  Anthropic::SummarizeCompaction.new(instructions: "Preserve key facts.")
 )
 ```
 
@@ -934,7 +966,7 @@ end
 
 ### Beta Namespace
 
-Beta features are accessed via `client.beta.messages`, `client.beta.models`, `client.beta.files`, `client.beta.skills`, and `client.beta.user_profiles`.
+Beta features are accessed via `client.beta.messages`, `client.beta.models`, `client.beta.files`, `client.beta.skills`, `client.beta.user_profiles`, and `client.beta.organization`.
 
 Beta-only params on `client.beta.messages.create` / `stream` / `open_stream` / `count_tokens`:
 
@@ -946,18 +978,20 @@ client.beta.messages.create(
 
   # Beta-only parameters
   betas: [String]?,                             # Explicit beta headers (auto-merged with tool headers)
-  speed: String?,                               # "fast" (with FAST_MODE_BETA) or default
   output_schema: BaseOutputSchema?,             # Structured outputs
   output_format: OutputFormat?,                 # Direct JSON schema form
   output_config: OutputConfig?,                 # effort + format + task_budget
   context_management: ContextManagementConfig?, # Auto-compaction edits
   container: String | ContainerConfig?,         # Container reuse or skill loading
   mcp_servers: Array(MCPServerDefinition)?,     # Server-side MCP servers
-  user_profile_id: String?,                     # BETA: user-profiles-2026-03-24
+  thread: BetaThreadParam?,                     # Server-side thread create/continue
+  compaction: CompactionParam?,                 # SummarizeCompaction
+  fallbacks: FallbacksParam?,                   # Refusal fallback chain or "default"
+  user_profile_id: String?,                     # Sent as anthropic-user-profile-id header
 )
 ```
 
-Note: passing `user_profile_id:` automatically adds the `user-profiles-2026-03-24` beta header; passing an `AdvisorTool` in `server_tools:` adds `advisor-tool-2026-03-01`; structured outputs auto-add `structured-outputs-2025-12-15`; etc.
+Note: passing `thread:` automatically adds `message-threads-2026-08-12`; passing an `AdvisorTool` in `server_tools:` adds `advisor-tool-2026-03-01`; `SummarizeCompaction` adds `compact-2026-09-04`; `fallbacks:` adds `server-side-fallback-2026-07-01`. GA `Messages`/`Batches` do not auto-attach `STRUCTURED_OUTPUT_BETA`, `CACHE_DIAGNOSTICS_BETA`, or `USER_PROFILES_BETA`.
 
 ### Structured Outputs
 
@@ -1274,7 +1308,12 @@ Anthropic::Model::CLAUDE_FABLE    # "claude-fable-5"
 Anthropic::Model::CLAUDE_OPUS     # "claude-opus-5"
 Anthropic::Model::CLAUDE_HAIKU    # "claude-haiku-4-5"
 
-# Latest models (July 2026 generation)
+# Latest models (5.5 / 5.2 & July 2026 generations)
+Anthropic::Model::CLAUDE_SONNET_5_5   # "claude-sonnet-5-5"
+Anthropic::Model::CLAUDE_HAIKU_5_5    # "claude-haiku-5-5"
+Anthropic::Model::CLAUDE_FABLE_5_2    # "claude-fable-5-2"
+Anthropic::Model::CLAUDE_MYTHOS_5_2   # "claude-mythos-5-2"
+Anthropic::Model::CLAUDE_OPUS_5_5     # "claude-opus-5-5"
 Anthropic::Model::CLAUDE_SONNET_5     # "claude-sonnet-5"
 Anthropic::Model::CLAUDE_FABLE_5      # "claude-fable-5"
 Anthropic::Model::CLAUDE_MYTHOS_5     # "claude-mythos-5"
@@ -1286,22 +1325,26 @@ Anthropic::Model::CLAUDE_OPUS_4_7     # "claude-opus-4-7"
 Anthropic::Model::CLAUDE_OPUS_4_6     # "claude-opus-4-6"
 Anthropic::Model::CLAUDE_OPUS_4_5     # "claude-opus-4-5-20251101"
 Anthropic::Model::CLAUDE_SONNET_4_6   # "claude-sonnet-4-6"
-Anthropic::Model::CLAUDE_SONNET_4_5   # "claude-sonnet-4-5-20250929"
 Anthropic::Model::CLAUDE_HAIKU_4_5    # "claude-haiku-4-5-20251001"
 
-# Deprecated (EOL August 5, 2026) — migrate to 4.5+ / Sonnet 5+
-Anthropic::Model::CLAUDE_OPUS_4_1
-Anthropic::Model::CLAUDE_SONNET_4
+# Deprecated
+Anthropic::Model::CLAUDE_SONNET_4_5   # EOL November 30, 2026
+Anthropic::Model::CLAUDE_OPUS_4_1     # EOL August 5, 2026
+Anthropic::Model::CLAUDE_SONNET_4     # EOL June 15, 2026
 
 # Model shorthands
-Anthropic.model_name(:sonnet)    # => "claude-sonnet-5"
-Anthropic.model_name(:fable)     # => "claude-fable-5"
-Anthropic.model_name(:mythos)    # => "claude-mythos-5"
-Anthropic.model_name(:opus)      # => "claude-opus-5"
-Anthropic.model_name(:opus_5)    # => "claude-opus-5"
-Anthropic.model_name(:opus_4_8)  # => "claude-opus-4-8"
-Anthropic.model_name(:opus_4_7)  # => "claude-opus-4-7"
-Anthropic.model_name(:haiku)     # => "claude-haiku-4-5-20251001"
+Anthropic.model_name(:sonnet)      # => "claude-sonnet-5"
+Anthropic.model_name(:sonnet_5_5)  # => "claude-sonnet-5-5"
+Anthropic.model_name(:haiku_5_5)   # => "claude-haiku-5-5"
+Anthropic.model_name(:fable_5_2)   # => "claude-fable-5-2"
+Anthropic.model_name(:mythos_5_2)  # => "claude-mythos-5-2"
+Anthropic.model_name(:fable)       # => "claude-fable-5"
+Anthropic.model_name(:mythos)      # => "claude-mythos-5"
+Anthropic.model_name(:opus)        # => "claude-opus-5"
+Anthropic.model_name(:opus_5_5)    # => "claude-opus-5-5"
+Anthropic.model_name(:opus_4_8)    # => "claude-opus-4-8"
+Anthropic.model_name(:opus_4_7)    # => "claude-opus-4-7"
+Anthropic.model_name(:haiku)       # => "claude-haiku-4-5-20251001"
 ```
 
 ---
@@ -1648,68 +1691,70 @@ message = client.beta.messages.create(
 
 ## User Profiles API
 
-The User Profiles API (beta `user-profiles-2026-03-24`) scopes per-end-user state — memory, trust grants, etc. — to a specific end user of your application. Accessed via `client.beta.user_profiles`. The SDK adds the beta header automatically on all user-profiles calls.
+The User Profiles API is GA via `client.user_profiles` (no beta header), while `client.beta.user_profiles` (`user-profiles-2026-08-18` / `2026-09-04`) preserves legacy `external_id` and `create_enrollment_url` helpers.
 
 ### Create a Profile
 
 ```crystal
-profile = client.beta.user_profiles.create(
-  external_id: "user-123",       # Optional: your platform's id (not enforced unique)
+profile = client.user_profiles.create(
+  access_type: Anthropic::UserProfileAccessType::PASSTHROUGH,
+  name: "Acme User",
+  external_user_details: Anthropic::UserProfileExternalUserDetails.new(reference_id: "user-123"),
   metadata: {"plan" => "pro"}    # Optional: up to 16 key/value pairs
 )
 
-puts profile.id              # => "uprof_..."
-puts profile.external_id     # => "user-123"
+puts profile.id                     # => "uprof_..."
+puts profile.enforcement_status     # => "unrestricted" | "pending" | "restricted" | "banned"
 puts profile.metadata["plan"]
 ```
 
-### Retrieve / Update / List
+### Retrieve / Update / List / Delete
 
 ```crystal
 # Retrieve
-profile = client.beta.user_profiles.retrieve("uprof_01abc")
+profile = client.user_profiles.retrieve("uprof_01abc")
 
 # Update (merges metadata; set a key to "" to remove it)
-profile = client.beta.user_profiles.update(
+profile = client.user_profiles.update(
   "uprof_01abc",
   metadata: {"plan" => "enterprise"}
 )
 
-# List (returns BetaUserProfileListResponse with data + next_page cursor)
-listing = client.beta.user_profiles.list(limit: 20, order: "desc")
+# List (returns UserProfileListResponse with data + next_page cursor)
+listing = client.user_profiles.list(limit: 20, order: "desc")
 listing.data.each { |p| puts p.id }
+
+# Delete
+deleted = client.user_profiles.delete("uprof_01abc")
 ```
 
-### Enrollment URL
+### Action URL
 
-Generate a URL to send to the end user to complete enrollment:
+Generate an action URL (such as end-user enrollment) for a profile:
 
 ```crystal
-enrollment = client.beta.user_profiles.create_enrollment_url(profile.id)
-puts enrollment.url         # URL valid until enrollment.expires_at
-puts enrollment.expires_at
+action_url = client.user_profiles.action_urls.create(
+  profile.id,
+  action: Anthropic::UserProfileEnrollEndUserAction.new
+)
+puts action_url.url         # URL valid until action_url.expires_at
+puts action_url.expires_at
 ```
 
 ### Scoping a Message to a Profile
 
-Pass `user_profile_id:` to a messages call to scope per-user state. The SDK sends it as the `anthropic-user-profile-id` request header (not a JSON body field) and auto-adds the `user-profiles-2026-03-24` beta header:
+Pass `user_profile_id:` to a messages call to scope per-user state. The SDK sends it as the `anthropic-user-profile-id` request header:
 
 ```crystal
-message = client.beta.messages.create(
-  model: Anthropic::Model::CLAUDE_OPUS_4_8,
+message = client.messages.create(
+  model: Anthropic::Model::CLAUDE_SONNET_5_5,
   max_tokens: 512,
   user_profile_id: profile.id,  # Sent as the anthropic-user-profile-id header
   messages: [{role: "user", content: "Welcome back!"}]
 )
 ```
 
-Trust grants returned on a profile are keyed by grant name, each with a `status` of `"active"`, `"pending"`, or `"rejected"`:
-
-```crystal
-profile.trust_grants.each do |name, grant|
-  puts "#{name}: #{grant.status}"
-end
-```
+GA profiles include typed `enforcement_actions` (`UserProfileEnforcementActionRestriction`, `UserProfileEnforcementActionBan`, `GenericUserProfileEnforcementAction`) and `programs` (`cyber`, `efs`). Beta profiles also retain `trust_grants`.
 
 ---
 
@@ -1860,19 +1905,26 @@ end
 
 | Error Type | HTTP Status | Description |
 |------------|-------------|-------------|
-| `BadRequestError` | 400 | Invalid request |
+| `BadRequestError` | 400 | Invalid request (subclassed via `error_code` in `ERROR_CLASSES`) |
 | `AuthenticationError` | 401 | Invalid API key |
 | `PermissionDeniedError` | 403 | Permission denied |
 | `NotFoundError` | 404 | Resource not found |
+| `RequestTimeoutError` | 408 | Request timeout |
 | `ConflictError` | 409 | Conflict |
-| `PayloadTooLargeError` | 413 | Request body exceeds size limits |
+| `PreconditionFailedError` | 412 | Precondition failed |
+| `ContentTooLargeError` | 413 | Request body exceeds size limits (alias `PayloadTooLargeError`) |
 | `UnprocessableEntityError` | 422 | Unprocessable entity |
 | `RateLimitError` | 429 | Rate limited (see `retry_after` seconds) |
+| `RequestHeaderFieldsTooLargeError` | 431 | Request headers too large |
+| `ClientClosedRequestError` | 499 | Client closed request |
 | `InternalServerError` | 500+ | Server error |
-| `GatewayTimeoutError` | 504 | Upstream gateway timeout |
-| `OverloadedError` | 529 | API temporarily overloaded |
+| `HTTPNotImplementedError` | 501 | Not implemented (`< InternalServerError`, never shadows `::NotImplementedError`) |
+| `ServiceUnavailableError` | 503 | Service unavailable (`< InternalServerError`) |
+| `GatewayTimeoutError` | 504 | Upstream gateway timeout (`< InternalServerError`) |
+| `OverloadedError` | 529 | API temporarily overloaded (`< InternalServerError`) |
 | `APIConnectionError` | N/A | Network/connection error |
 | `APITimeoutError` | N/A | Request timed out |
+| `ConfigurationError` | N/A | Invalid client configuration |
 | `StructuredOutputParseError` | N/A | Structured output failed to parse |
 
 ### Rate Limit Errors
@@ -1903,7 +1955,7 @@ rescue Anthropic::APIError => e
 end
 ```
 
-The server's `error.type` values map to classes as follows: `invalid_request_error` → `BadRequestError`, `authentication_error` → `AuthenticationError`, `permission_error` → `PermissionDeniedError`, `not_found_error` → `NotFoundError`, `rate_limit_error` → `RateLimitError`, `request_too_large` → `PayloadTooLargeError`, `overloaded_error` → `OverloadedError`, `timeout_error` / `gateway_timeout_error` → `GatewayTimeoutError`, `api_error` → `InternalServerError`.
+The server's `(status, error_code)` and `error.type` values dispatch through `ERROR_CLASSES` (98 entries) via `Anthropic.build_api_error` and `Anthropic.build_stream_api_error`, populating `api_message`, `error_type`, `error_code`, and typed `details` (`ErrorDetails | JSON::Any?`). For example: `invalid_request_error` → `BadRequestError`, `authentication_error` → `AuthenticationError`, `permission_error` → `PermissionDeniedError`, `not_found_error` → `NotFoundError`, `conflict_error` / `memory_path_conflict_error` → `ConflictError`, `memory_precondition_failed_error` → `PreconditionFailedError`, `request_too_large` → `ContentTooLargeError`, `rate_limit_error` → `RateLimitError`, `overloaded_error` → `OverloadedError`, `timeout_error` / `gateway_timeout_error` → `GatewayTimeoutError`, `api_error` → `InternalServerError`.
 
 ### Retry Behavior
 
@@ -1954,12 +2006,10 @@ messages: Array(MessageParam)    # Conversation messages
 
 # Optional parameters
 system: String | Array(TextContent)?     # System prompt
-temperature: Float64?                     # Sampling temperature (0.0-1.0)
-top_p: Float64?                           # Top-p sampling (0.0-1.0)
-top_k: Int32?                             # Top-k sampling
 stop_sequences: Array(String)?            # Stop sequences
-metadata: Metadata?                      # Request metadata (user_id)
+metadata: Metadata?                       # Request metadata (user_id)
 service_tier: String?                     # Service tier
+speed: String?                            # "standard" or "fast"
 
 # Tools
 tools: Array(Tool)?              # User-defined tools
@@ -2021,13 +2071,13 @@ message = client.messages.create(
 )
 ```
 
-### With Temperature Control
+### With Output Effort
 
 ```crystal
 message = client.messages.create(
-  model: Anthropic::Model::CLAUDE_SONNET_4_6,
+  model: Anthropic::Model::CLAUDE_SONNET_5_5,
   max_tokens: 1024,
-  temperature: 0.7,  # More creative
+  output_config: Anthropic::OutputConfig.new(effort: "high"),
   messages: [{role: "user", content: "Write a creative story"}]
 )
 ```
@@ -2196,7 +2246,7 @@ end
 | Tools parameter | Single `tools` array | Separate `tools:` and `server_tools:` parameters |
 | Streaming | Returns stream object with `.text.each` | Block-based only: `stream(...) { |event| }` |
 | Error headers | `e.headers` | `e.headers` ✅ Same |
-| Request ID | `_request_id` property | Not available |
+| Request ID | `_request_id` property | `e.request_id` on `APIError` ✅ |
 | Custom logger | `logger:` parameter | Not available |
 
 ### Migration Examples
@@ -2349,7 +2399,6 @@ client.beta.messages.tool_runner(
 ### Not Implemented (Post-1.0)
 
 - **Iterator-based streaming**: The `stream` method requires a block; returning a `MessageStream` object is not yet supported due to HTTP connection lifecycle limitations. `open_stream` is the recommended pattern when you want a stream object with accumulated helpers.
-- Per-request options (timeout, retries)
 - Raw HTTP response access
 - Undocumented parameters support
 - Connection pooling configuration
@@ -2376,7 +2425,9 @@ client.beta.messages.tool_runner(
 | `src/anthropic-cr/models/params.cr` | Request parameters including `OutputConfig`, `BetaTokenTaskBudget`, `BetaMessageCreateParams`, `MessageCreateParams` (with `fallbacks` / `fallback_credit_token`) |
 | `src/anthropic-cr/models/role.cr` | Role enum |
 | `src/anthropic-cr/models/usage.cr` | Usage struct (`iterations`, `fallback_credit`, `speed`) |
-| `src/anthropic-cr/models/model_info.cr` | Model constants (`CLAUDE_SONNET_5`, `CLAUDE_FABLE_5`, `CLAUDE_MYTHOS_5`, `CLAUDE_OPUS_5`, `CLAUDE_OPUS_4_8`, ...), `MODEL_SHORTHANDS`, `ModelInfo`, `EffortCapability` (with `xhigh`) |
+| `src/anthropic-cr/models/model_info.cr` | Model constants (`CLAUDE_SONNET_5_5`, `CLAUDE_HAIKU_5_5`, `CLAUDE_FABLE_5_2`, `CLAUDE_MYTHOS_5_2`, `CLAUDE_OPUS_5_5`, `CLAUDE_SONNET_5`, ...), `MODEL_SHORTHANDS`, `ModelInfo` (`lifecycle`, `line`, `server_tools`, `between_tools`), `EffortCapability` |
+| `src/anthropic-cr/models/user_profiles.cr` | GA `UserProfile`, `UserProfileEnforcementAction*`, `UserProfilePrograms`, `BetaUserProfile` |
+| `src/anthropic-cr/models/organization*.cr` | GA & Beta Organization Admin, RBAC, SpendLimits, Analytics, Plugins, Telemetry, Webhooks, Claude Tag |
 | `src/anthropic-cr/models/fallbacks.cr` | `FallbackParam`, `FallbacksParam`, `FallbackCreditToken*`, `FallbackContent`, `FallbackCreditUsage`, `fallbacks_present?` |
 | `src/anthropic-cr/models/dreams.cr` | Dreams API types (`BetaDream`, inputs, model config, usage) |
 | `src/anthropic-cr/models/tunnels.cr` | MCP Tunnels types (`BetaTunnel`, token, certificate) |
@@ -2392,18 +2443,22 @@ client.beta.messages.tool_runner(
 | `src/anthropic-cr/resources/models.cr` | Models API |
 | `src/anthropic-cr/resources/files.cr` | Files API |
 | `src/anthropic-cr/resources/skills.cr` | Skills API (beta) |
-| `src/anthropic-cr/resources/user_profiles.cr` | User Profiles API (beta) |
+| `src/anthropic-cr/resources/user_profiles.cr` | User Profiles API (GA `client.user_profiles` + beta `client.beta.user_profiles`) |
+| `src/anthropic-cr/resources/organization*.cr` | Organization Admin API (GA `client.organization` + beta extensions) |
 | `src/anthropic-cr/resources/deployments.cr` | Deployments + Deployment Runs API (beta) |
 | `src/anthropic-cr/resources/dreams.cr` | Dreams API (beta) |
 | `src/anthropic-cr/resources/tunnels.cr` | MCP Tunnels + certificates API (beta) |
-| `src/anthropic-cr/resources/beta.cr` | Beta namespace (`messages`, `dreams`, `tunnels`, agents, …) |
+| `src/anthropic-cr/resources/beta.cr` | Beta namespace (`messages`, `thread`, `dreams`, `tunnels`, agents, organization, …) |
 
 ### Core / Middleware Files
 
 | File | Purpose |
 |------|---------|
-| `src/anthropic-cr/middleware.cr` | `Middleware` module, `APIRequest`, `APIResponse`, `MiddlewareNext` |
-| `src/anthropic-cr/refusal_fallback_middleware.cr` | `BetaRefusalFallbackMiddleware` (client-side refusal fallbacks) |
+| `src/anthropic-cr/middleware.cr` | `Middleware` module, `APIRequest` (`beta?`), `APIResponse`, `MiddlewareNext` |
+| `src/anthropic-cr/refusal_fallback_middleware.cr` | `BetaRefusalFallbackMiddleware` (client-side refusal fallbacks, `between_tools` degradation, 429/529 speed fallback) |
+| `src/anthropic-cr/error_classes.cr` | 98-entry `(status, error_code)` subclass & `*ErrorDetails` dispatch (`build_api_error`, `build_stream_api_error`) |
+| `src/anthropic-cr/pagination.cr` | `PageCursorMethods`, `ReportPageCursor(T)` |
+| `src/anthropic-cr/threads.cr` | `BetaMessageThread` state, container adoption, replay recovery |
 | `src/anthropic-cr/stainless_helper.cr` | `StainlessHelper` (single-sourced `x-stainless-helper` telemetry header) |
 | `src/anthropic-cr/sessions.cr` | `Sessions.accumulate_managed_agents_event` + delta types |
 | `src/anthropic-cr/streaming/session_event_stream.cr` | Generic SSE stream for Managed Agents events |
@@ -2415,7 +2470,8 @@ client.beta.messages.tool_runner(
 | `src/anthropic-cr/tools/tool.cr` | `Tool`, `InlineTool`, `TypedTool` |
 | `src/anthropic-cr/tools/tool_choice.cr` | `ToolChoice` types |
 | `src/anthropic-cr/tools/server_tools.cr` | Server tools: `WebSearchTool` (+ 20260209, 20260318), `BashTool`, `TextEditorTool` (+ 20250124, 20250429, legacy 20241022), `ComputerUseTool` (+ 20251124, legacy), `WebFetchTool` (+ 20260209, 20260309, 20260318), `MemoryTool`, `CodeExecutionTool` (+ 20250522, 20260120, 20260521), `AdvisorTool`, `MCPTool`, `MCPToolset`, `ToolSearchBM25Tool`, `ToolSearchRegexTool`, and all beta header constants |
-| `src/anthropic-cr/tools/runner.cr` | `ToolRunner` + `ToolDispatch` (mid-conversation tool_addition/removal); tags `x-stainless-helper: BetaToolRunner` |
+| `src/anthropic-cr/tools/toolsets.cr` | `BrowserToolset20260801`, `ComputerToolset20260801`, `BrowserToolUse`, `ComputerToolUse`, `BrowserStateContent` |
+| `src/anthropic-cr/tools/runner.cr` | `ToolRunner` + `ToolDispatch` (default `BetaMessageThread`, mid-conversation tool changes); tags `x-stainless-helper: BetaToolRunner` |
 
 ### Streaming Files
 
@@ -2443,16 +2499,17 @@ Test helpers:
 
 ## Version Information
 
-- **Current Version**: 0.11.0 (September 2026)
-- **API Version**: 2023-06-01
+- **Current Version**: 0.12.0 (November 2026)
+- **API Version**: 2026-10-21
 - **Crystal Version**: >= 1.18.2
-- **Tracks**: late-September 2026 release of the official Python (1.8.0), Ruby (1.73.0), and TypeScript (0.128.0) SDKs
-- **Previous version**: 0.10.0 (September 2026 — Organization Admin API, alternate providers, Completions)
+- **Tracks**: `2026-10-21` release of the official Python (2.8.0), Ruby (2.8.0), and TypeScript (1.8.0) SDKs
+- **Previous version**: 0.11.0 (September 2026 — explicit compaction, runner tool changes, MCP listing pinning)
 
 ### Version History Highlights
 
 | Version | Release | Notable additions |
 |---------|---------|-------------------|
+| 0.12.0 | November 2026 | `2026-10-21` API version + Bearer API key auth; `?beta=true`/Completions/sampling/`CompactionConfig` removals; 5.5/5.2 models + lifecycle; `BetaMessageThread` + default `ToolRunner` threading; Browser/Computer toolsets (`20260801`); GA `user_profiles` + `organization`; beta plugins/telemetry/webhooks/Claude Tag/spend limits/usage & cost reports; 98-entry `ERROR_CLASSES`; Managed Agents workflow runs & `SessionRunner` idle fix; provider `with_options` + `supports_message_threads?`. |
 | 0.11.0 | September 2026 | Explicit compaction; runner tool changes; MCP listing pinning; response tools; input transformations; web-fetch `url_sources`; user external details; data-residency geos; rate-limit groups; September betas. |
 | 0.10.0 | September 2026 | Organization Admin API; AWS / Google Cloud / Vertex providers; legacy Completions; thinking display modes; `workspace_id` headers; session budgets; dream `output_behavior`; user-profile fields; Fable/Mythos 5.1. |
 | 0.9.0 | July 2026 | Opus 5; Dreams + MCP Tunnels; `fallbacks: "default"` + object credit tokens; July fallback betas; tool_addition/removal; managed-agents effort/speed + session `initial_events`. |

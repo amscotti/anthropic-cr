@@ -112,15 +112,32 @@ describe Anthropic::Client do
       headers.has_key?("x-api-key").should be_false
     end
 
-    it "prefers the API key when both credentials are present" do
-      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/models?limit=20", Fixtures::Responses::MODEL_LIST)
+    it "raises ArgumentError when both api_key and auth_token are passed explicitly" do
+      expect_raises(ArgumentError) do
+        Anthropic::Client.new(api_key: "sk-ant-test", auth_token: "oauth-token")
+      end
+    end
 
-      client = Anthropic::Client.new(api_key: "sk-ant-test", auth_token: "oauth-token")
-      client.models.list
+    it "warns once and uses ANTHROPIC_API_KEY when both env vars are set" do
+      with_saved_env("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN") do
+        ENV["ANTHROPIC_API_KEY"] = "sk-ant-env-both"
+        ENV["ANTHROPIC_AUTH_TOKEN"] = "oauth-env-both"
+        Anthropic::Client.reset_dual_credentials_warning!
+        io = IO::Memory.new
+        Anthropic::Client.warning_io = io
+        begin
+          capture = stub_and_capture(:get, "https://api.anthropic.com/v1/models?limit=20", Fixtures::Responses::MODEL_LIST)
+          client1 = Anthropic::Client.new
+          client1.models.list
+          capture.headers.not_nil!["authorization"].should eq("Bearer sk-ant-env-both")
+          capture.headers.not_nil!.has_key?("x-api-key").should be_false
 
-      headers = capture.headers.not_nil!
-      headers["x-api-key"].should eq("sk-ant-test")
-      headers.has_key?("authorization").should be_false
+          _client2 = Anthropic::Client.new
+          io.to_s.scan("ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN are both set").size.should eq(1)
+        ensure
+          Anthropic::Client.warning_io = nil
+        end
+      end
     end
 
     it "accepts custom base URL" do
@@ -190,8 +207,9 @@ describe Anthropic::Client do
       )
 
       headers = capture.headers.not_nil!
-      headers["x-api-key"].should eq("sk-ant-test-key")
-      headers["anthropic-version"].should eq("2023-06-01")
+      headers["authorization"].should eq("Bearer sk-ant-test-key")
+      headers.has_key?("x-api-key").should be_false
+      headers["anthropic-version"].should eq("2026-10-21")
       headers["content-type"].should eq("application/json")
       headers["user-agent"].should start_with("anthropic-crystal/")
     end
@@ -274,7 +292,8 @@ describe Anthropic::Client do
       scoped = client.with_options(api_key: "sk-ant-tenant", base_url: "https://tenant.example.com/")
       scoped.get("/v1/models")
 
-      tenant_capture.headers.not_nil!["x-api-key"].should eq("sk-ant-tenant")
+      tenant_capture.headers.not_nil!["authorization"].should eq("Bearer sk-ant-tenant")
+      tenant_capture.headers.not_nil!.has_key?("x-api-key").should be_false
       tenant_capture.path.should eq("/v1/models")
     end
 
@@ -597,9 +616,10 @@ describe Anthropic::Client do
       headers.should_not be_nil
       headers.not_nil!["anthropic-beta"].should contain(Anthropic::EXTENDED_CACHE_TTL_BETA)
 
-      # Test diagnostics beta
+      # Test diagnostics beta: omitted by default, attached when beta: true
       diag = Anthropic::DiagnosticsParam.new("msg_123")
-      headers = Anthropic.resolve_beta_headers(diagnostics: diag)
+      Anthropic.resolve_beta_headers(diagnostics: diag).should be_nil
+      headers = Anthropic.resolve_beta_headers(diagnostics: diag, beta: true)
       headers.should_not be_nil
       headers.not_nil!["anthropic-beta"].should contain(Anthropic::CACHE_DIAGNOSTICS_BETA)
 
@@ -614,7 +634,8 @@ describe Anthropic::Client do
         betas: ["custom-beta"],
         server_tools: tools,
         cache_control: cache,
-        diagnostics: diag
+        diagnostics: diag,
+        beta: true
       )
       headers.should_not be_nil
       val = headers.not_nil!["anthropic-beta"]

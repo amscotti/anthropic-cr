@@ -16,11 +16,14 @@ module Anthropic
     class Property
       include JSON::Serializable
 
-      getter type : String
+      @[JSON::Field(emit_null: false)]
+      getter type : String?
       @[JSON::Field(emit_null: false)]
       getter description : String?
       @[JSON::Field(key: "enum", emit_null: false)]
       getter enum_values : Array(String)?
+      @[JSON::Field(emit_null: false)]
+      getter const : JSON::Any?
       @[JSON::Field(emit_null: false)]
       getter items : Property?
       @[JSON::Field(emit_null: false)]
@@ -48,9 +51,10 @@ module Anthropic
       getter additional_properties : Bool?
 
       def initialize(
-        @type : String,
+        @type : String? = nil,
         @description : String? = nil,
         @enum_values : Array(String)? = nil,
+        @const : JSON::Any? = nil,
         @items : Property? = nil,
         @properties : Hash(String, Property)? = nil,
         @required : Array(String)? = nil,
@@ -159,12 +163,27 @@ module Anthropic
       *values : String,
       description : String? = nil,
       default : String? = nil,
+      type : String? = "string",
     ) : Property
       Property.new(
-        type: "string",
+        type: type,
         description: description,
         enum_values: values.to_a,
         default: default ? JSON::Any.new(default) : nil
+      )
+    end
+
+    # Define a constant-value property without requiring a `type` field.
+    def self.const(
+      value : String | Int64 | Int32 | Float64 | Bool | Nil,
+      description : String? = nil,
+      type : String? = nil,
+    ) : Property
+      const_any = value.nil? ? JSON::Any.new(nil) : JSON.parse(value.to_json)
+      Property.new(
+        type: type,
+        description: description,
+        const: const_any
       )
     end
 

@@ -50,7 +50,7 @@ module Anthropic
       params = {} of String => JSON::Any
       params["display_name"] = JSON::Any.new(display_name) if display_name
 
-      response = @client.post("/v1/tunnels?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels", params, beta_headers(betas, workspace_id), beta: true)
       BetaTunnel.from_json(response.body)
     end
 
@@ -60,7 +60,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnel
-      response = @client.get("/v1/tunnels/#{tunnel_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaTunnel.from_json(response.body)
     end
 
@@ -77,7 +77,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/tunnels?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/tunnels", query, beta_headers(betas, workspace_id), beta: true)
       BetaTunnelListResponse.from_json(response.body)
     end
 
@@ -88,23 +88,26 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnel
-      response = @client.post("/v1/tunnels/#{tunnel_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/archive", nil, beta_headers(betas, workspace_id), beta: true)
       BetaTunnel.from_json(response.body)
     end
 
-    # Reveal the tunnel's connector token (POST so it stays out of access logs).
-    # Repeated calls return the same value until rotated.
+    # Reveal a `cloudflare` tunnel's connector token (POST so it stays out of
+    # access logs). Repeated calls return the same value until rotated.
+    # A `relay` tunnel refuses with `tunnel_token_not_revealable` (`invalid_request_error`);
+    # use `rotate_token` to obtain a new relay token.
     def reveal_token(
       tunnel_id : String,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaTunnelToken
-      response = @client.post("/v1/tunnels/#{tunnel_id}/reveal_token?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/reveal_token", nil, beta_headers(betas, workspace_id), beta: true)
       BetaTunnelToken.from_json(response.body)
     end
 
-    # Rotate the connector token. Invalidates the current value for new
-    # connections; established connections are not severed.
+    # Rotate the connector token. On `cloudflare` tunnels, invalidates the current
+    # value for new connections while established connections stay open. On `relay`
+    # tunnels, closes existing relay connections and returns the new token once.
     def rotate_token(
       tunnel_id : String,
       reason : String? = nil,
@@ -114,7 +117,7 @@ module Anthropic
       params = {} of String => JSON::Any
       params["reason"] = JSON::Any.new(reason) if reason
 
-      response = @client.post("/v1/tunnels/#{tunnel_id}/rotate_token?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/rotate_token", params, beta_headers(betas, workspace_id), beta: true)
       BetaTunnelToken.from_json(response.body)
     end
   end
@@ -152,9 +155,10 @@ module Anthropic
       params = {"ca_certificate_pem" => ca_certificate_pem}
 
       response = @client.post(
-        "/v1/tunnels/#{tunnel_id}/certificates?beta=true",
+        "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates",
         params,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaTunnelCertificate.from_json(response.body)
     end
@@ -167,9 +171,10 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaTunnelCertificate
       response = @client.get(
-        "/v1/tunnels/#{tunnel_id}/certificates/#{certificate_id}?beta=true",
+        "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates/#{Anthropic.encode_path_segment(certificate_id)}",
         nil,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaTunnelCertificate.from_json(response.body)
     end
@@ -188,9 +193,10 @@ module Anthropic
       query["page"] = page if page
 
       response = @client.get(
-        "/v1/tunnels/#{tunnel_id}/certificates?beta=true",
+        "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates",
         query,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaTunnelCertificateListResponse.from_json(response.body)
     end
@@ -203,9 +209,10 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaTunnelCertificate
       response = @client.post(
-        "/v1/tunnels/#{tunnel_id}/certificates/#{certificate_id}/archive?beta=true",
+        "/v1/tunnels/#{Anthropic.encode_path_segment(tunnel_id)}/certificates/#{Anthropic.encode_path_segment(certificate_id)}/archive",
         nil,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaTunnelCertificate.from_json(response.body)
     end

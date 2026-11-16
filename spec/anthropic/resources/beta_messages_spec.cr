@@ -152,7 +152,7 @@ describe Anthropic::BetaMessages do
     it "posts to the beta token counting endpoint with required betas" do
       capture = stub_and_capture(
         :post,
-        "https://api.anthropic.com/v1/messages/count_tokens?beta=true",
+        "https://api.anthropic.com/v1/messages/count_tokens",
         Fixtures::Responses::TOKEN_COUNT_BASIC
       )
 
@@ -181,7 +181,7 @@ describe Anthropic::BetaMessages do
     it "auto-adds the structured outputs beta header for output_schema" do
       capture = stub_and_capture(
         :post,
-        "https://api.anthropic.com/v1/messages/count_tokens?beta=true",
+        "https://api.anthropic.com/v1/messages/count_tokens",
         Fixtures::Responses::TOKEN_COUNT_BASIC
       )
 

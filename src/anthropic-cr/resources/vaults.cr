@@ -70,7 +70,7 @@ module Anthropic
       params["display_name"] = JSON::Any.new(display_name)
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
 
-      response = @client.post("/v1/vaults?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/vaults", params, beta_headers(betas, workspace_id), beta: true)
       BetaVault.from_json(response.body)
     end
 
@@ -80,7 +80,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaVault
-      response = @client.get("/v1/vaults/#{vault_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaVault.from_json(response.body)
     end
 
@@ -96,7 +96,7 @@ module Anthropic
       params["display_name"] = JSON::Any.new(display_name) if display_name
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
 
-      response = @client.post("/v1/vaults/#{vault_id}?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}", params, beta_headers(betas, workspace_id), beta: true)
       BetaVault.from_json(response.body)
     end
 
@@ -112,7 +112,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/vaults?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/vaults", query, beta_headers(betas, workspace_id), beta: true)
       BetaVaultListResponse.from_json(response.body)
     end
 
@@ -122,7 +122,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaVaultDeleteResponse
-      response = @client.delete("/v1/vaults/#{vault_id}?beta=true", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}", beta_headers(betas, workspace_id), beta: true)
       BetaVaultDeleteResponse.from_json(response.body)
     end
 
@@ -132,7 +132,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaVault
-      response = @client.post("/v1/vaults/#{vault_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}/archive", nil, beta_headers(betas, workspace_id), beta: true)
       BetaVault.from_json(response.body)
     end
   end
@@ -173,7 +173,7 @@ module Anthropic
       params["injection_location"] = JSON.parse(injection_location.to_json) if injection_location
       params["networking"] = JSON.parse(networking.to_json) if networking
 
-      response = @client.post("/v1/vaults/#{vault_id}/credentials?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}/credentials", params, beta_headers(betas, workspace_id), beta: true)
       BetaCredential.from_json(response.body)
     end
 
@@ -184,7 +184,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaCredential
-      response = @client.get("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}/credentials/#{Anthropic.encode_path_segment(credential_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaCredential.from_json(response.body)
     end
 
@@ -207,7 +207,7 @@ module Anthropic
       params["injection_location"] = JSON.parse(injection_location.to_json) if injection_location
       params["networking"] = JSON.parse(networking.to_json) if networking
 
-      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", params, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}/credentials/#{Anthropic.encode_path_segment(credential_id)}", params, beta_headers(betas, workspace_id), beta: true)
       BetaCredential.from_json(response.body)
     end
 
@@ -224,7 +224,7 @@ module Anthropic
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
-      response = @client.get("/v1/vaults/#{vault_id}/credentials?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}/credentials", query, beta_headers(betas, workspace_id), beta: true)
       BetaCredentialListResponse.from_json(response.body)
     end
 
@@ -235,7 +235,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaCredentialDeleteResponse
-      response = @client.delete("/v1/vaults/#{vault_id}/credentials/#{credential_id}?beta=true", beta_headers(betas, workspace_id))
+      response = @client.delete("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}/credentials/#{Anthropic.encode_path_segment(credential_id)}", beta_headers(betas, workspace_id), beta: true)
       BetaCredentialDeleteResponse.from_json(response.body)
     end
 
@@ -246,7 +246,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaCredential
-      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}/credentials/#{Anthropic.encode_path_segment(credential_id)}/archive", nil, beta_headers(betas, workspace_id), beta: true)
       BetaCredential.from_json(response.body)
     end
 
@@ -257,7 +257,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaCredentialValidation
-      response = @client.post("/v1/vaults/#{vault_id}/credentials/#{credential_id}/mcp_oauth_validate?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/vaults/#{Anthropic.encode_path_segment(vault_id)}/credentials/#{Anthropic.encode_path_segment(credential_id)}/mcp_oauth_validate", nil, beta_headers(betas, workspace_id), beta: true)
       BetaCredentialValidation.from_json(response.body)
     end
   end

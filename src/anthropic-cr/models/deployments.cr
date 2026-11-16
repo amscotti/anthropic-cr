@@ -98,6 +98,7 @@ module Anthropic
   # List response envelope for deployments.
   struct BetaManagedAgentsDeploymentListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaManagedAgentsDeployment)
 
@@ -109,6 +110,7 @@ module Anthropic
   # List response envelope for deployment runs.
   struct BetaManagedAgentsDeploymentRunListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaManagedAgentsDeploymentRun)
 

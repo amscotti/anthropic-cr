@@ -15,10 +15,10 @@ module Anthropic
   # ```
   struct FileUpload
     getter io : IO
-    getter filename : String
+    getter filename : String?
     getter content_type : String
 
-    def initialize(@io : IO, @filename : String, @content_type : String)
+    def initialize(@io : IO, @filename : String? = nil, @content_type : String = "application/octet-stream")
     end
 
     # Create from a file path with auto-detected content type
@@ -43,12 +43,21 @@ module Anthropic
     # )
     # ```
     def self.from_path(path : String, content_type : String? = nil, filename : String? = nil) : self
-      actual_filename = filename || File.basename(path)
+      actual_filename = filename.nil? ? File.basename(path) : filename
       actual_content_type = content_type || content_type_for(File.extname(path))
       io = IO::Memory.new
       File.open(path) { |file| IO.copy(file, io) }
       io.rewind
       new(io, actual_filename, actual_content_type)
+    end
+
+    # Create a `FileUpload` from raw bytes without inventing a default filename.
+    def self.from_bytes(
+      bytes : Bytes,
+      content_type : String = "application/octet-stream",
+      filename : String? = nil,
+    ) : self
+      new(IO::Memory.new(bytes), filename, content_type)
     end
 
     # Extension to content-type mapping for uploads.

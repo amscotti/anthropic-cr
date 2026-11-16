@@ -30,7 +30,7 @@ describe "Stateful Managed Agents APIs" do
         "archived_at": null
       })
 
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/environments?beta=true", response_json)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/environments", response_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       packages = Anthropic::BetaPackages.new(apt: ["curl"])
@@ -61,9 +61,9 @@ describe "Stateful Managed Agents APIs" do
       env_json = %({"id":"env_123","name":"test-env","config":{"type":"self_hosted"},"metadata":{},"created_at":"","updated_at":""})
       del_json = %({"id":"env_123","type":"environment_deleted"})
 
-      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123?beta=true", env_json)
-      stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/archive?beta=true", env_json)
-      stub_and_capture(:delete, "https://api.anthropic.com/v1/environments/env_123?beta=true", del_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123", env_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/archive", env_json)
+      stub_and_capture(:delete, "https://api.anthropic.com/v1/environments/env_123", del_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -85,14 +85,14 @@ describe "Stateful Managed Agents APIs" do
       hb_json = %({"last_heartbeat":"","lease_extended":true,"state":"active","ttl_seconds":60,"type":"work_heartbeat"})
       stats_json = %({"depth":2,"oldest_queued_at":null,"pending":1,"type":"work_queue_stats","workers_polling":3})
 
-      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work/work_1?beta=true", work_json)
-      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/work/work_1?beta=true", work_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work?beta=true&limit=20", list_json)
-      stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/work/work_1/ack?beta=true", work_json)
-      stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/work/work_1/heartbeat?beta=true&desired_ttl_seconds=60", hb_json)
-      poll_capture = stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work/poll?beta=true&block_ms=100", work_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work/stats?beta=true", stats_json)
-      stop_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/work/work_1/stop?beta=true", work_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work/work_1", work_json)
+      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/work/work_1", work_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work?limit=20", list_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/work/work_1/ack", work_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/work/work_1/heartbeat?desired_ttl_seconds=60", hb_json)
+      poll_capture = stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work/poll?block_ms=100", work_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work/stats", stats_json)
+      stop_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/environments/env_123/work/work_1/stop", work_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       work = client.beta.environments.work
@@ -136,13 +136,13 @@ describe "Stateful Managed Agents APIs" do
     end
 
     it "returns nil when work poll finds nothing" do
-      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work/poll?beta=true", "")
+      stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123/work/poll", "")
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.beta.environments.work.poll(environment_id: "env_123").should be_nil
     end
 
     it "sends workspace_id on environment calls" do
-      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123?beta=true", %({"id":"env_123","name":"e","config":{"type":"self_hosted"},"metadata":{},"created_at":"","updated_at":""}))
+      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/environments/env_123", %({"id":"env_123","name":"e","config":{"type":"self_hosted"},"metadata":{},"created_at":"","updated_at":""}))
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.beta.environments.retrieve("env_123", workspace_id: "ws_1")
       capture.headers.not_nil!["anthropic-workspace-id"].should eq("ws_1")
@@ -155,9 +155,9 @@ describe "Stateful Managed Agents APIs" do
       mem_json = %({"id":"mem_123","path":"/test","content_sha256":"abc","content_size_bytes":100,"memory_store_id":"store_123","memory_version_id":"ver_123","created_at":"","updated_at":""})
       ver_json = %({"id":"ver_123","memory_id":"mem_123","memory_store_id":"store_123","operation":"create","created_at":""})
 
-      stub_and_capture(:post, "https://api.anthropic.com/v1/memory_stores?beta=true", store_json)
-      mem_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/memory_stores/store_123/memories?beta=true", mem_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/memory_stores/store_123/versions/ver_123?beta=true", ver_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/memory_stores", store_json)
+      mem_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/memory_stores/store_123/memories", mem_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/memory_stores/store_123/versions/ver_123", ver_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -168,9 +168,10 @@ describe "Stateful Managed Agents APIs" do
       memory.id.should eq("mem_123")
       memory.memory_store_id.should eq("store_123")
 
-      # All memory-stores requests carry the managed-agents AND agent-memory betas.
-      mem_capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::MANAGED_AGENTS_BETA)
-      mem_capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::AGENT_MEMORY_BETA)
+      # Memory-stores requests carry the agent-memory beta (not managed-agents).
+      beta_hdr = mem_capture.headers.not_nil!["anthropic-beta"]
+      beta_hdr.should contain(Anthropic::AGENT_MEMORY_BETA)
+      beta_hdr.should_not contain(Anthropic::MANAGED_AGENTS_BETA)
 
       version = client.beta.memory_stores.memory_versions.retrieve(memory_store_id: "store_123", version_id: "ver_123")
       version.id.should eq("ver_123")
@@ -183,8 +184,8 @@ describe "Stateful Managed Agents APIs" do
       session_json = %({"id":"sess_123","environment_id":"env_123","vault_ids":[],"outcome_evaluations":[],"resources":[],"metadata":{},"created_at":"","updated_at":"","status":"idle","agent":{},"stats":{},"usage":{}})
       thread_json = %({"id":"thread_123","session_id":"sess_123","status":"running","created_at":"","updated_at":"","agent":{}})
 
-      session_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions?beta=true", session_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/threads/thread_123?beta=true", thread_json)
+      session_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions", session_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/threads/thread_123", thread_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -208,7 +209,7 @@ describe "Stateful Managed Agents APIs" do
 
     it "includes initial_events on session create" do
       session_json = %({"id":"sess_init","environment_id":"env_123","vault_ids":[],"outcome_evaluations":[],"resources":[],"metadata":{},"created_at":"","updated_at":"","status":"idle","agent":{},"stats":{},"usage":{}})
-      session_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions?beta=true", session_json)
+      session_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions", session_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       client.beta.sessions.create(
@@ -227,7 +228,7 @@ describe "Stateful Managed Agents APIs" do
 
     it "sends typed input events to a session" do
       send_json = %({"data":[{"type":"user.message","content":[{"type":"text","text":"Where is my order?"}]}]})
-      send_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123/events?beta=true", send_json)
+      send_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123/events", send_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       events = [
@@ -304,11 +305,11 @@ describe "Stateful Managed Agents APIs" do
       ],"next_page":null})
       del_json = %({"id":"res_1","type":"session_resource_deleted"})
 
-      stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123/resources?beta=true", file_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/resources/res_1?beta=true", file_json)
-      stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123/resources/res_1?beta=true", file_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/resources?beta=true&limit=20", list_json)
-      stub_and_capture(:delete, "https://api.anthropic.com/v1/sessions/sess_123/resources/res_1?beta=true", del_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123/resources", file_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/resources/res_1", file_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123/resources/res_1", file_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/resources?limit=20", list_json)
+      stub_and_capture(:delete, "https://api.anthropic.com/v1/sessions/sess_123/resources/res_1", del_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -342,8 +343,8 @@ describe "Stateful Managed Agents APIs" do
     end
 
     it "sends workspace_id on events and thread calls" do
-      events_capture = stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/events?beta=true&limit=20", %({"data":[]}))
-      thread_capture = stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/threads?beta=true&limit=20", %({"data":[]}))
+      events_capture = stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/events?limit=20", %({"data":[]}))
+      thread_capture = stub_and_capture(:get, "https://api.anthropic.com/v1/sessions/sess_123/threads?limit=20", %({"data":[]}))
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.beta.sessions.events.list(session_id: "sess_123", workspace_id: "ws_1")
@@ -355,7 +356,7 @@ describe "Stateful Managed Agents APIs" do
 
     it "updates sessions with metadata patches and vault ids" do
       session_json = %({"id":"sess_123","environment_id":"env_123","vault_ids":["vlt_1"],"outcome_evaluations":[],"resources":[],"metadata":{},"created_at":"","updated_at":"","status":"idle","agent":{},"stats":{},"usage":{}})
-      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123?beta=true", session_json)
+      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123", session_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       session = client.beta.sessions.update(
@@ -372,10 +373,10 @@ describe "Stateful Managed Agents APIs" do
     end
 
     it "sends workspace_id on session list, delete, and archive" do
-      list_capture = stub_and_capture(:get, "https://api.anthropic.com/v1/sessions?beta=true&limit=20", %({"data":[],"next_page":null,"prev_page":null}))
-      del_capture = stub_and_capture(:delete, "https://api.anthropic.com/v1/sessions/sess_123?beta=true", %({"id":"sess_123","type":"session_deleted"}))
+      list_capture = stub_and_capture(:get, "https://api.anthropic.com/v1/sessions?limit=20", %({"data":[],"next_page":null,"prev_page":null}))
+      del_capture = stub_and_capture(:delete, "https://api.anthropic.com/v1/sessions/sess_123", %({"id":"sess_123","type":"session_deleted"}))
       session_json = %({"id":"sess_123","environment_id":"env_123","vault_ids":[],"outcome_evaluations":[],"resources":[],"metadata":{},"created_at":"","updated_at":"","status":"idle","agent":{},"stats":{},"usage":{}})
-      arch_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123/archive?beta=true", session_json)
+      arch_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/sessions/sess_123/archive", session_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.beta.sessions.list(workspace_id: "ws_1")
@@ -563,7 +564,7 @@ describe "Stateful Managed Agents APIs" do
         ],
         "next_page": null
       })
-      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/agents/agent_123/versions?beta=true&limit=20", list_json)
+      capture = stub_and_capture(:get, "https://api.anthropic.com/v1/agents/agent_123/versions?limit=20", list_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       versions = client.beta.agents.versions.list("agent_123")
@@ -596,7 +597,7 @@ describe "Stateful Managed Agents APIs" do
         ],
         "created_at": "", "updated_at": "", "archived_at": null
       })
-      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents?beta=true", agent_json)
+      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents", agent_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       agent = client.beta.agents.create(
@@ -664,7 +665,7 @@ describe "Stateful Managed Agents APIs" do
         ],
         "created_at": "", "updated_at": "", "archived_at": null
       })
-      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_ts?beta=true", agent_json)
+      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_ts", agent_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       updated = client.beta.agents.update(
@@ -734,11 +735,11 @@ describe "Stateful Managed Agents APIs" do
         "next_page": null
       })
 
-      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents?beta=true", agent_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/agents/agent_123?beta=true", agent_json)
-      stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123?beta=true", agent_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/agents?beta=true&limit=20", list_json)
-      stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123/archive?beta=true", agent_json)
+      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents", agent_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/agents/agent_123", agent_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123", agent_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/agents?limit=20", list_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123/archive", agent_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -794,7 +795,7 @@ describe "Stateful Managed Agents APIs" do
         "archived_at": null
       })
 
-      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents?beta=true", agent_json)
+      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents", agent_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       agent = client.beta.agents.create(
@@ -825,7 +826,7 @@ describe "Stateful Managed Agents APIs" do
         "archived_at": null
       })
 
-      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents?beta=true", agent_json)
+      create_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents", agent_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       client.beta.agents.create(
@@ -852,7 +853,7 @@ describe "Stateful Managed Agents APIs" do
         "archived_at": null
       })
 
-      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123?beta=true", agent_json)
+      update_capture = stub_and_capture(:post, "https://api.anthropic.com/v1/agents/agent_123", agent_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       client.beta.agents.update(
@@ -881,13 +882,13 @@ describe "Stateful Managed Agents APIs" do
       del_cred_json = %({"id":"cred_123","type":"credential_deleted"})
       val_json = %({"status":"valid"})
 
-      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults?beta=true", vault_json)
-      stub_and_capture(:get, "https://api.anthropic.com/v1/vaults/vault_123?beta=true", vault_json)
-      stub_and_capture(:delete, "https://api.anthropic.com/v1/vaults/vault_123?beta=true", del_vault_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults", vault_json)
+      stub_and_capture(:get, "https://api.anthropic.com/v1/vaults/vault_123", vault_json)
+      stub_and_capture(:delete, "https://api.anthropic.com/v1/vaults/vault_123", del_vault_json)
 
-      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults/vault_123/credentials?beta=true", cred_json)
-      stub_and_capture(:delete, "https://api.anthropic.com/v1/vaults/vault_123/credentials/cred_123?beta=true", del_cred_json)
-      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults/vault_123/credentials/cred_123/mcp_oauth_validate?beta=true", val_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults/vault_123/credentials", cred_json)
+      stub_and_capture(:delete, "https://api.anthropic.com/v1/vaults/vault_123/credentials/cred_123", del_cred_json)
+      stub_and_capture(:post, "https://api.anthropic.com/v1/vaults/vault_123/credentials/cred_123/mcp_oauth_validate", val_json)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 

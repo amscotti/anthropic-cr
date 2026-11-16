@@ -5,7 +5,7 @@ describe "Managed Agents Deployments" do
   describe Anthropic::BetaDeployments do
     it "creates a deployment and posts the expected body + beta header" do
       deployment_json = %({"id":"dep_123","agent":{"id":"agent_123","version":1},"archived_at":null,"created_at":"2026-06-09T00:00:00Z","description":"nightly","environment_id":"env_123","initial_events":[],"metadata":{},"name":"Nightly summary","paused_reason":null,"resources":null,"schedule":null,"status":"active","type":"deployment","updated_at":"2026-06-09T00:00:00Z","vault_ids":["vault_1"]})
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/deployments?beta=true", deployment_json)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/deployments", deployment_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       deployment = client.beta.deployments.create(
@@ -33,7 +33,7 @@ describe "Managed Agents Deployments" do
 
     it "retrieves a deployment by id" do
       deployment_json = %({"id":"dep_123","agent":{"id":"agent_123"},"archived_at":null,"created_at":"","description":null,"environment_id":"env_123","initial_events":[],"metadata":{},"name":"D","paused_reason":null,"resources":null,"schedule":null,"status":"paused","type":"deployment","updated_at":"","vault_ids":[]})
-      WebMock.stub(:get, "https://api.anthropic.com/v1/deployments/dep_123?beta=true")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/deployments/dep_123")
         .to_return(body: deployment_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -43,7 +43,7 @@ describe "Managed Agents Deployments" do
 
     it "lists deployments with query params" do
       list_json = %({"data":[],"next_page":null})
-      WebMock.stub(:get, "https://api.anthropic.com/v1/deployments?beta=true&limit=20&status=active")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/deployments?limit=20&status=active")
         .to_return(body: list_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -57,9 +57,9 @@ describe "Managed Agents Deployments" do
       active_json = %({"id":"dep_1","agent":{"id":"a"},"archived_at":null,"created_at":"","description":null,"environment_id":"e","initial_events":[],"metadata":{},"name":"n","paused_reason":null,"resources":null,"schedule":null,"status":"active","type":"deployment","updated_at":"","vault_ids":[]})
       archived_json = %({"id":"dep_1","agent":{"id":"a"},"archived_at":"2026-06-09T00:00:00Z","created_at":"","description":null,"environment_id":"e","initial_events":[],"metadata":{},"name":"n","paused_reason":null,"resources":null,"schedule":null,"status":"active","type":"deployment","updated_at":"","vault_ids":[]})
 
-      WebMock.stub(:post, "https://api.anthropic.com/v1/deployments/dep_1/pause?beta=true").to_return(body: paused_json)
-      WebMock.stub(:post, "https://api.anthropic.com/v1/deployments/dep_1/unpause?beta=true").to_return(body: active_json)
-      WebMock.stub(:post, "https://api.anthropic.com/v1/deployments/dep_1/archive?beta=true").to_return(body: archived_json)
+      WebMock.stub(:post, "https://api.anthropic.com/v1/deployments/dep_1/pause").to_return(body: paused_json)
+      WebMock.stub(:post, "https://api.anthropic.com/v1/deployments/dep_1/unpause").to_return(body: active_json)
+      WebMock.stub(:post, "https://api.anthropic.com/v1/deployments/dep_1/archive").to_return(body: archived_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       client.beta.deployments.pause("dep_1").paused?.should be_true
@@ -69,7 +69,7 @@ describe "Managed Agents Deployments" do
 
     it "triggers a deployment run" do
       run_json = %({"id":"drun_1","agent":{"id":"a"},"created_at":"","deployment_id":"dep_1","error":null,"session_id":"sess_1","trigger_context":{"type":"manual"},"type":"deployment_run"})
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/deployments/dep_1/run?beta=true", run_json)
+      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/deployments/dep_1/run", run_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
       run = client.beta.deployments.run("dep_1")
@@ -83,7 +83,7 @@ describe "Managed Agents Deployments" do
   describe Anthropic::BetaDeploymentRuns do
     it "retrieves a deployment run (with error)" do
       run_json = %({"id":"drun_2","agent":{"id":"a"},"created_at":"","deployment_id":"dep_1","error":{"type":"session_rate_limited"},"session_id":null,"trigger_context":{"type":"schedule"},"type":"deployment_run"})
-      WebMock.stub(:get, "https://api.anthropic.com/v1/deployment_runs/drun_2?beta=true")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/deployment_runs/drun_2")
         .to_return(body: run_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -95,7 +95,7 @@ describe "Managed Agents Deployments" do
 
     it "lists deployment runs filtering by deployment_id" do
       list_json = %({"data":[],"next_page":null})
-      WebMock.stub(:get, "https://api.anthropic.com/v1/deployment_runs?beta=true&limit=20&deployment_id=dep_1")
+      WebMock.stub(:get, "https://api.anthropic.com/v1/deployment_runs?limit=20&deployment_id=dep_1")
         .to_return(body: list_json)
       client = Anthropic::Client.new(api_key: "sk-ant-test")
 

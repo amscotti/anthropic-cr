@@ -1,4 +1,73 @@
 module Anthropic
+  # Cloudflare connector transport for an MCP tunnel (`{"type": "cloudflare"}`).
+  struct BetaCloudflareTunnelTransport
+    include JSON::Serializable
+
+    getter type : String = "cloudflare"
+
+    def initialize(@type : String = "cloudflare")
+    end
+  end
+
+  # Anthropic relay transport for an MCP tunnel (`{"type": "relay"}`).
+  # `token` is populated only in the `tunnels.create` response and omitted on reads.
+  struct BetaRelayTunnelTransport
+    include JSON::Serializable
+
+    getter type : String = "relay"
+
+    @[JSON::Field(emit_null: false)]
+    getter token : BetaTunnelToken? = nil
+
+    def initialize(@token : BetaTunnelToken? = nil, @type : String = "relay")
+    end
+  end
+
+  # Forward-compatible fallback for unrecognized MCP tunnel transport types.
+  struct GenericBetaTunnelTransport
+    getter type : String
+    getter raw : JSON::Any
+
+    def initialize(@type : String, @raw : JSON::Any)
+    end
+
+    def to_json(builder : JSON::Builder) : Nil
+      raw.to_json(builder)
+    end
+  end
+
+  alias GenericTunnelTransport = GenericBetaTunnelTransport
+
+  # How traffic reaches an MCP tunnel, discriminated on `"type"`.
+  alias BetaTunnelTransport = BetaCloudflareTunnelTransport | BetaRelayTunnelTransport | GenericBetaTunnelTransport
+
+  # Discriminated-union converter for `BetaTunnel#transport`.
+  module BetaTunnelTransportConverter
+    def self.from_json(pull : JSON::PullParser) : BetaTunnelTransport?
+      if pull.kind.null?
+        pull.read_null
+        return nil
+      end
+
+      json = JSON::Any.new(pull)
+      type = json["type"]?.try(&.as_s?) || "unknown"
+      raw = json.to_json
+
+      case type
+      when "cloudflare"
+        BetaCloudflareTunnelTransport.from_json(raw)
+      when "relay"
+        BetaRelayTunnelTransport.from_json(raw)
+      else
+        GenericBetaTunnelTransport.new(type: type, raw: json)
+      end
+    end
+
+    def self.to_json(value : BetaTunnelTransport?, builder : JSON::Builder) : Nil
+      value.to_json(builder)
+    end
+  end
+
   # An MCP tunnel (research preview).
   #
   # Creation allocates a fresh hostname; the tunnel rejects MCP traffic until at
@@ -21,6 +90,10 @@ module Anthropic
 
     # Anthropic-assigned hostname. Globally unique and never reused after archive.
     getter domain : String
+
+    # How traffic reaches the tunnel (`cloudflare`, `relay`, or nil on legacy payloads).
+    @[JSON::Field(converter: Anthropic::BetaTunnelTransportConverter, emit_null: false)]
+    getter transport : BetaTunnelTransport? = nil
 
     getter type : String
 
@@ -82,6 +155,7 @@ module Anthropic
   # Page-cursor list response for tunnels (`data` + `next_page`).
   struct BetaTunnelListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaTunnel)
 
@@ -92,6 +166,7 @@ module Anthropic
   # Page-cursor list response for tunnel certificates (`data` + `next_page`).
   struct BetaTunnelCertificateListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     getter data : Array(BetaTunnelCertificate)
 

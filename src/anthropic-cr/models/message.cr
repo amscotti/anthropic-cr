@@ -358,14 +358,66 @@ module Anthropic
     end
   end
 
+  # Per-message output configuration on a `role: "system"` beta input message.
+  struct BetaSystemMessageOutputConfig
+    include JSON::Serializable
+
+    @[JSON::Field(emit_null: false)]
+    getter effort : String?
+
+    def initialize(@effort : String? = nil)
+    end
+  end
+
+  # JSON converter for `MessageParam#content` supporting nil, String, or Array(ContentBlock).
+  module MessageParamContentConverter
+    def self.from_json(pull : JSON::PullParser) : String | Array(ContentBlock)?
+      case pull.kind
+      when .null?
+        pull.read_null
+        nil
+      when .string?
+        pull.read_string
+      when .begin_array?
+        ContentBlockArrayConverter.from_json(pull)
+      else
+        raise JSON::ParseException.new("Expected String, Array, or null for MessageParam#content", *pull.location)
+      end
+    end
+
+    def self.to_json(value : String | Array(ContentBlock)?, builder : JSON::Builder) : Nil
+      case value
+      when nil
+        builder.null
+      when String
+        builder.string(value)
+      when Array(ContentBlock)
+        ContentBlockArrayConverter.to_json(value, builder)
+      end
+    end
+  end
+
   # MessageParam struct for API requests
   struct MessageParam
     include JSON::Serializable
 
     getter role : String
-    getter content : String | Array(ContentBlock)
 
-    def initialize(role : String | Role, @content : String | Array(ContentBlock))
+    @[JSON::Field(converter: Anthropic::MessageParamContentConverter, emit_null: false)]
+    getter content : String | Array(ContentBlock)?
+
+    @[JSON::Field(key: "clear_at", emit_null: false)]
+    getter clear_at : String?
+
+    @[JSON::Field(key: "output_config", emit_null: false)]
+    getter output_config : BetaSystemMessageOutputConfig?
+
+    def initialize(
+      role : String | Role,
+      @content : String | Array(ContentBlock)? = nil,
+      @clear_at : String? = nil,
+      @output_config : BetaSystemMessageOutputConfig? = nil,
+    )
       @role = role.is_a?(Role) ? role.to_s : role
     end
 
@@ -376,6 +428,15 @@ module Anthropic
 
     def self.assistant(text : String) : self
       new(role: Role::Assistant, content: text)
+    end
+
+    # Convenience constructor for beta `role: "system"` directive messages.
+    def self.system(
+      content : String | Array(ContentBlock)? = nil,
+      clear_at : String? = nil,
+      output_config : BetaSystemMessageOutputConfig? = nil,
+    ) : self
+      new(role: "system", content: content, clear_at: clear_at, output_config: output_config)
     end
   end
 end

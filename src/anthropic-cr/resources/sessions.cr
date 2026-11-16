@@ -63,14 +63,14 @@ module Anthropic
       params["budget"] = JSON.parse(budget.to_json) if budget
 
       headers = beta_headers(betas, workspace_id)
-      response = @client.post("/v1/sessions?beta=true", params, headers)
+      response = @client.post("/v1/sessions", params, headers, beta: true)
       BetaManagedAgentsSession.from_json(response.body)
     end
 
     # Retrieve a session
     def retrieve(session_id : String, workspace_id : String? = nil, betas : Array(String) = [] of String) : BetaManagedAgentsSession
       headers = beta_headers(betas, workspace_id)
-      response = @client.get("/v1/sessions/#{session_id}?beta=true", nil, headers)
+      response = @client.get("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}", nil, headers, beta: true)
       BetaManagedAgentsSession.from_json(response.body)
     end
 
@@ -97,7 +97,7 @@ module Anthropic
       params["vault_ids"] = JSON.parse(vault_ids.to_json) if vault_ids
 
       headers = beta_headers(betas, workspace_id)
-      response = @client.post("/v1/sessions/#{session_id}?beta=true", params, headers)
+      response = @client.post("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}", params, headers, beta: true)
       BetaManagedAgentsSession.from_json(response.body)
     end
 
@@ -114,7 +114,7 @@ module Anthropic
       query["page"] = page if page
 
       headers = beta_headers(betas, workspace_id)
-      response = @client.get("/v1/sessions?beta=true", query, headers)
+      response = @client.get("/v1/sessions", query, headers, beta: true)
       BetaSessionListResponse.from_json(response.body)
     end
 
@@ -125,7 +125,7 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaManagedAgentsDeletedSession
       headers = beta_headers(betas, workspace_id)
-      response = @client.delete("/v1/sessions/#{session_id}?beta=true", headers)
+      response = @client.delete("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}", headers, beta: true)
       BetaManagedAgentsDeletedSession.from_json(response.body)
     end
 
@@ -136,7 +136,7 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaManagedAgentsSession
       headers = beta_headers(betas, workspace_id)
-      response = @client.post("/v1/sessions/#{session_id}/archive?beta=true", nil, headers)
+      response = @client.post("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/archive", nil, headers, beta: true)
       BetaManagedAgentsSession.from_json(response.body)
     end
   end
@@ -179,7 +179,7 @@ module Anthropic
       query["page"] = page if page
       query["types"] = types if types
 
-      response = @client.get("/v1/sessions/#{session_id}/events?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/events", query, beta_headers(betas, workspace_id), beta: true)
       JSON.parse(response.body)
     end
 
@@ -198,7 +198,7 @@ module Anthropic
       workspace_id : String? = nil,
     ) : JSON::Any
       body = {"events" => JSON.parse(events.to_json)}
-      response = @client.post("/v1/sessions/#{session_id}/events?beta=true", body, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/events", body, beta_headers(betas, workspace_id), beta: true)
       JSON.parse(response.body)
     end
 
@@ -216,11 +216,11 @@ module Anthropic
       workspace_id : String? = nil,
       & : JSON::Any -> _
     )
-      path = "/v1/sessions/#{session_id}/events/stream?beta=true"
+      path = "/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/events/stream"
       if event_deltas && !event_deltas.empty?
         params = URI::Params.new
-        event_deltas.each { |delta_type| params.add("event_deltas", delta_type) }
-        path = "#{path}&#{params}"
+        event_deltas.each { |delta_type| params.add("event_deltas[]", delta_type) }
+        path = "#{path}?#{params}"
       end
 
       @client.get_stream(path, beta_headers(betas, workspace_id)) do |response|
@@ -252,7 +252,7 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaSessionResource
       resource = BetaManagedAgentsFileResourceParam.new(file_id: file_id, mount_path: mount_path)
-      response = @client.post("/v1/sessions/#{session_id}/resources?beta=true", resource, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/resources", resource, beta_headers(betas, workspace_id), beta: true)
       BetaSessionResourceConverter.from_json(JSON::PullParser.new(response.body))
     end
 
@@ -263,7 +263,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaSessionResource
-      response = @client.get("/v1/sessions/#{session_id}/resources/#{resource_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/resources/#{Anthropic.encode_path_segment(resource_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaSessionResourceConverter.from_json(JSON::PullParser.new(response.body))
     end
 
@@ -277,9 +277,10 @@ module Anthropic
     ) : BetaSessionResource
       body = {"authorization_token" => authorization_token}
       response = @client.post(
-        "/v1/sessions/#{session_id}/resources/#{resource_id}?beta=true",
+        "/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/resources/#{Anthropic.encode_path_segment(resource_id)}",
         body,
-        beta_headers(betas, workspace_id)
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaSessionResourceConverter.from_json(JSON::PullParser.new(response.body))
     end
@@ -295,7 +296,7 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/sessions/#{session_id}/resources?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/resources", query, beta_headers(betas, workspace_id), beta: true)
       BetaSessionResourceListResponse.from_json(response.body)
     end
 
@@ -307,8 +308,9 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaSessionResourceDeleted
       response = @client.delete(
-        "/v1/sessions/#{session_id}/resources/#{resource_id}?beta=true",
-        beta_headers(betas, workspace_id)
+        "/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/resources/#{Anthropic.encode_path_segment(resource_id)}",
+        beta_headers(betas, workspace_id),
+        beta: true
       )
       BetaSessionResourceDeleted.from_json(response.body)
     end
@@ -339,7 +341,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsSessionThread
-      response = @client.get("/v1/sessions/#{session_id}/threads/#{thread_id}?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/threads/#{Anthropic.encode_path_segment(thread_id)}", nil, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsSessionThread.from_json(response.body)
     end
 
@@ -348,13 +350,15 @@ module Anthropic
       session_id : String,
       limit : Int32 = 20,
       page : String? = nil,
+      statuses : Array(String)? = nil,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaSessionThreadListResponse
-      query = {"limit" => limit.to_s}
+      query = {"limit" => limit.to_s} of String => Client::QueryParamValue
       query["page"] = page if page
+      query["statuses"] = statuses if statuses
 
-      response = @client.get("/v1/sessions/#{session_id}/threads?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/threads", query, beta_headers(betas, workspace_id), beta: true)
       BetaSessionThreadListResponse.from_json(response.body)
     end
 
@@ -365,7 +369,7 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsSessionThread
-      response = @client.post("/v1/sessions/#{session_id}/threads/#{thread_id}/archive?beta=true", nil, beta_headers(betas, workspace_id))
+      response = @client.post("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/threads/#{Anthropic.encode_path_segment(thread_id)}/archive", nil, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsSessionThread.from_json(response.body)
     end
   end
@@ -396,7 +400,7 @@ module Anthropic
       query = {"limit" => limit.to_s}
       query["page"] = page if page
 
-      response = @client.get("/v1/sessions/#{session_id}/threads/#{thread_id}/events?beta=true", query, beta_headers(betas, workspace_id))
+      response = @client.get("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/threads/#{Anthropic.encode_path_segment(thread_id)}/events", query, beta_headers(betas, workspace_id), beta: true)
       JSON.parse(response.body)
     end
 
@@ -416,11 +420,11 @@ module Anthropic
       workspace_id : String? = nil,
       & : JSON::Any -> _
     )
-      path = "/v1/sessions/#{session_id}/threads/#{thread_id}/stream?beta=true"
+      path = "/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/threads/#{Anthropic.encode_path_segment(thread_id)}/stream"
       if event_deltas && !event_deltas.empty?
         params = URI::Params.new
-        event_deltas.each { |delta_type| params.add("event_deltas", delta_type) }
-        path = "#{path}&#{params}"
+        event_deltas.each { |delta_type| params.add("event_deltas[]", delta_type) }
+        path = "#{path}?#{params}"
       end
 
       @client.get_stream(path, beta_headers(betas, workspace_id)) do |response|

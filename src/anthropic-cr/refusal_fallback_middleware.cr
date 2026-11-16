@@ -53,18 +53,21 @@ module Anthropic
       # Only applies to messages create requests with a JSON body.
       return nxt.call(request) unless applies_to?(request)
 
-      original_body = JSON.parse(request.body || "{}")
+      parsed_body = JSON.parse(request.body || "{}")
 
       # Server-side fallbacks and this middleware are mutually exclusive.
-      if original_body["fallbacks"]?
+      if parsed_body["fallbacks"]?
         raise ArgumentError.new(
           "BetaRefusalFallbackMiddleware is incompatible with the request-body `fallbacks:` param. " \
           "Use the server-side-fallback-2026-07-01 beta header instead."
         )
       end
 
+      original_body, cleaned_any = strip_fallback_blocks(parsed_body)
+      initial_request = cleaned_any ? request.with(body: original_body.to_json) : request
+
       # First attempt with the fallback-credit beta + helper tag attached.
-      response = nxt.call(apply_defaults(request))
+      response = nxt.call(apply_defaults(initial_request))
 
       return response unless response.status == 200
 
@@ -74,9 +77,8 @@ module Anthropic
       # Walk the fallback chain on refusal.
       @fallbacks.each do |fallback|
         credit_token = refusal_credit_token(message)
-        retry_body = build_retry_body(original_body, fallback, credit_token)
-        retry_request = apply_defaults(request.with(body: retry_body.to_json), fresh_idempotency_key: true)
-        response = nxt.call(retry_request)
+        retry_body, speed_inherited_fast = build_retry_body(original_body, fallback, credit_token)
+        response = send_hop(request, nxt, retry_body, speed_inherited_fast)
 
         return response unless response.status == 200
 
@@ -88,11 +90,34 @@ module Anthropic
       response
     end
 
+    private def send_hop(
+      request : APIRequest,
+      nxt : MiddlewareNext,
+      retry_body : JSON::Any,
+      speed_inherited_fast : Bool,
+    ) : APIResponse
+      retry_request = apply_defaults(request.with(body: retry_body.to_json), fresh_idempotency_key: true)
+      response = nxt.call(retry_request)
+
+      if (response.status == 429 || response.status == 529) && speed_inherited_fast
+        fallback_hash = retry_body.as_h.dup
+        fallback_hash.delete("speed")
+        retry_without_speed = apply_defaults(
+          request.with(body: JSON::Any.new(fallback_hash).to_json),
+          fresh_idempotency_key: true
+        )
+        return nxt.call(retry_without_speed)
+      end
+
+      response
+    end
+
     # Applies to messages-create requests (POST /v1/messages) with a JSON body.
     # The beta vs non-beta distinction is conveyed via the anthropic-beta header;
     # since this middleware is opt-in, intercepting both surfaces is correct.
     private def applies_to?(request : APIRequest) : Bool
-      request.method == "POST" &&
+      request.beta? &&
+        request.method == "POST" &&
         (request.path == "/v1/messages" || request.path.starts_with?("/v1/messages?")) &&
         !request.body.nil?
     end
@@ -127,8 +152,55 @@ module Anthropic
       message["stop_details"]?.try(&.["fallback_credit_token"]?).try(&.as_s?)
     end
 
+    # Strip client-unrecognized `fallback` content blocks from historical messages,
+    # preserving `role: "system"` directives verbatim and only dropping non-system
+    # turns that were emptied by stripping.
+    private def strip_fallback_blocks(body : JSON::Any) : {JSON::Any, Bool}
+      raw_hash = body.as_h?
+      return {body, false} unless raw_hash
+
+      messages = raw_hash["messages"]?.try(&.as_a?)
+      return {body, false} unless messages
+
+      changed = false
+      cleaned_messages = [] of JSON::Any
+
+      messages.each do |msg|
+        cleaned_msg, keep, msg_changed = clean_message_fallbacks(msg)
+        changed ||= msg_changed
+        cleaned_messages << cleaned_msg if keep
+      end
+
+      return {body, false} unless changed
+
+      updated = raw_hash.dup
+      updated["messages"] = JSON::Any.new(cleaned_messages)
+      {JSON::Any.new(updated), true}
+    end
+
+    private def clean_message_fallbacks(msg : JSON::Any) : {JSON::Any, Bool, Bool}
+      msg_hash = msg.as_h?
+      return {msg, true, false} unless msg_hash
+      return {msg, true, false} if msg_hash["role"]?.try(&.as_s?) == "system"
+
+      content = msg_hash["content"]?.try(&.as_a?)
+      return {msg, true, false} unless content
+
+      filtered = content.reject { |block| block.as_h?.try(&.["type"]?.try(&.as_s?)) == "fallback" }
+      return {msg, true, false} if filtered.size == content.size
+      return {msg, false, true} if filtered.empty?
+
+      updated_msg = msg_hash.dup
+      updated_msg["content"] = JSON::Any.new(filtered)
+      {JSON::Any.new(updated_msg), true, true}
+    end
+
     # Build a retry body by merging a fallback entry over the original.
-    private def build_retry_body(original : JSON::Any, fallback : FallbackParam, credit_token : String?) : JSON::Any
+    private def build_retry_body(
+      original : JSON::Any,
+      fallback : FallbackParam,
+      credit_token : String?,
+    ) : {JSON::Any, Bool}
       hash = original.as_h.dup
 
       hash["model"] = JSON::Any.new(fallback.model)
@@ -136,15 +208,15 @@ module Anthropic
       if max_tokens = fallback.max_tokens
         hash["max_tokens"] = JSON::Any.new(max_tokens.to_i64)
       end
+
+      speed_inherited_fast = fallback.speed.nil? && hash["speed"]?.try(&.as_s?) == "fast"
       if speed = fallback.speed
         hash["speed"] = JSON::Any.new(speed)
       end
-      if thinking = fallback.thinking
-        hash["thinking"] = JSON.parse(thinking.to_json)
-      end
-      if output_config = fallback.output_config
-        hash["output_config"] = JSON.parse(output_config.to_json)
-      end
+
+      apply_fallback_thinking(hash, fallback)
+      apply_fallback_output_config(hash, fallback)
+
       if token = credit_token
         # Object form with best_effort: a failing redemption no longer 400s the
         # hop — the retry proceeds at normal price and reports outcome on
@@ -154,7 +226,29 @@ module Anthropic
         )
       end
 
-      JSON::Any.new(hash)
+      {JSON::Any.new(hash), speed_inherited_fast}
+    end
+
+    private def apply_fallback_thinking(hash : Hash(String, JSON::Any), fallback : FallbackParam) : Nil
+      if thinking = fallback.thinking
+        hash["thinking"] = JSON.parse(thinking.to_json)
+      elsif hash["thinking"]?.try(&.as_h?).try(&.["type"]?.try(&.as_s?)) == "between_tools"
+        hash["thinking"] = JSON.parse(%({"type":"disabled"}))
+      end
+    end
+
+    private def apply_fallback_output_config(hash : Hash(String, JSON::Any), fallback : FallbackParam) : Nil
+      fallback_oc = fallback.output_config
+      return unless fallback_oc
+
+      fallback_hash = JSON.parse(fallback_oc.to_json).as_h
+      if existing = hash["output_config"]?.try(&.as_h?)
+        merged = existing.dup
+        fallback_hash.each { |k, v| merged[k] = v }
+        hash["output_config"] = JSON::Any.new(merged)
+      else
+        hash["output_config"] = JSON::Any.new(fallback_hash)
+      end
     end
   end
 end

@@ -45,6 +45,7 @@ module Anthropic
   # Response for listing vaults
   struct BetaVaultListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     # Array of retrieved vaults
     getter data : Array(BetaVault)
@@ -105,6 +106,7 @@ module Anthropic
   # Response for listing credentials
   struct BetaCredentialListResponse
     include JSON::Serializable
+    include PageCursorMethods
 
     # Array of retrieved credentials
     getter data : Array(BetaCredential)

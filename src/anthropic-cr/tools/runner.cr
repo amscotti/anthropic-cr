@@ -1,41 +1,9 @@
 module Anthropic
-  # Configuration for automatic message compaction
-  #
-  # When enabled, the tool runner will automatically compress conversation
-  # history when token usage exceeds the specified threshold.
-  #
-  # ```
-  # compaction = Anthropic::CompactionConfig.new(
-  #   enabled: true,
-  #   context_token_threshold: 3000,
-  #   on_compact: ->(before : Int32, after : Int32) {
-  #     puts "Compacted: #{before} -> #{after} tokens"
-  #   }
-  # )
-  # ```
-  class CompactionConfig
-    property? enabled : Bool
-    property context_token_threshold : Int32
-    property on_compact : Proc(Int32, Int32, Nil)?
+  # Replace invalid UTF-8 / unpaired UTF-16 surrogate byte sequences with U+FFFD.
+  def self.sanitize_tool_result_text(text : String) : String
+    return text if text.valid_encoding?
 
-    def initialize(
-      @enabled : Bool = false,
-      @context_token_threshold : Int32 = 10000,
-      @on_compact : Proc(Int32, Int32, Nil)? = nil,
-    )
-    end
-
-    # Create enabled compaction config with callback
-    def self.enabled(
-      threshold : Int32 = 10000,
-      &on_compact : Int32, Int32 -> Nil
-    ) : self
-      new(
-        enabled: true,
-        context_token_threshold: threshold,
-        on_compact: on_compact
-      )
-    end
+    text.scrub("\u{FFFD}")
   end
 
   # Automatic tool execution loop
@@ -43,7 +11,9 @@ module Anthropic
   # Runs a conversation with Claude where tools are automatically executed
   # and their results are fed back to Claude until the conversation completes.
   #
-  # Supports auto-compaction to manage conversation length in extended sessions.
+  # When created via `client.beta.messages.tool_runner` on a client supporting
+  # message threads, requests automatically use `BetaMessageThread` unless
+  # `thread: false` is specified.
   #
   # ```
   # # Basic usage - iterate all messages
@@ -73,14 +43,15 @@ module Anthropic
   # end
   # ```
   class ToolRunner
+    getter thread : BetaMessageThread?
+
     @client : Client
     @model : String
     @max_tokens : Int32
     @initial_messages : Array(MessageParam)
     @tools : Array(Tool)
     @max_iterations : Int32
-    @system : String?
-    @compaction : CompactionConfig?
+    @system : SystemPrompt?
     @speed : String?
     @thinking : ThinkingConfig?
     @output_config : OutputConfig?
@@ -88,11 +59,15 @@ module Anthropic
     @container : String | ContainerConfig?
     @betas : Array(String)
     @use_beta : Bool
+    @server_tools : Array(ServerTool)?
+    @thread : BetaMessageThread?
+    @initial_thread_state : ThreadStateSnapshot?
 
     # Stateful iteration tracking
     @current_messages : Array(MessageParam)
     @iteration : Int32 = 0
     @finished : Bool = false
+    @started : Bool = false
     @last_response : Message? = nil
     @initial_container : String | ContainerConfig?
 
@@ -108,10 +83,9 @@ module Anthropic
       @model : String,
       @max_tokens : Int32,
       messages : Array(MessageParam),
-      @tools : Array(Tool),
+      tools : Enumerable(Tool),
       @max_iterations : Int32 = 10,
-      @system : String? = nil,
-      @compaction : CompactionConfig? = nil,
+      @system : SystemPrompt? = nil,
       @speed : String? = nil,
       @thinking : ThinkingConfig? = nil,
       @output_config : OutputConfig? = nil,
@@ -119,10 +93,15 @@ module Anthropic
       @container : String | ContainerConfig? = nil,
       @betas : Array(String) = [] of String,
       @use_beta : Bool = false,
+      server_tools : Enumerable(ServerTool)? = nil,
+      @thread : BetaMessageThread? = nil,
     )
-      @initial_messages = messages.dup
-      @current_messages = messages.dup
+      @tools = tools.map(&.as(Tool))
+      @server_tools = server_tools.try(&.map(&.as(ServerTool)))
+      @initial_messages = BetaMessageThread.deep_copy_messages(messages)
+      @current_messages = BetaMessageThread.deep_copy_messages(messages)
       @initial_container = @container
+      @initial_thread_state = @thread.try(&.capture_state)
     end
 
     # Check if the runner has finished (no more tool calls or max iterations reached)
@@ -132,7 +111,7 @@ module Anthropic
 
     # Reset the runner to its initial state
     def reset
-      @current_messages = @initial_messages.dup
+      @current_messages = BetaMessageThread.deep_copy_messages(@initial_messages)
       @iteration = 0
       @finished = false
       @last_response = nil
@@ -140,15 +119,19 @@ module Anthropic
       @pending_tool_changes.clear
       @tool_overrides.clear
       @pending_compaction = nil
+
+      if @started
+        if (thread = @thread) && (snapshot = @initial_thread_state)
+          thread.restore_state(snapshot)
+        end
+        @started = false
+      end
     end
 
     # Iterate through messages, auto-executing tools
     #
     # Yields each message response, including those with tool use.
     # Continues until max_iterations is reached or Claude stops using tools.
-    #
-    # If compaction is enabled, automatically compresses conversation when
-    # token usage exceeds the configured threshold.
     #
     # Note: This resets the runner state before iterating.
     def each_message(&)
@@ -167,12 +150,13 @@ module Anthropic
     # while msg = runner.next_message
     #   pp msg.content
     #   # Optionally inject messages
-    #   runner.feed_messages([...]) if some_condition
+    #   runner.feed_messages([MessageParam.user("Actually, also check...")]) if some_condition
     # end
     # ```
     def next_message : Message?
       return nil if @finished
 
+      @started = true
       last_stop_reason = @last_response.try(&.stop_reason)
 
       # A pending explicit compaction runs before queued tool changes
@@ -197,62 +181,12 @@ module Anthropic
       # A paused turn goes back as the last message, so queued tool
       # changes wait for the request after it.
       send_pending_tool_changes unless last_stop_reason == "pause_turn"
-      inline_beta = history_has_tool_changes?
 
-      # Check for compaction before making request
-      if should_compact?(@current_messages)
-        @current_messages = compact_messages(@current_messages)
-      end
-
-      response = create_message(
-        @current_messages,
-        max_tokens: @max_tokens,
-        tools: @tools,
-        system: @system,
-        speed: @speed,
-        thinking: @thinking,
-        output_config: @output_config,
-        inference_geo: @inference_geo,
-        container: @container,
-        betas: inline_beta ? with_inline_tools_beta : nil
-      )
-
+      response = send_runner_turn
       @last_response = response
-      update_container(response.container_id)
+      sync_container_after_turn(response.container_id)
 
-      # A paused turn is sent back unchanged so the server continues it.
-      # No tool calls run; the loop proceeds with the resumed history.
-      if resume_stop_reason?(response.stop_reason)
-        @current_messages << MessageParam.new(
-          role: Role::Assistant,
-          content: parse_response_content(response)
-        )
-        return response
-      end
-
-      # Check if tool use is requested
-      unless response.tool_use?
-        @finished = true
-        return response
-      end
-
-      # Execute tools and build results
-      tool_results = execute_tools(response.tool_use_blocks)
-
-      # Add assistant response and tool results to conversation
-      assistant_content = parse_response_content(response)
-
-      @current_messages << MessageParam.new(
-        role: Role::Assistant,
-        content: assistant_content
-      )
-
-      @current_messages << MessageParam.new(
-        role: Role::User,
-        content: tool_results.map(&.as(ContentBlock))
-      )
-
-      response
+      handle_turn_response(response)
     end
 
     # Add messages to the conversation mid-loop
@@ -269,14 +203,85 @@ module Anthropic
     # end
     # ```
     def feed_messages(messages : Array(MessageParam))
-      @current_messages.concat(messages)
+      return if messages.empty?
+
+      copied = BetaMessageThread.deep_copy_messages(messages)
+      if thread = @thread
+        thread.append(copied)
+      else
+        @current_messages.concat(copied)
+      end
       # Reset finished state since we have new input
-      @finished = false if @finished && !messages.empty?
+      @finished = false if @finished
     end
 
     # Add a single message to the conversation
     def feed_message(message : MessageParam)
       feed_messages([message])
+    end
+
+    # Append one or more messages to the conversation (alias parity with official SDKs).
+    def push_messages(*messages : MessageParam) : self
+      feed_messages(messages.to_a)
+      self
+    end
+
+    def push_messages(messages : Array(MessageParam)) : self
+      feed_messages(messages)
+      self
+    end
+
+    # Update runner message request parameters for subsequent turns.
+    def set_messages_params(
+      model : String | UnsetValue = UNSET,
+      max_tokens : Int32 | UnsetValue = UNSET,
+      messages : Array(MessageParam) | UnsetValue = UNSET,
+      system : SystemPrompt? | UnsetValue = UNSET,
+      tools : Enumerable(Tool) | UnsetValue = UNSET,
+      server_tools : Enumerable(ServerTool)? | UnsetValue = UNSET,
+      speed : String? | UnsetValue = UNSET,
+      thinking : ThinkingConfig? | UnsetValue = UNSET,
+      output_config : OutputConfig? | UnsetValue = UNSET,
+      inference_geo : String? | UnsetValue = UNSET,
+      container : String | ContainerConfig? | UnsetValue = UNSET,
+      betas : Array(String) | UnsetValue = UNSET,
+    ) : self
+      @model = model unless model.is_a?(UnsetValue)
+      @max_tokens = max_tokens unless max_tokens.is_a?(UnsetValue)
+      @system = system unless system.is_a?(UnsetValue)
+      @tools = tools.map(&.as(Tool)) unless tools.is_a?(UnsetValue)
+      @server_tools = server_tools.try(&.map(&.as(ServerTool))) unless server_tools.is_a?(UnsetValue)
+      @speed = speed unless speed.is_a?(UnsetValue)
+      @thinking = thinking unless thinking.is_a?(UnsetValue)
+      @output_config = output_config unless output_config.is_a?(UnsetValue)
+      @inference_geo = inference_geo unless inference_geo.is_a?(UnsetValue)
+      @container = container unless container.is_a?(UnsetValue)
+      @betas = betas.dup unless betas.is_a?(UnsetValue)
+
+      if thread = @thread
+        thread.update(
+          model: model,
+          max_tokens: max_tokens,
+          betas: betas,
+          system: system,
+          tools: tools,
+          server_tools: server_tools,
+          speed: speed,
+          thinking: thinking,
+          output_config: output_config,
+          inference_geo: inference_geo,
+          container: container
+        )
+        unless messages.is_a?(UnsetValue)
+          thread.reset_history(messages)
+          @finished = false
+        end
+      elsif !messages.is_a?(UnsetValue)
+        @current_messages = BetaMessageThread.deep_copy_messages(messages)
+        @finished = false
+      end
+
+      self
     end
 
     # Offer more tools from the next request on.
@@ -404,7 +409,7 @@ module Anthropic
       tools: Array(Tool),
       max_iterations: Int32,
       iteration: Int32,
-      system: String?,
+      system: SystemPrompt?,
       container: String | ContainerConfig?,
       finished: Bool,
     )
@@ -412,7 +417,7 @@ module Anthropic
         model:            @model,
         max_tokens:       @max_tokens,
         messages:         @initial_messages,
-        current_messages: @current_messages,
+        current_messages: current_messages,
         tools:            @tools,
         max_iterations:   @max_iterations,
         iteration:        @iteration,
@@ -424,12 +429,47 @@ module Anthropic
 
     # Get the current accumulated messages (including tool results)
     def current_messages : Array(MessageParam)
-      @current_messages.dup
+      if thread = @thread
+        thread.messages
+      else
+        @current_messages.dup
+      end
     end
 
     # Get the last response received
     def last_response : Message?
       @last_response
+    end
+
+    # Count tokens for the current conversation (attaching inline-tools beta if needed).
+    def count_tokens(messages : Array(MessageParam) = current_messages) : TokenCountResponse
+      if @use_beta
+        @client.beta.messages.count_tokens(
+          betas: history_has_tool_changes? ? with_inline_tools_beta : @betas,
+          model: @model,
+          messages: messages,
+          tools: @tools,
+          server_tools: @server_tools,
+          system: @system,
+          thinking: @thinking,
+          output_config: @output_config,
+          inference_geo: @inference_geo,
+          container: @container,
+          speed: @speed
+        )
+      else
+        @client.messages.count_tokens(
+          model: @model,
+          messages: messages,
+          tools: @tools,
+          server_tools: @server_tools,
+          system: @system,
+          thinking: @thinking,
+          output_config: @output_config,
+          inference_geo: @inference_geo,
+          speed: @speed
+        )
+      end
     end
 
     # Iterate through streaming events while auto-executing tools
@@ -453,6 +493,7 @@ module Anthropic
     # ```
     def each_streaming(&block : AnyStreamEvent ->)
       reset
+      @started = true
       last_stop_reason : String? = nil
 
       loop do
@@ -474,17 +515,86 @@ module Anthropic
         # A paused turn goes back as the last message, so queued tool
         # changes wait for the request after it.
         send_pending_tool_changes unless last_stop_reason == "pause_turn"
-        inline_beta = history_has_tool_changes?
 
-        # Check for compaction before making request
-        if should_compact?(@current_messages)
-          @current_messages = compact_messages(@current_messages)
-        end
-
-        # Accumulate the full message (thinking, text, tool uses) so
-        # resumes and tool turns replay complete content.
         snapshot = SnapshotBuilder.new
+        run_streaming_turn(snapshot, &block)
 
+        final = snapshot.message
+        @last_response = final if final
+        stop_reason = final.try(&.stop_reason)
+        last_stop_reason = stop_reason
+
+        break unless continue_streaming_loop?(final, stop_reason)
+      end
+    end
+
+    private def send_runner_turn : Message
+      inline_beta = history_has_tool_changes?
+      if thread = @thread
+        thread.send(
+          betas: inline_beta ? with_inline_tools_beta : UNSET,
+          extra_headers: StainlessHelper.header(StainlessHelper::BETA_TOOL_RUNNER)
+        )
+      else
+        create_message(
+          @current_messages,
+          max_tokens: @max_tokens,
+          tools: @tools,
+          system: @system,
+          speed: @speed,
+          thinking: @thinking,
+          output_config: @output_config,
+          inference_geo: @inference_geo,
+          container: @container,
+          betas: inline_beta ? with_inline_tools_beta : nil
+        )
+      end
+    end
+
+    private def handle_turn_response(response : Message) : Message
+      if resume_stop_reason?(response.stop_reason)
+        unless @thread
+          @current_messages << MessageParam.new(
+            role: Role::Assistant,
+            content: response.content
+          )
+        end
+        return response
+      end
+
+      unless response.tool_use?
+        @finished = true
+        return response
+      end
+
+      tool_results = execute_tools(response.tool_use_blocks)
+      result_msg = MessageParam.new(
+        role: Role::User,
+        content: tool_results.map(&.as(ContentBlock))
+      )
+
+      if thread = @thread
+        thread.append(result_msg)
+      else
+        @current_messages << MessageParam.new(role: Role::Assistant, content: response.content)
+        @current_messages << result_msg
+      end
+
+      response
+    end
+
+    private def run_streaming_turn(snapshot : SnapshotBuilder, &block : AnyStreamEvent ->) : Nil
+      inline_beta = history_has_tool_changes?
+      if thread = @thread
+        thread.stream(
+          betas: inline_beta ? with_inline_tools_beta : UNSET,
+          extra_headers: StainlessHelper.header(StainlessHelper::BETA_TOOL_RUNNER)
+        ) do |event|
+          block.call(event)
+          snapshot.apply(event)
+          track_streaming_container(event)
+        end
+      else
         stream_messages(
           @current_messages,
           max_tokens: @max_tokens,
@@ -497,48 +607,39 @@ module Anthropic
           container: @container,
           betas: inline_beta ? with_inline_tools_beta : nil
         ) do |event|
-          # Yield every event to the caller
           block.call(event)
-
           snapshot.apply(event)
           track_streaming_container(event)
         end
-
-        final = snapshot.message
-        stop_reason = final.try(&.stop_reason)
-        last_stop_reason = stop_reason
-
-        # A paused turn resumes: send it back unchanged so the server
-        # continues it.
-        if resume_stop_reason?(stop_reason) && final
-          @current_messages << MessageParam.new(
-            role: Role::Assistant,
-            content: final.content
-          )
-          next
-        end
-
-        # Tools run only on tool_use turns; any other stop reason ends
-        # the loop without executing, even if blocks are present.
-        tool_uses = final.try(&.tool_use_blocks) || [] of ToolUseContent
-        if stop_reason == "tool_use" && !tool_uses.empty? && final
-          # Execute tools
-          tool_results = execute_tools(tool_uses)
-
-          @current_messages << MessageParam.new(
-            role: Role::Assistant,
-            content: final.content
-          )
-
-          @current_messages << MessageParam.new(
-            role: Role::User,
-            content: tool_results.map(&.as(ContentBlock))
-          )
-        else
-          @finished = true
-          break
-        end
       end
+    end
+
+    private def continue_streaming_loop?(final : Message?, stop_reason : String?) : Bool
+      if resume_stop_reason?(stop_reason) && final
+        unless @thread
+          @current_messages << MessageParam.new(role: Role::Assistant, content: final.content)
+        end
+        return true
+      end
+
+      tool_uses = final.try(&.tool_use_blocks) || [] of ToolUseContent
+      if stop_reason == "tool_use" && !tool_uses.empty? && final
+        tool_results = execute_tools(tool_uses)
+        result_msg = MessageParam.new(
+          role: Role::User,
+          content: tool_results.map(&.as(ContentBlock))
+        )
+        if thread = @thread
+          thread.append(result_msg)
+        else
+          @current_messages << MessageParam.new(role: Role::Assistant, content: final.content)
+          @current_messages << result_msg
+        end
+        return true
+      end
+
+      @finished = true
+      false
     end
 
     # Stop reasons for unfinished turns. `pause_turn` pauses a
@@ -558,10 +659,12 @@ module Anthropic
     private def send_pending_tool_changes : Bool
       return false if @pending_tool_changes.empty?
 
-      @current_messages << MessageParam.new(
-        role: Role::System,
-        content: @pending_tool_changes.dup
-      )
+      change_msg = MessageParam.system(content: @pending_tool_changes.dup)
+      if thread = @thread
+        thread.append(change_msg)
+      else
+        @current_messages << change_msg
+      end
       @pending_tool_changes.clear
       true
     end
@@ -570,9 +673,9 @@ module Anthropic
     # from the messages so a failed turn's retry still attaches the
     # inline-tools beta for the already-flushed blocks.
     private def history_has_tool_changes? : Bool
-      @current_messages.any? do |message|
+      current_messages.any? do |message|
         content = message.content
-        next false if content.is_a?(String)
+        next false unless content.is_a?(Array)
 
         content.any? { |block| block.is_a?(ToolAdditionContent) || block.is_a?(ToolRemovalContent) }
       end
@@ -597,170 +700,114 @@ module Anthropic
         raise ArgumentError.new("compact_before_next_turn requires a beta tool runner (use_beta: true)")
       end
 
-      # Compaction turns sample no reply, so a structured-output format
-      # is incompatible with them; effort and task budgets carry over.
-      output_config = @output_config
-      if (config = output_config) && config.format
-        output_config = OutputConfig.new(effort: config.effort, task_budget: config.task_budget)
-      end
-
-      response = create_message(
-        @current_messages,
-        max_tokens: @max_tokens,
-        tools: @tools,
-        system: @system,
-        speed: @speed,
-        thinking: @thinking,
-        output_config: output_config,
-        inference_geo: @inference_geo,
-        container: @container,
-        compaction: compaction
-      )
+      output_config = compaction_output_config
+      pre_state = @thread.try(&.capture_state)
+      response = execute_compaction_request(compaction, output_config)
       @pending_compaction = nil
 
       @last_response = response
-      update_container(response.container_id)
+      sync_container_after_turn(response.container_id)
 
-      summary = response.content.compact_map { |block| block.as?(CompactionContent) }.first?
-      has_summary = summary && (!(summary.content || "").empty? || !(summary.encrypted_content || "").empty?)
-      if has_summary
-        @current_messages = [MessageParam.new(role: Role::Assistant, content: response.content)]
+      if compaction_has_summary?(response)
+        replacement = [MessageParam.new(role: Role::Assistant, content: response.content)]
+        if thread = @thread
+          thread.reset_history(replacement)
+        else
+          @current_messages = replacement
+        end
         response
       else
+        if (thread = @thread) && pre_state
+          thread.restore_state(pre_state)
+        end
         Log.for("anthropic-cr.tool_runner").warn { "Compaction produced no summary; keeping the conversation as it is." }
         nil
       end
     end
 
-    # Get response content as ContentBlock array (content is already typed)
-    private def parse_response_content(response : Message) : Array(ContentBlock)
-      response.content
+    # Compaction turns sample no reply, so a structured-output format
+    # is incompatible with them; effort and task budgets carry over.
+    private def compaction_output_config : OutputConfig?
+      config = @output_config
+      return config unless config && config.format
+
+      (config.effort || config.task_budget) ? OutputConfig.new(effort: config.effort, task_budget: config.task_budget) : nil
+    end
+
+    private def execute_compaction_request(compaction : CompactionParam, output_config : OutputConfig?) : Message
+      inline_beta = history_has_tool_changes?
+      if thread = @thread
+        thread.send(
+          betas: inline_beta ? with_inline_tools_beta : UNSET,
+          compaction: compaction,
+          output_config: output_config,
+          extra_headers: StainlessHelper.header(StainlessHelper::BETA_TOOL_RUNNER)
+        )
+      else
+        create_message(
+          @current_messages,
+          max_tokens: @max_tokens,
+          tools: @tools,
+          system: @system,
+          speed: @speed,
+          thinking: @thinking,
+          output_config: output_config,
+          inference_geo: @inference_geo,
+          container: @container,
+          betas: inline_beta ? with_inline_tools_beta : nil,
+          compaction: compaction
+        )
+      end
+    end
+
+    private def compaction_has_summary?(response : Message) : Bool
+      summary = response.content.compact_map { |block| block.as?(CompactionContent) }.first?
+      return false unless summary
+
+      !(summary.content || "").empty? || !(summary.encrypted_content || "").empty?
     end
 
     private def execute_tools(tool_uses : Array(ToolUseContent)) : Array(ToolResultContent)
       # Mid-conversation tool_removal / tool_addition only affect local dispatch;
       # removed tools take the same unknown-tool path as never-declared tools.
-      available = ToolDispatch.available_tool_names(@current_messages, @tools.map(&.name))
+      available = ToolDispatch.available_tool_names(current_messages, @tools.map(&.name))
 
       tool_uses.map do |tool_use|
-        tool = if @tool_overrides.has_key?(tool_use.name)
-                 @tool_overrides[tool_use.name]
-               elsif available.includes?(tool_use.name)
-                 @tools.find { |available_tool| available_tool.name == tool_use.name }
-               end
+        run_single_tool(tool_use, available)
+      end
+    end
 
-        if tool
-          begin
-            result = tool.call(tool_use.input)
-            ToolResultContent.new(
-              tool_use_id: tool_use.id,
-              content: result
-            )
-          rescue ex
-            ToolResultContent.new(
-              tool_use_id: tool_use.id,
-              content: "Error: #{ex.message}",
-              is_error: true
-            )
-          end
-        else
+    private def run_single_tool(tool_use : ToolUseContent, available : Set(String)) : ToolResultContent
+      tool = if @tool_overrides.has_key?(tool_use.name)
+               @tool_overrides[tool_use.name]
+             elsif available.includes?(tool_use.name)
+               @tools.find { |available_tool| available_tool.name == tool_use.name }
+             end
+
+      if tool
+        begin
+          result = tool.call(tool_use.input)
           ToolResultContent.new(
             tool_use_id: tool_use.id,
-            content: "Unknown tool: #{tool_use.name}",
-            is_error: true
+            content: Anthropic.sanitize_tool_result_text(result),
+            toolset_name: tool_use.toolset_name
+          )
+        rescue ex
+          ToolResultContent.new(
+            tool_use_id: tool_use.id,
+            content: Anthropic.sanitize_tool_result_text("Error: #{ex.message}"),
+            is_error: true,
+            toolset_name: tool_use.toolset_name
           )
         end
+      else
+        ToolResultContent.new(
+          tool_use_id: tool_use.id,
+          content: "Unknown tool: #{tool_use.name}",
+          is_error: true,
+          toolset_name: tool_use.toolset_name
+        )
       end
-    end
-
-    # Check if compaction is needed based on token count
-    private def should_compact?(messages : Array(MessageParam)) : Bool
-      return false unless @compaction.try(&.enabled?)
-
-      threshold = @compaction.try(&.context_token_threshold) || 10000
-
-      # Count tokens using the API
-      begin
-        count = count_tokens(messages)
-        count.input_tokens > threshold
-      rescue ex : APIError | IO::Error | Socket::Error | OpenSSL::Error
-        # If token counting fails, don't compact
-        false
-      end
-    end
-
-    # Compact messages by asking Claude to summarize the conversation
-    private def compact_messages(messages : Array(MessageParam)) : Array(MessageParam)
-      return messages if messages.size < 3
-
-      # Get token count before compaction
-      tokens_before = begin
-        count_tokens(messages).input_tokens
-      rescue ex : APIError | IO::Error | Socket::Error | OpenSSL::Error
-        0
-      end
-
-      # Build conversation text for summarization
-      conversation_text = messages.map do |msg|
-        role = msg.role.to_s.capitalize
-        content_text = case c = msg.content
-                       when String
-                         c
-                       when Array
-                         c.compact_map do |block|
-                           block.as?(TextContent).try(&.text)
-                         end.join("\n")
-                       else
-                         ""
-                       end
-        "#{role}: #{content_text}"
-      end.join("\n\n")
-
-      # Ask Claude to summarize
-      summary_response = create_message(
-        [
-          MessageParam.user(
-            "Please provide a concise summary of this conversation that preserves " \
-            "all important context, tool usage, and results. Focus on key information " \
-            "needed to continue the conversation:\n\n#{conversation_text}"
-          ),
-        ],
-        max_tokens: 2048,
-        tools: nil,
-        system: nil,
-        speed: @speed,
-        thinking: nil,
-        output_config: nil,
-        inference_geo: nil,
-        container: @container
-      )
-
-      # Extract text from first text block
-      text_block = summary_response.content.find(&.is_a?(TextContent)).as?(TextContent)
-      summary_text = text_block.try(&.text) || ""
-
-      # Create compacted messages: system summary + last user message
-      compacted = [
-        MessageParam.user("[Conversation Summary]\n#{summary_text}"),
-        MessageParam.assistant("I understand. I have the context from our previous conversation. How can I help you continue?"),
-      ] of MessageParam
-
-      # Keep the last exchange if it exists
-      if messages.size >= 2
-        last_two = messages[-2..-1]
-        compacted.concat(last_two)
-      end
-
-      # Get token count after compaction and call callback
-      tokens_after = begin
-        count_tokens(compacted).input_tokens
-      rescue ex : APIError | IO::Error | Socket::Error | OpenSSL::Error
-        0
-      end
-
-      @compaction.try(&.on_compact).try(&.call(tokens_before, tokens_after))
-
-      compacted
     end
 
     # Track container reassignment during streaming. Content
@@ -778,7 +825,7 @@ module Anthropic
       messages : Array(MessageParam),
       max_tokens : Int32,
       tools : Array(Tool)?,
-      system : String?,
+      system : SystemPrompt?,
       speed : String?,
       thinking : ThinkingConfig?,
       output_config : OutputConfig?,
@@ -794,6 +841,7 @@ module Anthropic
           max_tokens: max_tokens,
           messages: messages,
           tools: tools,
+          server_tools: @server_tools,
           system: system,
           speed: speed,
           thinking: thinking,
@@ -809,7 +857,9 @@ module Anthropic
           max_tokens: max_tokens,
           messages: messages,
           tools: tools,
+          server_tools: @server_tools,
           system: system,
+          speed: speed,
           thinking: thinking,
           output_config: output_config,
           inference_geo: inference_geo,
@@ -823,7 +873,7 @@ module Anthropic
       messages : Array(MessageParam),
       max_tokens : Int32,
       tools : Array(Tool)?,
-      system : String?,
+      system : SystemPrompt?,
       speed : String?,
       thinking : ThinkingConfig?,
       output_config : OutputConfig?,
@@ -839,6 +889,7 @@ module Anthropic
           max_tokens: max_tokens,
           messages: messages,
           tools: tools,
+          server_tools: @server_tools,
           system: system,
           speed: speed,
           thinking: thinking,
@@ -855,7 +906,9 @@ module Anthropic
           max_tokens: max_tokens,
           messages: messages,
           tools: tools,
+          server_tools: @server_tools,
           system: system,
+          speed: speed,
           thinking: thinking,
           output_config: output_config,
           inference_geo: inference_geo,
@@ -867,37 +920,21 @@ module Anthropic
       end
     end
 
-    private def count_tokens(messages : Array(MessageParam)) : TokenCountResponse
-      if @use_beta
-        @client.beta.messages.count_tokens(
-          betas: history_has_tool_changes? ? with_inline_tools_beta : @betas,
-          model: @model,
-          messages: messages,
-          tools: @tools,
-          system: @system,
-          thinking: @thinking,
-          output_config: @output_config,
-          inference_geo: @inference_geo,
-          container: @container,
-          speed: @speed
-        )
+    private def sync_container_after_turn(container_id : String?) : Nil
+      if thread = @thread
+        @container = thread.params[:container]
       else
-        @client.messages.count_tokens(
-          model: @model,
-          messages: messages,
-          tools: @tools,
-          system: @system,
-          thinking: @thinking,
-          output_config: @output_config,
-          inference_geo: @inference_geo
-        )
+        update_container(container_id)
       end
     end
 
     private def update_container(container_id : String?)
-      return unless container_id
+      return if container_id.nil? || container_id.empty?
 
-      @container = container_id
+      current = @container
+      if current.nil? || current.is_a?(ContainerConfig) || (current.is_a?(String) && current.empty?)
+        @container = container_id
+      end
     end
 
     private def non_beta_container_id(container : String | ContainerConfig?) : String?
@@ -929,7 +966,7 @@ module Anthropic
 
       messages.each do |message|
         content = message.content
-        next if content.is_a?(String)
+        next unless content.is_a?(Array)
 
         if message.role == "system"
           content.each do |block|

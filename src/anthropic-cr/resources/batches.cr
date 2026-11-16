@@ -32,7 +32,8 @@ module Anthropic
 
     # Retrieve batch status
     def retrieve(batch_id : String) : BatchResponse
-      response = @client.get("/v1/messages/batches/#{batch_id}")
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.get("/v1/messages/batches/#{encoded_id}")
       BatchResponse.from_json(response.body)
     end
 
@@ -52,7 +53,8 @@ module Anthropic
 
     # Stream batch results (JSONL format)
     def results(batch_id : String, &)
-      @client.get_stream("/v1/messages/batches/#{batch_id}/results") do |response|
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      @client.get_stream("/v1/messages/batches/#{encoded_id}/results") do |response|
         response.body_io.each_line do |line|
           next if line.empty?
           yield BatchResult.from_json(line)
@@ -62,13 +64,15 @@ module Anthropic
 
     # Cancel a batch
     def cancel(batch_id : String) : BatchResponse
-      response = @client.post("/v1/messages/batches/#{batch_id}/cancel", NamedTuple.new)
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.post("/v1/messages/batches/#{encoded_id}/cancel", NamedTuple.new)
       BatchResponse.from_json(response.body)
     end
 
     # Delete a batch
     def delete(batch_id : String) : DeletedResponse
-      response = @client.delete("/v1/messages/batches/#{batch_id}")
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.delete("/v1/messages/batches/#{encoded_id}")
       DeletedResponse.from_json(response.body)
     end
 
@@ -104,21 +108,23 @@ module Anthropic
       betas : Array(String) = [] of String,
     ) : BatchResponse
       body = BatchCreateBody.new(requests)
-      response = @client.post("/v1/messages/batches?beta=true", body, beta_headers(betas, requests))
+      response = @client.post("/v1/messages/batches", body, beta_headers(betas, requests), beta: true)
       BatchResponse.from_json(response.body)
     end
 
+    # :ditto:
     def create(
       requests : Array(BetaBatchRequest),
       betas : Array(String) = [] of String,
     ) : BatchResponse
       body = BetaBatchCreateBody.new(requests)
-      response = @client.post("/v1/messages/batches?beta=true", body, beta_headers(betas, requests))
+      response = @client.post("/v1/messages/batches", body, beta_headers(betas, requests), beta: true)
       BatchResponse.from_json(response.body)
     end
 
     def retrieve(batch_id : String, betas : Array(String) = [] of String) : BatchResponse
-      response = @client.get("/v1/messages/batches/#{batch_id}?beta=true", nil, beta_headers(betas))
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.get("/v1/messages/batches/#{encoded_id}", nil, beta_headers(betas), beta: true)
       BatchResponse.from_json(response.body)
     end
 
@@ -132,12 +138,13 @@ module Anthropic
       params["before_id"] = before_id if before_id
       params["after_id"] = after_id if after_id
 
-      response = @client.get("/v1/messages/batches?beta=true", params, beta_headers(betas))
+      response = @client.get("/v1/messages/batches", params, beta_headers(betas), beta: true)
       BetaBatchListResponse.from_json(response.body)
     end
 
     def results(batch_id : String, betas : Array(String) = [] of String, &)
-      @client.get_stream("/v1/messages/batches/#{batch_id}/results?beta=true", beta_headers(betas)) do |response|
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      @client.get_stream("/v1/messages/batches/#{encoded_id}/results", beta_headers(betas)) do |response|
         response.body_io.each_line do |line|
           next if line.empty?
           yield BatchResult.from_json(line)
@@ -146,12 +153,14 @@ module Anthropic
     end
 
     def cancel(batch_id : String, betas : Array(String) = [] of String) : BatchResponse
-      response = @client.post("/v1/messages/batches/#{batch_id}/cancel?beta=true", NamedTuple.new, beta_headers(betas))
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.post("/v1/messages/batches/#{encoded_id}/cancel", NamedTuple.new, beta_headers(betas), beta: true)
       BatchResponse.from_json(response.body)
     end
 
     def delete(batch_id : String, betas : Array(String) = [] of String) : DeletedResponse
-      response = @client.delete("/v1/messages/batches/#{batch_id}?beta=true", beta_headers(betas))
+      encoded_id = Anthropic.encode_path_segment(batch_id)
+      response = @client.delete("/v1/messages/batches/#{encoded_id}", beta_headers(betas), beta: true)
       DeletedResponse.from_json(response.body)
     end
 
@@ -185,12 +194,12 @@ module Anthropic
           merged_betas << EXTENDED_CACHE_TTL_BETA unless merged_betas.includes?(EXTENDED_CACHE_TTL_BETA)
         end
 
-        if params.output_config.try(&.format)
-          merged_betas << STRUCTURED_OUTPUT_BETA unless merged_betas.includes?(STRUCTURED_OUTPUT_BETA)
-        end
-
         if params.compaction
           merged_betas << COMPACT_2026_09_04_BETA unless merged_betas.includes?(COMPACT_2026_09_04_BETA)
+        end
+
+        if params.thread
+          merged_betas << MESSAGE_THREADS_BETA unless merged_betas.includes?(MESSAGE_THREADS_BETA)
         end
 
         Anthropic.beta_headers_for_tools(params.tools).each do |beta|
@@ -242,15 +251,6 @@ module Anthropic
     getter system : String | Array(TextContent)?
 
     @[JSON::Field(emit_null: false)]
-    getter temperature : Float64?
-
-    @[JSON::Field(key: "top_p", emit_null: false)]
-    getter top_p : Float64?
-
-    @[JSON::Field(key: "top_k", emit_null: false)]
-    getter top_k : Int32?
-
-    @[JSON::Field(emit_null: false)]
     getter tools : Array(ToolDefinition | ServerTool)?
 
     @[JSON::Field(key: "tool_choice", emit_null: false)]
@@ -264,6 +264,9 @@ module Anthropic
 
     @[JSON::Field(key: "service_tier", emit_null: false)]
     getter service_tier : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter speed : String?
 
     @[JSON::Field(emit_null: false)]
     getter thinking : ThinkingConfig?
@@ -285,14 +288,12 @@ module Anthropic
       @max_tokens : Int32,
       @messages : Array(MessageParam),
       @system : String | Array(TextContent)? = nil,
-      @temperature : Float64? = nil,
-      @top_p : Float64? = nil,
-      @top_k : Int32? = nil,
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @stop_sequences : Array(String)? = nil,
       @metadata : Metadata | Hash(String, String)? = nil,
       @service_tier : String? = nil,
+      @speed : String? = nil,
       @thinking : ThinkingConfig? = nil,
       @cache_control : CacheControl? = nil,
       @container : String? = nil,
@@ -309,13 +310,11 @@ module Anthropic
       tools : Array(Tool),
       server_tools : Array(ServerTool)? = nil,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata | Hash(String, String)? = nil,
       service_tier : String? = nil,
+      speed : String? = nil,
       thinking : ThinkingConfig? = nil,
       cache_control : CacheControl? = nil,
       container : String? = nil,
@@ -331,14 +330,12 @@ module Anthropic
         max_tokens: max_tokens,
         messages: messages,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tool_definitions,
         tool_choice: tool_choice,
         stop_sequences: stop_sequences,
         metadata: metadata,
         service_tier: service_tier,
+        speed: speed,
         thinking: thinking,
         cache_control: cache_control,
         container: container,
@@ -360,15 +357,6 @@ module Anthropic
 
     @[JSON::Field(emit_null: false)]
     getter system : String | Array(TextContent)?
-
-    @[JSON::Field(emit_null: false)]
-    getter temperature : Float64?
-
-    @[JSON::Field(key: "top_p", emit_null: false)]
-    getter top_p : Float64?
-
-    @[JSON::Field(key: "top_k", emit_null: false)]
-    getter top_k : Int32?
 
     @[JSON::Field(emit_null: false)]
     getter tools : Array(ToolDefinition | ServerTool)?
@@ -412,14 +400,14 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter compaction : CompactionParam?
 
+    @[JSON::Field(converter: Anthropic::BetaThreadParamConverter, emit_null: false)]
+    getter thread : BetaThreadParam?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
       @messages : Array(MessageParam),
       @system : String | Array(TextContent)? = nil,
-      @temperature : Float64? = nil,
-      @top_p : Float64? = nil,
-      @top_k : Int32? = nil,
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @stop_sequences : Array(String)? = nil,
@@ -434,6 +422,7 @@ module Anthropic
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
       @compaction : CompactionParam? = nil,
+      @thread : BetaThreadParam? = nil,
     )
     end
 
@@ -444,9 +433,6 @@ module Anthropic
       tools : Array(Tool),
       server_tools : Array(ServerTool)? = nil,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata? = nil,
@@ -460,6 +446,7 @@ module Anthropic
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
       compaction : CompactionParam? = nil,
+      thread : BetaThreadParam? = nil,
     ) : self
       tool_definitions = [] of ToolDefinition | ServerTool
       tools.each { |tool| tool_definitions << tool.to_definition }
@@ -470,9 +457,6 @@ module Anthropic
         max_tokens: max_tokens,
         messages: messages,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tool_definitions,
         tool_choice: tool_choice,
         stop_sequences: stop_sequences,
@@ -486,7 +470,8 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       )
     end
   end

@@ -34,7 +34,7 @@ module Anthropic
           line = raw_line.ends_with?('\r') ? raw_line[0...-1] : raw_line
 
           if line.empty?
-            yield_event(event_type, data_lines) { |event| yield event }
+            dispatch_event(event_type, data_lines) { |event| yield event }
             event_type = ""
             data_lines.clear
             next
@@ -42,10 +42,10 @@ module Anthropic
 
           next if line.starts_with?(":")
 
-          if line.starts_with?("event: ")
-            event_type = line[7..]
-          elsif line.starts_with?("data: ")
-            data_lines << line[6..]
+          if line.starts_with?("event:")
+            event_type = parse_sse_field_value(line, 6)
+          elsif line.starts_with?("data:")
+            data_lines << parse_sse_field_value(line, 5)
           end
         end
       rescue ex : IO::TimeoutError
@@ -54,16 +54,36 @@ module Anthropic
         raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
       end
 
-      yield_event(event_type, data_lines) { |event| yield event }
+      dispatch_event(event_type, data_lines) { |event| yield event }
     end
 
-    private def yield_event(event_type : String, data_lines : Array(String), &)
+    private def parse_sse_field_value(line : String, prefix_len : Int32) : String
+      rest = line[prefix_len..]
+      rest.starts_with?(' ') ? rest[1..] : rest
+    end
+
+    private def dispatch_event(event_type : String, data_lines : Array(String), &)
       return if data_lines.empty?
 
       data = data_lines.join("\n")
       return if data == "[DONE]"
 
-      yield JSON.parse(data)
+      parsed = JSON.parse(data)
+      yield parsed
+      raise_sse_error_if_needed(event_type, parsed)
+    end
+
+    private def raise_sse_error_if_needed(event_type : String, parsed : JSON::Any) : Nil
+      hash = parsed.as_h?
+      payload_type = hash.try(&.[]?("type")).try(&.as_s?)
+      nested_error = hash.try(&.[]?("error")).try(&.as_h?)
+      return unless event_type == "error" || (payload_type == "error" && nested_error)
+
+      err_hash = nested_error || hash
+      error_type = err_hash.try(&.[]?("type")).try(&.as_s?)
+      api_message = err_hash.try(&.[]?("message")).try(&.as_s?)
+      details = err_hash.try(&.[]?("details"))
+      raise Anthropic.build_stream_api_error(error_type, api_message, details)
     end
   end
 end

@@ -27,7 +27,7 @@ describe Anthropic::BetaDreams do
   }).gsub(/\s+/, "")
 
   it "creates a dream with inputs, model string, and dreaming beta header" do
-    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams?beta=true", dream_json)
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams", dream_json)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     dream = client.beta.dreams.create(
@@ -60,12 +60,12 @@ describe Anthropic::BetaDreams do
     beta_header = capture.headers.not_nil!["anthropic-beta"]
     beta_header.should contain(Anthropic::DREAMING_BETA)
     beta_header.should contain("dreaming-2026-04-21")
-    beta_header.should contain(Anthropic::MANAGED_AGENTS_BETA)
-    beta_header.should contain("managed-agents-2026-04-01")
+    beta_header.should_not contain(Anthropic::MANAGED_AGENTS_BETA)
+    beta_header.should_not contain("managed-agents-2026-04-01")
   end
 
   it "creates a dream with BetaDreamModelConfig model object" do
-    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams?beta=true", dream_json)
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams", dream_json)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     client.beta.dreams.create(
@@ -79,7 +79,7 @@ describe Anthropic::BetaDreams do
   end
 
   it "retrieves a dream by id" do
-    WebMock.stub(:get, "https://api.anthropic.com/v1/dreams/dream_01abc?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/dreams/dream_01abc")
       .to_return(body: dream_json)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
@@ -91,7 +91,7 @@ describe Anthropic::BetaDreams do
   it "lists dreams with query params including statuses" do
     list_json = %({"data":[#{dream_json}],"next_page":null})
     capture = RequestCapture.new
-    WebMock.stub(:get, /https:\/\/api\.anthropic\.com\/v1\/dreams\?beta=true/)
+    WebMock.stub(:get, /https:\/\/api\.anthropic\.com\/v1\/dreams/)
       .to_return do |request|
         capture.headers = request.headers
         capture.path = request.resource
@@ -111,14 +111,14 @@ describe Anthropic::BetaDreams do
     response.next_page.should be_nil
     capture.path.not_nil!.should contain("limit=10")
     capture.path.not_nil!.should contain("created_at%5Bgt%5D=")
-    capture.path.not_nil!.should contain("statuses=pending")
-    capture.path.not_nil!.should contain("statuses=running")
+    capture.path.not_nil!.should contain("statuses%5B%5D=pending")
+    capture.path.not_nil!.should contain("statuses%5B%5D=running")
     capture.headers.not_nil!["anthropic-beta"].should contain(Anthropic::DREAMING_BETA)
   end
 
   it "archives a dream" do
     archived = dream_json.sub(%("archived_at":null), %("archived_at":"2026-04-22T00:00:00Z"))
-    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams/dream_01abc/archive?beta=true", archived)
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams/dream_01abc/archive", archived)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     dream = client.beta.dreams.archive("dream_01abc")
@@ -128,7 +128,7 @@ describe Anthropic::BetaDreams do
 
   it "cancels a dream" do
     canceled = dream_json.sub(%("status":"pending"), %("status":"canceled"))
-    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams/dream_01abc/cancel?beta=true", canceled)
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams/dream_01abc/cancel", canceled)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     dream = client.beta.dreams.cancel("dream_01abc")
@@ -137,7 +137,7 @@ describe Anthropic::BetaDreams do
   end
 
   it "merges extra betas with dreaming beta" do
-    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams?beta=true", dream_json)
+    capture = stub_and_capture(:post, "https://api.anthropic.com/v1/dreams", dream_json)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
     client.beta.dreams.create(
@@ -155,7 +155,7 @@ describe Anthropic::BetaDreams do
     failed_json = dream_json
       .sub(%("status":"pending"), %("status":"failed"))
       .sub(%("error":null), %("error":{"message":"upstream timeout","type":"api_error"}))
-    WebMock.stub(:get, "https://api.anthropic.com/v1/dreams/dream_fail?beta=true")
+    WebMock.stub(:get, "https://api.anthropic.com/v1/dreams/dream_fail")
       .to_return(body: failed_json)
     client = Anthropic::Client.new(api_key: "sk-ant-test")
 
