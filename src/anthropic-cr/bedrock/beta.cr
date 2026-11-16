@@ -72,7 +72,7 @@ module Anthropic
       end
 
       private def not_supported(feature : String) : NoReturn
-        raise NotImplementedError.new(
+        raise ::NotImplementedError.new(
           "Bedrock does not support beta.#{feature}. Only client.beta.messages is available " \
           "(matching the official Anthropic Bedrock SDKs)."
         )

@@ -22,10 +22,11 @@ module Anthropic
 
     # Resolves and caches GCP access tokens.
     class Provider
-      @static_token : String?
-      @token_provider : (-> String)?
-      @credentials_path : String | Path | Nil
-      @enable_metadata_server : Bool
+      getter static_token : String?
+      getter token_provider : (-> String)?
+      getter credentials_path : String | Path | Nil
+      getter? enable_metadata_server : Bool
+
       @cached_token : String?
       @cached_expiry : Time?
       @mutex : Mutex

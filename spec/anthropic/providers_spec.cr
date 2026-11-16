@@ -44,10 +44,11 @@ describe Anthropic::Vertex::Client do
     headers = capture.headers.not_nil!
     headers["authorization"].should eq("Bearer vertex-test-token-abc")
     headers["x-api-key"]?.should be_nil
+    headers["anthropic-version"]?.should be_nil
 
     body = JSON.parse(capture.body.not_nil!)
     body.as_h.has_key?("model").should be_false
-    body["anthropic_version"].as_s.should eq("vertex-2023-10-16")
+    body["anthropic_version"].as_s.should eq("2026-10-21")
     body["max_tokens"].as_i.should eq(32)
   end
 
@@ -91,9 +92,16 @@ describe Anthropic::Vertex::Client do
 end
 
 describe Anthropic::GoogleCloud::Client do
-  it "requires a workspace ID unless skip_auth is set" do
+  it "defers missing workspace ID check until workspace-scoped request" do
+    client = Anthropic::GoogleCloud::Client.new(project: "proj-123", skip_auth: true)
+    client.workspace_id.should be_nil
+
     expect_raises(ArgumentError, /workspace/) do
-      Anthropic::GoogleCloud::Client.new(project: "proj-123")
+      client.messages.create(
+        model: "claude-sonnet-5",
+        max_tokens: 8,
+        messages: [{role: "user", content: "hi"}]
+      )
     end
   end
 
@@ -110,7 +118,7 @@ describe Anthropic::GoogleCloud::Client do
 
   it "sends Bearer auth through the gateway untouched" do
     capture = RequestCapture.new
-    WebMock.stub(:post, /claude\.googleapis\.com\/v1alpha\/projects\//).to_return do |request|
+    WebMock.stub(:post, /claude\.googleapis\.com\/v1\/projects\//).to_return do |request|
       capture.body = request.body.to_s
       capture.headers = request.headers
       capture.path = request.resource
@@ -131,7 +139,7 @@ describe Anthropic::GoogleCloud::Client do
     )
 
     message.should be_a(Anthropic::Message)
-    capture.path.not_nil!.should contain("/v1alpha/projects/proj-123/locations/global/workspaces/ws_123/invoke/v1/messages")
+    capture.path.not_nil!.should contain("/v1/projects/proj-123/locations/global/workspaces/ws_123/invoke/v1/messages")
     headers = capture.headers.not_nil!
     headers["authorization"].should eq("Bearer vertex-test-token-abc")
     headers["x-api-key"]?.should be_nil
@@ -212,7 +220,7 @@ describe Anthropic::GoogleAuth::Provider do
 end
 
 describe Anthropic::AWS::Client do
-  it "sends x-api-key and workspace headers in API-key mode" do
+  it "sends Bearer authorization and workspace headers in API-key mode" do
     capture = RequestCapture.new
     WebMock.stub(:post, /aws-external-anthropic\.us-east-1\.api\.aws\/v1\/messages/).to_return do |request|
       capture.body = request.body.to_s
@@ -235,9 +243,9 @@ describe Anthropic::AWS::Client do
 
     message.should be_a(Anthropic::Message)
     headers = capture.headers.not_nil!
-    headers["x-api-key"].should eq("aws-gateway-key")
+    headers["Authorization"].should eq("Bearer aws-gateway-key")
     headers["anthropic-workspace-id"].should eq("ws_123")
-    headers["Authorization"]?.should be_nil
+    headers["x-api-key"]?.should be_nil
   end
 
   it "SigV4-signs requests with explicit credentials" do
@@ -287,8 +295,8 @@ describe Anthropic::AWS::Client do
     ).should be_a(Anthropic::Message)
 
     headers = capture.headers.not_nil!
-    headers["x-api-key"].should eq("explicit-key")
-    headers["Authorization"]?.should be_nil
+    headers["Authorization"].should eq("Bearer explicit-key")
+    headers["x-api-key"]?.should be_nil
   end
 
   it "requires a region in SigV4 mode" do

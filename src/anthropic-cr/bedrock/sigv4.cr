@@ -14,6 +14,45 @@ module Anthropic
 
       SERVICE = "bedrock"
 
+      # Headers excluded from the SigV4 canonical signature because proxies or
+      # instrumentation may mutate or strip them after signing.
+      UNSIGNABLE_HEADERS = Set{
+        "connection",
+        "proxy-authorization",
+        "traceparent",
+        "tracestate",
+        "baggage",
+      }
+
+      # Headers containing secrets or credentials that must be redacted in logs.
+      SENSITIVE_HEADERS = Set{
+        "authorization",
+        "proxy-authorization",
+        "api-key",
+        "x-api-key",
+        "x-amz-security-token",
+        "cookie",
+        "set-cookie",
+      }
+
+      # Returns true when `name` is permitted in the SigV4 SignedHeaders list.
+      def signable_header?(name : String, extra_unsignable : Enumerable(String)? = nil) : Bool
+        downcased = name.downcase
+        return false if UNSIGNABLE_HEADERS.includes?(downcased)
+        return false if extra_unsignable && extra_unsignable.any? { |header| header.downcase == downcased }
+        true
+      end
+
+      # Returns a header hash with sensitive auth/token headers replaced by `"***"`.
+      def redact_headers(headers : HTTP::Headers | Hash(String, String)) : Hash(String, String)
+        redacted = {} of String => String
+        headers.each do |name, value|
+          normalized = value.is_a?(Array(String)) ? value.join(", ") : value
+          redacted[name] = SENSITIVE_HEADERS.includes?(name.downcase) ? "***" : normalized
+        end
+        redacted
+      end
+
       # Sign an HTTP request and return headers to merge into the outbound request.
       #
       # `service` defaults to `"bedrock"` (Bedrock Runtime). Mantle uses
@@ -26,6 +65,7 @@ module Anthropic
         body : String?,
         now : Time = Time.utc,
         service : String = SERVICE,
+        unsignable_headers : Enumerable(String)? = nil,
       ) : Hash(String, String)
         uri = URI.parse(url)
         host = uri.host || raise ArgumentError.new("URL missing host: #{url}")
@@ -51,6 +91,8 @@ module Anthropic
         if ct = headers["content-type"]? || headers["Content-Type"]?
           signed["content-type"] = ct
         end
+
+        signed.reject! { |k, _| !signable_header?(k, unsignable_headers) }
 
         # SigV4 canonical URI: percent-encode each path segment (slashes kept).
         # Already-encoded bytes are encoded again for the canonical string.

@@ -98,7 +98,7 @@ describe Anthropic::Bedrock::MantleClient do
     req.headers["Authorization"].should contain("/bedrock-mantle/aws4_request")
   end
 
-  it "rejects models, batches, and non-messages beta resources" do
+  it "rejects models, batches, user_profiles, and non-messages beta resources" do
     client = Anthropic::Bedrock::MantleClient.new(
       aws_access_key: "AKIAEXAMPLE",
       aws_secret_key: "secret",
@@ -113,8 +113,12 @@ describe Anthropic::Bedrock::MantleClient do
       client.post("/v1/messages/batches", {"foo" => "bar"})
     end
 
-    expect_raises(NotImplementedError, /Token counting/) do
-      client.post("/v1/messages/count_tokens", {"foo" => "bar"})
+    expect_raises(NotImplementedError, /User profiles/) do
+      client.user_profiles
+    end
+
+    expect_raises(NotImplementedError, /Beta user profiles/) do
+      client.beta.user_profiles
     end
 
     expect_raises(NotImplementedError, /Beta files/) do
