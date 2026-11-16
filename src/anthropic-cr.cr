@@ -32,6 +32,7 @@ require "./anthropic-cr/models/fallbacks"
 require "./anthropic-cr/models/deployments"
 require "./anthropic-cr/models/dreams"
 require "./anthropic-cr/models/tunnels"
+require "./anthropic-cr/models/user_profiles"
 
 # Streaming
 require "./anthropic-cr/streaming/events"

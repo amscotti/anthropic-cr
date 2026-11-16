@@ -87,27 +87,30 @@ module Anthropic
       JSON.parse(%({"id":#{id.to_json},"type":"agent.message","content":[],"processed_at":""}))
     end
 
-    # Folds a single text fragment into the snapshot at the given index.
+    # Parses a Managed Agents session/thread/workflow event payload (`JSON::Any`)
+    # into a typed `BetaManagedAgentsSessionEvent` union value.
+    def self.parse_event(event : JSON::Any) : BetaManagedAgentsSessionEvent
+      BetaManagedAgentsSessionEventConverter.parse_any(event)
+    end
+
+    # Folds a single fragment into the snapshot at the given index.
     # Returns a fresh snapshot; the input snapshot is not mutated.
     private def self.fold_fragment(snapshot : JSON::Any, index : Int32, fragment : JSON::Any) : JSON::Any
       content = snapshot["content"].as_a.dup
 
-      # Pad the content array up to the target index.
-      while content.size <= index
-        content << JSON.parse(%({"type":"text","text":""}))
-      end
-
-      existing = content[index]
-      fragment_text = fragment["text"]?.try(&.to_s) || ""
-
-      new_text =
-        if existing["type"]?.try(&.to_s) == "text"
-          (existing["text"]?.try(&.to_s) || "") + fragment_text
-        else
-          fragment_text
+      if index < content.size
+        existing = content[index]
+        if existing["type"]?.try(&.as_s?) == "text" && fragment["type"]?.try(&.as_s?) == "text"
+          combined = (existing["text"]?.try(&.to_s) || "") + (fragment["text"]?.try(&.to_s) || "")
+          content[index] = JSON.parse(%({"type":"text","text":#{combined.to_json}}))
         end
-
-      content[index] = JSON.parse(%({"type":"text","text":#{new_text.to_json}}))
+        # Unrecognized fragment/existing block pairs leave the entry intact for forward compatibility.
+      else
+        while content.size < index
+          content << JSON.parse(%({"type":"text","text":""}))
+        end
+        content << fragment.dup
+      end
 
       # Rebuild the snapshot with updated content.
       hash = snapshot.as_h.dup

@@ -5,7 +5,8 @@ require "crypto/subtle"
 module Anthropic
   # Webhooks utility resource (beta)
   #
-  # Used to verify and unwrap secure callback payloads sent by Managed Agents.
+  # Used to verify and unwrap secure callback payloads sent by Anthropic
+  # (Managed Agents, User Profiles, etc.).
   # Follows the standard webhook signature verification specifications.
   class BetaWebhooks
     def initialize(@client : Client)

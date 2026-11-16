@@ -291,6 +291,11 @@ module Anthropic
       Skills.new(self)
     end
 
+    # User Profiles API for managing end-user profiles, enforcement status, and action URLs.
+    def user_profiles : UserProfiles
+      UserProfiles.new(self)
+    end
+
     def beta : Beta
       Beta.new(self)
     end

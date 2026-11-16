@@ -29,9 +29,10 @@ module Anthropic
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsMemoryStore
-      params = {"name" => name}
-      params["description"] = description if description
-      params["metadata"] = metadata if metadata
+      params = {} of String => JSON::Any
+      params["name"] = JSON::Any.new(name)
+      params["description"] = JSON::Any.new(description) if description
+      params["metadata"] = JSON.parse(metadata.to_json) if metadata
 
       response = @client.post("/v1/memory_stores", params, beta_headers(betas, workspace_id), beta: true)
       BetaManagedAgentsMemoryStore.from_json(response.body)
@@ -48,7 +49,7 @@ module Anthropic
       memory_store_id : String,
       name : String? = nil,
       description : String? = nil,
-      metadata : Hash(String, String)? = nil,
+      metadata : Hash(String, String) | Hash(String, String?) | Nil = nil,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaManagedAgentsMemoryStore
@@ -64,6 +65,8 @@ module Anthropic
 
     # List memory stores
     def list(
+      created_at_gte : String? = nil,
+      created_at_lte : String? = nil,
       include_archived : Bool? = nil,
       limit : Int32 = 20,
       page : String? = nil,
@@ -71,6 +74,8 @@ module Anthropic
       workspace_id : String? = nil,
     ) : BetaMemoryStoreListResponse
       query = {"limit" => limit.to_s}
+      query["created_at[gte]"] = created_at_gte if created_at_gte
+      query["created_at[lte]"] = created_at_lte if created_at_lte
       query["include_archived"] = include_archived.to_s if include_archived != nil
       query["page"] = page if page
 
