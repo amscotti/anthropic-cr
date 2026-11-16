@@ -13,7 +13,7 @@ require "dotenv"
 #   Without access, list/create return 404 NotFoundError.
 #
 # Headers (auto-attached by the SDK):
-#   managed-agents-2026-04-01,dreaming-2026-04-21
+#   dreaming-2026-04-21
 #
 # Requires:
 #   ANTHROPIC_API_KEY
@@ -37,7 +37,7 @@ client = Anthropic::Client.new
 
 puts "Dreams API Example (research preview)"
 puts "=" * 60
-puts "Betas (auto): #{Anthropic::MANAGED_AGENTS_BETA},#{Anthropic::DREAMING_BETA}"
+puts "Betas (auto): #{Anthropic::DREAMING_BETA}"
 puts "Docs: https://platform.claude.com/docs/en/managed-agents/dreams"
 puts "Access form: https://claude.com/form/claude-managed-agents"
 puts

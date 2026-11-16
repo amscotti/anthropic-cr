@@ -31,7 +31,7 @@ crystal run examples/01_basic_message.cr
 | `02_streaming.cr` | Streaming responses with SSE |
 | `03_tool_use.cr` | Complete tool execution loop |
 | `04_vision.cr` | Image understanding |
-| `05_system_prompt.cr` | System prompts and temperature |
+| `05_system_prompt.cr` | System prompts and output effort |
 | `06_error_handling.cr` | Error types and retry behavior |
 
 ### Resources
@@ -83,7 +83,7 @@ crystal run examples/01_basic_message.cr
 | `34_managed_agents.cr` | Stateful Managed Agents API (environments, memory stores, agents, vaults, webhooks) |
 | `34_opus_48.cr` | Claude Opus 4.8 with `xhigh` effort and `BetaTokenTaskBudget` |
 | `35_advisor_tool.cr` | Advisor tool (`advisor_20260301`) with typed result-block handling |
-| `36_user_profiles.cr` | User Profiles API + `user_profile_id` scoped messaging |
+| `36_user_profiles.cr` | User Profiles API (`client.user_profiles` GA + beta) and `user_profile_id` scoped messaging |
 
 ### Sonnet 5 / Fable 5 / July 2026 (0.8.0)
 
@@ -112,13 +112,14 @@ crystal run examples/01_basic_message.cr
 | `45_bedrock.cr` | Bedrock Runtime — SigV4, non-streaming + streaming (event-stream→SSE) |
 | `46_bedrock_mantle.cr` | Bedrock Mantle — native `/v1/messages`, SigV4 service `bedrock-mantle` |
 
-### Parity additions / September 2026 (0.10.0)
+### Parity additions / September–November 2026 (0.10.0–0.12.0)
 
 | File | Description |
 |------|-------------|
-| `48_organization.cr` | Organization Admin API — `client.beta.organization` overview |
+| `48_organization.cr` | Organization Admin API (`client.organization` GA + beta extensions) |
 | `49_providers.cr` | Alternate providers — AWS / Google Cloud / Vertex clients |
 | `50_compaction_and_tools.cr` | Explicit compaction + runner tool changes |
+| `51_threads_toolsets_and_admin.cr` | `2026-10-21` parity: 5.5/5.2 models, `BetaMessageThread`, browser/computer toolsets, GA `user_profiles`, GA + beta `organization` |
 
 Prefer inference profile model IDs for Runtime (`us.anthropic.*` / `global.anthropic.*`). Credentials resolve from env, `~/.aws/credentials`, `aws login` cache, IAM Identity Center SSO (`aws sso login`), or IMDS. Mantle Anthropic models may need separate account entitlement beyond Runtime access.
 
