@@ -30,7 +30,8 @@ module Anthropic
     # Create a new stateful agent.
     #
     # `model` accepts a model string / shorthand symbol, or a
-    # `BetaManagedAgentsModelConfig` (or hash) for effort/speed control:
+    # `BetaManagedAgentsModelConfig` (or hash) for effort/speed control.
+    # `tools` supports up to 256 tool entries.
     #
     # ```
     # client.beta.agents.create(model: :sonnet, name: "Helper")
@@ -50,10 +51,11 @@ module Anthropic
       description : String? = nil,
       mcp_servers : Array(JSON::Any | Hash(String, JSON::Any))? = nil,
       metadata : Hash(String, String)? = nil,
-      multiagent : JSON::Any? = nil,
+      multiagent : BetaManagedAgentsMultiagentParamLike? = nil,
       skills : Array(JSON::Any)? = nil,
       system : String? = nil,
-      tools : Array(BetaManagedAgentsToolsetParam)? = nil,
+      tools : Enumerable(BetaManagedAgentsToolsetParam)? = nil,
+      execution_identity : BetaManagedAgentsExecutionIdentityParamLike? = nil,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaAgent
@@ -61,12 +63,13 @@ module Anthropic
       params["model"] = serialize_model(model)
       params["name"] = JSON::Any.new(name)
       params["description"] = JSON::Any.new(description) if description
+      params["execution_identity"] = JSON.parse(execution_identity.to_json) if execution_identity
       params["mcp_servers"] = JSON.parse(mcp_servers.to_json) if mcp_servers
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
-      params["multiagent"] = multiagent if multiagent
+      params["multiagent"] = JSON.parse(multiagent.to_json) if multiagent
       params["skills"] = JSON.parse(skills.to_json) if skills
       params["system"] = JSON::Any.new(system) if system
-      params["tools"] = JSON.parse(tools.to_json) if tools
+      params["tools"] = JSON.parse(tools.to_a.to_json) if tools
 
       response = @client.post("/v1/agents", params, beta_headers(betas, workspace_id), beta: true)
       BetaAgent.from_json(response.body)
@@ -98,10 +101,11 @@ module Anthropic
       description : String? = nil,
       mcp_servers : Array(JSON::Any | Hash(String, JSON::Any))? = nil,
       metadata : Hash(String, String)? = nil,
-      multiagent : JSON::Any? = nil,
+      multiagent : BetaManagedAgentsMultiagentParamLike? = nil,
       skills : Array(JSON::Any)? = nil,
       system : String? = nil,
-      tools : Array(BetaManagedAgentsToolsetParam)? = nil,
+      tools : Enumerable(BetaManagedAgentsToolsetParam)? = nil,
+      execution_identity : BetaManagedAgentsExecutionIdentityParamLike? = nil,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaAgent
@@ -110,12 +114,13 @@ module Anthropic
       params["model"] = serialize_model(model) if model
       params["name"] = JSON::Any.new(name) if name
       params["description"] = JSON::Any.new(description) if description
+      params["execution_identity"] = JSON.parse(execution_identity.to_json) if execution_identity
       params["mcp_servers"] = JSON.parse(mcp_servers.to_json) if mcp_servers
       params["metadata"] = JSON.parse(metadata.to_json) if metadata
-      params["multiagent"] = multiagent if multiagent
+      params["multiagent"] = JSON.parse(multiagent.to_json) if multiagent
       params["skills"] = JSON.parse(skills.to_json) if skills
       params["system"] = JSON::Any.new(system) if system
-      params["tools"] = JSON.parse(tools.to_json) if tools
+      params["tools"] = JSON.parse(tools.to_a.to_json) if tools
 
       response = @client.post("/v1/agents/#{Anthropic.encode_path_segment(agent_id)}", params, beta_headers(betas, workspace_id), beta: true)
       BetaAgent.from_json(response.body)

@@ -92,8 +92,10 @@ module Anthropic
       BetaTunnel.from_json(response.body)
     end
 
-    # Reveal the tunnel's connector token (POST so it stays out of access logs).
-    # Repeated calls return the same value until rotated.
+    # Reveal a `cloudflare` tunnel's connector token (POST so it stays out of
+    # access logs). Repeated calls return the same value until rotated.
+    # A `relay` tunnel refuses with `tunnel_token_not_revealable` (`invalid_request_error`);
+    # use `rotate_token` to obtain a new relay token.
     def reveal_token(
       tunnel_id : String,
       betas : Array(String) = [] of String,
@@ -103,8 +105,9 @@ module Anthropic
       BetaTunnelToken.from_json(response.body)
     end
 
-    # Rotate the connector token. Invalidates the current value for new
-    # connections; established connections are not severed.
+    # Rotate the connector token. On `cloudflare` tunnels, invalidates the current
+    # value for new connections while established connections stay open. On `relay`
+    # tunnels, closes existing relay connections and returns the new token once.
     def rotate_token(
       tunnel_id : String,
       reason : String? = nil,

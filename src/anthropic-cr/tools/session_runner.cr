@@ -16,15 +16,18 @@ module Anthropic
   #   (already-answered calls and already-seen tool uses are skipped). A
   #   failed history read is non-fatal — the live stream carries on. A
   #   terminal event in history ends the run immediately, and a trailing
-  #   `end_turn` idle re-arms the idle countdown.
+  #   turn-ending idle (any `session.status_idle` other than `requires_action`)
+  #   re-arms the idle countdown.
   # - **Confirmation gating:** calls the server gated (`evaluated_permission
   #   == "ask"`, or an unrecognized permission) are held until a matching
   #   `user.tool_confirmation` verdict arrives. Only an explicit `allow`
   #   runs the tool; anything else (including server-side `deny`, which
   #   overrides any recorded verdict) resolves the call without executing
   #   or posting, exactly like TypeScript.
-  # - **Idle stop:** after a `session.status_idle` event with an `end_turn`
-  #   stop reason, the run ends once `max_idle` elapses with no further
+  # - **Idle stop:** after a `session.status_idle` event whose
+  #   `stop_reason.type` is not `"requires_action"` (`end_turn`, `refusal`,
+  #   `budget_reached`, `max_tokens`, etc.), the run ends once `max_idle`
+  #   elapses with no further
   #   activity (any other event disarms the countdown; held confirmations
   #   defer it). Defaults to 60 seconds like TypeScript; `nil` disables it.
   #   Note the countdown is only evaluated when events arrive or the
@@ -72,7 +75,7 @@ module Anthropic
     STREAM_BACKOFF_START = 500.milliseconds
     STREAM_BACKOFF_CAP   = 10.seconds
 
-    # Default idle stop after an `end_turn` idle.
+    # Default idle stop after a turn-ending idle.
     DEFAULT_MAX_IDLE = 60.seconds
 
     # History window re-read after each (re)connect.
@@ -329,7 +332,7 @@ module Anthropic
         apply_verdict(event, id, name, verdict)
       end
 
-      # Re-arm when history trails an `end_turn` idle: routing above
+      # Re-arm when history trails a turn-ending idle: routing above
       # either answered or held every pending call, and held calls defer
       # the countdown via `idle_expired?` (matching TypeScript, where a
       # held call blocks an armed clock).
@@ -494,9 +497,9 @@ module Anthropic
       @dispatching = false
     end
 
-    # Arm the idle countdown on `end_turn` idles, disarm on any other
-    # activity. Confirmations are neutral: they signal neither agent
-    # activity nor a fresh idle.
+    # Arm the idle countdown on turn-ending idles (`stop_reason.type != "requires_action"`),
+    # disarm on any other activity. Confirmations are neutral: they signal
+    # neither agent activity nor a fresh idle.
     private def track_idle(event : JSON::Any) : Nil
       return unless @max_idle
       return if event["type"]?.try(&.as_s?) == "user.tool_confirmation"
@@ -507,8 +510,7 @@ module Anthropic
     private def end_turn_idle?(event : JSON::Any) : Bool
       return false unless event["type"]?.try(&.as_s?) == "session.status_idle"
       reason = event["stop_reason"]?.try(&.as_h?)
-      return false unless reason
-      reason["type"]?.try(&.as_s?) == "end_turn"
+      reason.try(&.[]?("type")).try(&.as_s?) != "requires_action"
     end
 
     private def idle_expired? : Bool

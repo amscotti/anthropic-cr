@@ -350,11 +350,13 @@ module Anthropic
       session_id : String,
       limit : Int32 = 20,
       page : String? = nil,
+      statuses : Array(String)? = nil,
       betas : Array(String) = [] of String,
       workspace_id : String? = nil,
     ) : BetaSessionThreadListResponse
-      query = {"limit" => limit.to_s}
+      query = {"limit" => limit.to_s} of String => Client::QueryParamValue
       query["page"] = page if page
+      query["statuses"] = statuses if statuses
 
       response = @client.get("/v1/sessions/#{Anthropic.encode_path_segment(session_id)}/threads", query, beta_headers(betas, workspace_id), beta: true)
       BetaSessionThreadListResponse.from_json(response.body)
