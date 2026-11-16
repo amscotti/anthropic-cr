@@ -198,6 +198,10 @@ module Anthropic
           merged_betas << COMPACT_2026_09_04_BETA unless merged_betas.includes?(COMPACT_2026_09_04_BETA)
         end
 
+        if params.thread
+          merged_betas << MESSAGE_THREADS_BETA unless merged_betas.includes?(MESSAGE_THREADS_BETA)
+        end
+
         Anthropic.beta_headers_for_tools(params.tools).each do |beta|
           merged_betas << beta unless merged_betas.includes?(beta)
         end
@@ -247,15 +251,6 @@ module Anthropic
     getter system : String | Array(TextContent)?
 
     @[JSON::Field(emit_null: false)]
-    getter temperature : Float64?
-
-    @[JSON::Field(key: "top_p", emit_null: false)]
-    getter top_p : Float64?
-
-    @[JSON::Field(key: "top_k", emit_null: false)]
-    getter top_k : Int32?
-
-    @[JSON::Field(emit_null: false)]
     getter tools : Array(ToolDefinition | ServerTool)?
 
     @[JSON::Field(key: "tool_choice", emit_null: false)]
@@ -269,6 +264,9 @@ module Anthropic
 
     @[JSON::Field(key: "service_tier", emit_null: false)]
     getter service_tier : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter speed : String?
 
     @[JSON::Field(emit_null: false)]
     getter thinking : ThinkingConfig?
@@ -290,14 +288,12 @@ module Anthropic
       @max_tokens : Int32,
       @messages : Array(MessageParam),
       @system : String | Array(TextContent)? = nil,
-      @temperature : Float64? = nil,
-      @top_p : Float64? = nil,
-      @top_k : Int32? = nil,
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @stop_sequences : Array(String)? = nil,
       @metadata : Metadata | Hash(String, String)? = nil,
       @service_tier : String? = nil,
+      @speed : String? = nil,
       @thinking : ThinkingConfig? = nil,
       @cache_control : CacheControl? = nil,
       @container : String? = nil,
@@ -314,13 +310,11 @@ module Anthropic
       tools : Array(Tool),
       server_tools : Array(ServerTool)? = nil,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata | Hash(String, String)? = nil,
       service_tier : String? = nil,
+      speed : String? = nil,
       thinking : ThinkingConfig? = nil,
       cache_control : CacheControl? = nil,
       container : String? = nil,
@@ -336,14 +330,12 @@ module Anthropic
         max_tokens: max_tokens,
         messages: messages,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tool_definitions,
         tool_choice: tool_choice,
         stop_sequences: stop_sequences,
         metadata: metadata,
         service_tier: service_tier,
+        speed: speed,
         thinking: thinking,
         cache_control: cache_control,
         container: container,
@@ -365,15 +357,6 @@ module Anthropic
 
     @[JSON::Field(emit_null: false)]
     getter system : String | Array(TextContent)?
-
-    @[JSON::Field(emit_null: false)]
-    getter temperature : Float64?
-
-    @[JSON::Field(key: "top_p", emit_null: false)]
-    getter top_p : Float64?
-
-    @[JSON::Field(key: "top_k", emit_null: false)]
-    getter top_k : Int32?
 
     @[JSON::Field(emit_null: false)]
     getter tools : Array(ToolDefinition | ServerTool)?
@@ -417,14 +400,14 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter compaction : CompactionParam?
 
+    @[JSON::Field(converter: Anthropic::BetaThreadParamConverter, emit_null: false)]
+    getter thread : BetaThreadParam?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
       @messages : Array(MessageParam),
       @system : String | Array(TextContent)? = nil,
-      @temperature : Float64? = nil,
-      @top_p : Float64? = nil,
-      @top_k : Int32? = nil,
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @stop_sequences : Array(String)? = nil,
@@ -439,6 +422,7 @@ module Anthropic
       @container : String | ContainerConfig? = nil,
       @mcp_servers : Array(MCPServerDefinition)? = nil,
       @compaction : CompactionParam? = nil,
+      @thread : BetaThreadParam? = nil,
     )
     end
 
@@ -449,9 +433,6 @@ module Anthropic
       tools : Array(Tool),
       server_tools : Array(ServerTool)? = nil,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata? = nil,
@@ -465,6 +446,7 @@ module Anthropic
       container : String | ContainerConfig? = nil,
       mcp_servers : Array(MCPServerDefinition)? = nil,
       compaction : CompactionParam? = nil,
+      thread : BetaThreadParam? = nil,
     ) : self
       tool_definitions = [] of ToolDefinition | ServerTool
       tools.each { |tool| tool_definitions << tool.to_definition }
@@ -475,9 +457,6 @@ module Anthropic
         max_tokens: max_tokens,
         messages: messages,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tool_definitions,
         tool_choice: tool_choice,
         stop_sequences: stop_sequences,
@@ -491,7 +470,8 @@ module Anthropic
         context_management: context_management,
         container: container,
         mcp_servers: mcp_servers,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       )
     end
   end

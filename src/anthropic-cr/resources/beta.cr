@@ -162,88 +162,19 @@ module Anthropic
 
     # Create a tool runner for automatic tool execution
     #
-    # ```
-    # runner = client.beta.messages.tool_runner(
-    #   model: "claude-sonnet-4-6",
-    #   max_tokens: 1024,
-    #   messages: [Anthropic::MessageParam.user("What's the weather in Tokyo?")],
-    #   tools: [weather_tool]
-    # )
+    # Build a `BetaMessageThread` managing server-side thread continuation
+    # (`message-threads-2026-08-12`).
     #
-    # runner.each_message { |msg| pp msg.content }
-    # final = runner.final_message
-    # ```
-    #
-    # With auto-compaction:
-    # ```
-    # compaction = Anthropic::CompactionConfig.enabled(threshold: 3000) { |before, after|
-    #   puts "Compacted: #{before} -> #{after} tokens"
-    # }
-    #
-    # runner = client.beta.messages.tool_runner(
-    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
-    #   max_tokens: 1024,
-    #   messages: messages,
-    #   tools: tools,
-    #   compaction: compaction
-    # )
-    # ```
-    def tool_runner(
+    # Raises `NotImplementedError` when the underlying client does not support
+    # message threads (e.g., Bedrock or Vertex providers).
+    def thread(
       model : String,
       max_tokens : Int32,
-      messages : Array(MessageParam),
-      tools : Array(Tool),
-      betas : Array(String) = [] of String,
-      max_iterations : Int32 = 10,
-      system : String? = nil,
-      compaction : CompactionConfig? = nil,
-      speed : String? = nil,
-      thinking : ThinkingConfig? = nil,
-      output_config : OutputConfig? = nil,
-      inference_geo : String? = nil,
-      container : String | ContainerConfig? = nil,
-    ) : ToolRunner
-      ToolRunner.new(
-        client: @client,
-        model: model,
-        max_tokens: max_tokens,
-        messages: messages,
-        tools: tools,
-        max_iterations: max_iterations,
-        system: system,
-        compaction: compaction,
-        speed: speed,
-        thinking: thinking,
-        output_config: output_config,
-        inference_geo: inference_geo,
-        container: container,
-        betas: betas,
-        use_beta: true
-      )
-    end
-
-    # Create a message with beta features
-    #
-    # ```
-    # message = client.beta.messages.create(
-    #   betas: ["structured-outputs-2025-12-15"],
-    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
-    #   max_tokens: 1024,
-    #   output_schema: my_schema,
-    #   messages: [{role: "user", content: "Hello"}]
-    # )
-    # ```
-    def create(
-      model : String,
-      max_tokens : Int32,
-      messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
+      messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)) = [] of MessageParam,
       betas : Array(String) = [] of String,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
-      tools : Array(Tool)? = nil,
-      server_tools : Array(ServerTool)? = nil,
+      tools : Enumerable(Tool)? = nil,
+      server_tools : Enumerable(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata? = nil,
@@ -265,6 +196,172 @@ module Anthropic
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       compaction : CompactionParam? = nil,
+      unsupported_request_behavior : String = "error",
+    ) : BetaMessageThread
+      unless @client.supports_message_threads?
+        raise ::NotImplementedError.new("Message threads are not supported by #{@client.class}")
+      end
+
+      BetaMessageThread.new(
+        client: @client,
+        model: model,
+        max_tokens: max_tokens,
+        messages: messages,
+        betas: betas,
+        system: system,
+        tools: tools,
+        server_tools: server_tools,
+        tool_choice: tool_choice,
+        stop_sequences: stop_sequences,
+        metadata: metadata,
+        service_tier: service_tier,
+        speed: speed,
+        thinking: thinking,
+        cache_control: cache_control,
+        output_schema: output_schema,
+        effort: effort,
+        output_config: output_config,
+        inference_geo: inference_geo,
+        context_management: context_management,
+        container: container,
+        mcp_servers: mcp_servers,
+        fallbacks: fallbacks,
+        fallback_credit_token: fallback_credit_token,
+        user_profile_id: user_profile_id,
+        workspace_id: workspace_id,
+        extra_headers: extra_headers,
+        diagnostics: diagnostics,
+        compaction: compaction,
+        unsupported_request_behavior: unsupported_request_behavior
+      )
+    end
+
+    # ```
+    # runner = client.beta.messages.tool_runner(
+    #   model: "claude-sonnet-4-6",
+    #   max_tokens: 1024,
+    #   messages: [Anthropic::MessageParam.user("What's the weather in Tokyo?")],
+    #   tools: [weather_tool]
+    # )
+    #
+    # runner.each_message { |msg| pp msg.content }
+    # final = runner.final_message
+    # ```
+    #
+    # With server-side compaction:
+    # ```
+    # runner = client.beta.messages.tool_runner(
+    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
+    #   max_tokens: 1024,
+    #   messages: messages,
+    #   tools: tools
+    # )
+    # runner.compact_before_next_turn
+    # ```
+    def tool_runner(
+      model : String,
+      max_tokens : Int32,
+      messages : Array(MessageParam),
+      tools : Enumerable(Tool),
+      betas : Array(String) = [] of String,
+      max_iterations : Int32 = 10,
+      system : String? = nil,
+      speed : String? = nil,
+      thinking : ThinkingConfig? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
+      container : String | ContainerConfig? = nil,
+      server_tools : Enumerable(ServerTool)? = nil,
+      thread : Bool | BetaThreadParam | Nil = nil,
+    ) : ToolRunner
+      unless thread.nil? || thread == false
+        raise ArgumentError.new(
+          "Invalid `thread:` option #{thread.inspect} for tool_runner; " \
+          "omit it to use default message threading or pass `thread: false` to opt out"
+        )
+      end
+
+      resolved_thread = if thread != false && @client.supports_message_threads?
+                          BetaMessageThread.new(
+                            client: @client,
+                            model: model,
+                            max_tokens: max_tokens,
+                            messages: messages,
+                            betas: betas,
+                            system: system,
+                            tools: tools,
+                            server_tools: server_tools,
+                            speed: speed,
+                            thinking: thinking,
+                            output_config: output_config,
+                            inference_geo: inference_geo,
+                            container: container
+                          )
+                        else
+                          nil
+                        end
+
+      ToolRunner.new(
+        client: @client,
+        model: model,
+        max_tokens: max_tokens,
+        messages: messages,
+        tools: tools,
+        max_iterations: max_iterations,
+        system: system,
+        speed: speed,
+        thinking: thinking,
+        output_config: output_config,
+        inference_geo: inference_geo,
+        container: container,
+        betas: betas,
+        use_beta: true,
+        server_tools: server_tools,
+        thread: resolved_thread
+      )
+    end
+
+    # Create a message with beta features
+    #
+    # ```
+    # message = client.beta.messages.create(
+    #   betas: ["structured-outputs-2025-12-15"],
+    #   model: Anthropic::Model::CLAUDE_SONNET_4_6,
+    #   max_tokens: 1024,
+    #   output_schema: my_schema,
+    #   messages: [{role: "user", content: "Hello"}]
+    # )
+    # ```
+    def create(
+      model : String,
+      max_tokens : Int32,
+      messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
+      betas : Array(String) = [] of String,
+      system : String | Array(TextContent)? = nil,
+      tools : Enumerable(Tool)? = nil,
+      server_tools : Enumerable(ServerTool)? = nil,
+      tool_choice : ToolChoice? = nil,
+      stop_sequences : Array(String)? = nil,
+      metadata : Metadata? = nil,
+      service_tier : String? = nil,
+      speed : String? = nil,
+      thinking : ThinkingConfig? = nil,
+      cache_control : CacheControl? = nil,
+      output_schema : BaseOutputSchema? = nil,
+      effort : String? = nil,
+      output_config : OutputConfig? = nil,
+      inference_geo : String? = nil,
+      context_management : ContextManagementConfig? = nil,
+      container : String | ContainerConfig? = nil,
+      mcp_servers : Array(MCPServerDefinition)? = nil,
+      fallbacks : FallbacksParam? = nil,
+      fallback_credit_token : FallbackCreditToken? = nil,
+      user_profile_id : String? = nil,
+      workspace_id : String? = nil,
+      extra_headers : Hash(String, String)? = nil,
+      diagnostics : DiagnosticsParam? = nil,
+      compaction : CompactionParam? = nil,
+      thread : BetaThreadParam? = nil,
     ) : Message
       # Convert messages to typed MessageParam array
       typed_messages = normalize_messages(messages)
@@ -283,9 +380,6 @@ module Anthropic
         messages: typed_messages,
         stream: false,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tool_definitions,
         tool_choice: tool_choice,
         stop_sequences: stop_sequences,
@@ -303,7 +397,8 @@ module Anthropic
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
         diagnostics: diagnostics,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       )
 
       beta_headers = build_beta_headers(
@@ -317,10 +412,12 @@ module Anthropic
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
         thinking: thinking,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       )
       merged = merge_user_profile_header(beta_headers, user_profile_id)
       merged = Anthropic.merge_workspace_header(merged, workspace_id)
+      merged = Anthropic.merge_toolset_helper_headers(merged, server_tools)
       merged = merge_extra_headers(merged, extra_headers)
       response = @client.post("/v1/messages", params, merged, beta: true)
       Message.from_json(response.body)
@@ -345,11 +442,8 @@ module Anthropic
       messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
       betas : Array(String) = [] of String,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
-      tools : Array(Tool)? = nil,
-      server_tools : Array(ServerTool)? = nil,
+      tools : Enumerable(Tool)? = nil,
+      server_tools : Enumerable(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata? = nil,
@@ -371,6 +465,7 @@ module Anthropic
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       compaction : CompactionParam? = nil,
+      thread : BetaThreadParam? = nil,
       &
     )
       open_stream(
@@ -379,9 +474,6 @@ module Anthropic
         messages: messages,
         betas: betas,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tools,
         server_tools: server_tools,
         tool_choice: tool_choice,
@@ -404,7 +496,8 @@ module Anthropic
         workspace_id: workspace_id,
         extra_headers: extra_headers,
         diagnostics: diagnostics,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       ) do |stream|
         stream.each { |event| yield event }
       end
@@ -417,11 +510,8 @@ module Anthropic
       messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
       betas : Array(String) = [] of String,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
-      tools : Array(Tool)? = nil,
-      server_tools : Array(ServerTool)? = nil,
+      tools : Enumerable(Tool)? = nil,
+      server_tools : Enumerable(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata? = nil,
@@ -443,6 +533,7 @@ module Anthropic
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       compaction : CompactionParam? = nil,
+      thread : BetaThreadParam? = nil,
       &
     )
       typed_messages = normalize_messages(messages)
@@ -456,9 +547,6 @@ module Anthropic
         messages: typed_messages,
         stream: true,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tool_definitions,
         tool_choice: tool_choice,
         stop_sequences: stop_sequences,
@@ -476,7 +564,8 @@ module Anthropic
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
         diagnostics: diagnostics,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       )
 
       beta_headers = build_beta_headers(
@@ -490,11 +579,14 @@ module Anthropic
         fallbacks: fallbacks,
         fallback_credit_token: fallback_credit_token,
         thinking: thinking,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       )
 
       merged = merge_user_profile_header(beta_headers, user_profile_id)
       merged = Anthropic.merge_workspace_header(merged, workspace_id)
+      merged = Anthropic.merge_toolset_helper_headers(merged, server_tools)
+      merged = StainlessHelper.merge_method_header(merged, "stream")
       merged = merge_extra_headers(merged, extra_headers)
 
       @client.post_stream("/v1/messages", params, merged) do |response|
@@ -508,8 +600,8 @@ module Anthropic
       messages : Array(MessageParam) | Array(NamedTuple(role: String, content: String)),
       betas : Array(String) = [] of String,
       system : String | Array(TextContent)? = nil,
-      tools : Array(Tool)? = nil,
-      server_tools : Array(ServerTool)? = nil,
+      tools : Enumerable(Tool)? = nil,
+      server_tools : Enumerable(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       thinking : ThinkingConfig? = nil,
       cache_control : CacheControl? = nil,
@@ -563,7 +655,10 @@ module Anthropic
         compaction: compaction
       )
 
-      response = @client.post("/v1/messages/count_tokens", params, Anthropic.merge_workspace_header(merge_user_profile_header(beta_headers, user_profile_id), workspace_id), beta: true)
+      merged_headers = Anthropic.merge_workspace_header(merge_user_profile_header(beta_headers, user_profile_id), workspace_id)
+      merged_headers = Anthropic.merge_toolset_helper_headers(merged_headers, server_tools)
+
+      response = @client.post("/v1/messages/count_tokens", params, merged_headers, beta: true)
       TokenCountResponse.from_json(response.body)
     end
 
@@ -574,11 +669,8 @@ module Anthropic
       output_schema : TypedOutputSchema(T),
       betas : Array(String) = [] of String,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
-      tools : Array(Tool)? = nil,
-      server_tools : Array(ServerTool)? = nil,
+      tools : Enumerable(Tool)? = nil,
+      server_tools : Enumerable(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata? = nil,
@@ -599,6 +691,7 @@ module Anthropic
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       compaction : CompactionParam? = nil,
+      thread : BetaThreadParam? = nil,
     ) : ParsedMessage(T) forall T
       message = create(
         model: model,
@@ -607,9 +700,6 @@ module Anthropic
         output_schema: output_schema,
         betas: betas,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tools,
         server_tools: server_tools,
         tool_choice: tool_choice,
@@ -631,7 +721,8 @@ module Anthropic
         workspace_id: workspace_id,
         extra_headers: extra_headers,
         diagnostics: diagnostics,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       )
 
       ParsedMessage(T).new(message, message.parsed_output_as!(T))
@@ -644,11 +735,8 @@ module Anthropic
       output_schema : OutputSchema,
       betas : Array(String) = [] of String,
       system : String | Array(TextContent)? = nil,
-      temperature : Float64? = nil,
-      top_p : Float64? = nil,
-      top_k : Int32? = nil,
-      tools : Array(Tool)? = nil,
-      server_tools : Array(ServerTool)? = nil,
+      tools : Enumerable(Tool)? = nil,
+      server_tools : Enumerable(ServerTool)? = nil,
       tool_choice : ToolChoice? = nil,
       stop_sequences : Array(String)? = nil,
       metadata : Metadata? = nil,
@@ -669,6 +757,7 @@ module Anthropic
       extra_headers : Hash(String, String)? = nil,
       diagnostics : DiagnosticsParam? = nil,
       compaction : CompactionParam? = nil,
+      thread : BetaThreadParam? = nil,
     ) : ParsedMessage(JSON::Any)
       message = create(
         model: model,
@@ -677,9 +766,6 @@ module Anthropic
         output_schema: output_schema,
         betas: betas,
         system: system,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k,
         tools: tools,
         server_tools: server_tools,
         tool_choice: tool_choice,
@@ -701,7 +787,8 @@ module Anthropic
         workspace_id: workspace_id,
         extra_headers: extra_headers,
         diagnostics: diagnostics,
-        compaction: compaction
+        compaction: compaction,
+        thread: thread
       )
 
       ParsedMessage(JSON::Any).new(message, message.parsed_output_as!(JSON::Any))
@@ -721,10 +808,10 @@ module Anthropic
 
     # Build combined tool definitions from user tools and server tools
     private def build_tool_definitions(
-      tools : Array(Tool)?,
-      server_tools : Array(ServerTool)?,
+      tools : Enumerable(Tool)?,
+      server_tools : Enumerable(ServerTool)?,
     ) : Array(ToolDefinition | ServerTool)?
-      return nil if (tools.nil? || tools.empty?) && (server_tools.nil? || server_tools.empty?)
+      return nil if tools.nil? && server_tools.nil?
 
       result = [] of ToolDefinition | ServerTool
 
@@ -755,7 +842,7 @@ module Anthropic
 
     private def build_beta_headers(
       betas : Array(String),
-      server_tools : Array(ServerTool)?,
+      server_tools : Enumerable(ServerTool)?,
       output_format : OutputFormat?,
       output_config : OutputConfig?,
       cache_control : CacheControl?,
@@ -766,6 +853,7 @@ module Anthropic
       fallback_credit_token : FallbackCreditToken? = nil,
       thinking : ThinkingConfig? = nil,
       compaction : CompactionParam? = nil,
+      thread : BetaThreadParam? = nil,
     ) : Hash(String, String)?
       # Explicit chain / "default" and bare-string credit tokens auto-attach the
       # server-side fallback beta. Object-form credit tokens need the July 2026
@@ -789,6 +877,7 @@ module Anthropic
         include_user_profiles: include_user_profiles_beta,
         thinking: thinking,
         compaction: compaction,
+        thread: thread,
         beta: true
       )
     end

@@ -349,8 +349,17 @@ module Anthropic
     end
   end
 
+  # Unrecognized or forward-compatible SSE event passed through without failing.
+  struct UnknownStreamEvent < StreamEvent
+    getter type : String
+    getter data : JSON::Any
+
+    def initialize(@type : String, @data : JSON::Any)
+    end
+  end
+
   # Union of all event types for pattern matching
   alias AnyStreamEvent = MessageStartEvent | MessageDeltaEvent | MessageStopEvent |
                          ContentBlockStartEvent | ContentBlockDeltaEvent | ContentBlockStopEvent |
-                         PingEvent | ErrorEvent
+                         PingEvent | ErrorEvent | UnknownStreamEvent
 end

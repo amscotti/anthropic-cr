@@ -66,6 +66,7 @@ module Anthropic
     include_user_profiles : Bool = false,
     thinking : ThinkingConfig? = nil,
     compaction : CompactionParam? = nil,
+    thread : BetaThreadParam? = nil,
     beta : Bool = false,
   ) : Hash(String, String)?
     merged = betas.dup
@@ -76,6 +77,10 @@ module Anthropic
 
     if compaction
       merged << COMPACT_2026_09_04_BETA unless merged.includes?(COMPACT_2026_09_04_BETA)
+    end
+
+    if beta && thread
+      merged << MESSAGE_THREADS_BETA unless merged.includes?(MESSAGE_THREADS_BETA)
     end
 
     if include_token_counting
@@ -1499,7 +1504,7 @@ module Anthropic
                         ComputerUseTool |
                         ComputerUseTool20251124 | WebFetchTool | WebFetchTool20260209 | WebFetchTool20260309 | WebFetchTool20260318 | MemoryTool |
                         ToolSearchBM25Tool | ToolSearchRegexTool |
-                        MCPToolset |
+                        MCPToolset | BrowserToolset20260801 | ComputerToolset20260801 |
                         AdvisorTool |
                         BashToolLegacy | TextEditorToolLegacy | ComputerUseToolLegacy
 

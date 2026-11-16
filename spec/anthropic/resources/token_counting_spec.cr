@@ -125,39 +125,6 @@ describe "Cache Control" do
   end
 end
 
-describe "Compaction Config" do
-  describe Anthropic::CompactionConfig do
-    it "creates disabled config by default" do
-      config = Anthropic::CompactionConfig.new
-
-      config.enabled?.should be_false
-      config.context_token_threshold.should eq(10000)
-      config.on_compact.should be_nil
-    end
-
-    it "creates enabled config with callback" do
-      callback_called = false
-      tokens_before = 0
-      tokens_after = 0
-
-      config = Anthropic::CompactionConfig.enabled(threshold: 5000) do |before, after|
-        callback_called = true
-        tokens_before = before
-        tokens_after = after
-      end
-
-      config.enabled?.should be_true
-      config.context_token_threshold.should eq(5000)
-
-      # Call the callback
-      config.on_compact.try(&.call(1000, 500))
-      callback_called.should be_true
-      tokens_before.should eq(1000)
-      tokens_after.should eq(500)
-    end
-  end
-end
-
 describe "Beta Constants" do
   it "defines web search beta header" do
     Anthropic::WEB_SEARCH_BETA.should eq("web-search-2025-03-05")

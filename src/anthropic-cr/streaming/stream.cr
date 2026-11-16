@@ -167,7 +167,11 @@ module Anthropic
 
     @response : HTTP::Client::Response
     @buffered_events : Array(AnyStreamEvent)?
+    @partial_events = [] of AnyStreamEvent
     @snapshot : SnapshotBuilder?
+
+    getter? message_started : Bool = false
+    getter? message_stopped : Bool = false
 
     def initialize(@response)
     end
@@ -253,6 +257,18 @@ module Anthropic
       CitationIterator.new(self)
     end
 
+    # Build a best-effort `Message` snapshot from events observed so far.
+    #
+    # Returns `nil` if `message_start` has not yet been received.
+    def partial_message : Message?
+      source_events = @buffered_events || @partial_events
+      return nil if source_events.empty?
+
+      snapshot = SnapshotBuilder.new
+      source_events.each { |event| snapshot.apply(event) }
+      snapshot.message
+    end
+
     # Return the buffered events, reading from the response IO on
     # first access.
     private def events : Array(AnyStreamEvent)
@@ -270,7 +286,9 @@ module Anthropic
 
     # Read all events from the response IO exactly once.
     private def read_events_from_io : Array(AnyStreamEvent)
-      result = [] of AnyStreamEvent
+      @partial_events.clear
+      @message_started = false
+      @message_stopped = false
       event_type = ""
       data_lines = [] of String
 
@@ -279,7 +297,7 @@ module Anthropic
           line = raw_line.ends_with?('\r') ? raw_line[0...-1] : raw_line
 
           if line.empty?
-            emit_event(event_type, data_lines) { |event| result << event }
+            emit_event(event_type, data_lines) { |event| record_event(event) }
             event_type = ""
             data_lines.clear
             next
@@ -299,8 +317,18 @@ module Anthropic
         raise APIConnectionError.new("Stream connection failed: #{ex.message}", cause: ex)
       end
 
-      emit_event(event_type, data_lines) { |event| result << event }
-      result
+      emit_event(event_type, data_lines) { |event| record_event(event) }
+      @partial_events
+    end
+
+    private def record_event(event : AnyStreamEvent) : Nil
+      @partial_events << event
+      case event
+      when MessageStartEvent
+        @message_started = true
+      when MessageStopEvent
+        @message_stopped = true
+      end
     end
 
     private def emit_event(event_type : String, data_lines : Array(String), & : AnyStreamEvent -> _)
@@ -338,7 +366,10 @@ module Anthropic
       when "error"
         ErrorEvent.from_json(data)
       else
-        nil
+        UnknownStreamEvent.new(
+          type: resolved_type.empty? ? "unknown" : resolved_type,
+          data: JSON.parse(data)
+        )
       end
     rescue ex : JSON::ParseException
       nil

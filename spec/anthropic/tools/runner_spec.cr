@@ -211,7 +211,8 @@ describe Anthropic::ToolRunner do
         model: "claude-sonnet-4-6",
         max_tokens: 1024,
         messages: [Anthropic::MessageParam.user("Hi")],
-        tools: [create_dummy_tool] of Anthropic::Tool
+        tools: [create_dummy_tool] of Anthropic::Tool,
+        thread: false
       )
 
       runner.next_message
@@ -863,36 +864,6 @@ describe Anthropic::ToolRunner do
       result = blocks.find(&.is_a?(Anthropic::ToolResultContent)).as(Anthropic::ToolResultContent)
       result.content.should eq("sunny")
       result.is_error.should be_nil
-    end
-  end
-end
-
-describe Anthropic::CompactionConfig do
-  describe ".enabled" do
-    it "creates enabled config with threshold" do
-      callback_called = false
-
-      config = Anthropic::CompactionConfig.enabled(threshold: 5000) do |_before, _after|
-        callback_called = true
-      end
-
-      config.enabled?.should be_true
-      config.context_token_threshold.should eq(5000)
-      config.on_compact.should_not be_nil
-    end
-  end
-
-  describe "#enabled?" do
-    it "defaults to false" do
-      config = Anthropic::CompactionConfig.new
-      config.enabled?.should be_false
-    end
-  end
-
-  describe "#context_token_threshold" do
-    it "defaults to 10000" do
-      config = Anthropic::CompactionConfig.new
-      config.context_token_threshold.should eq(10000)
     end
   end
 end

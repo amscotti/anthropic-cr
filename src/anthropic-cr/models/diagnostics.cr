@@ -27,10 +27,10 @@ module Anthropic
 
     getter type : String # "model_changed" | "system_changed" | "tools_changed" | "messages_changed" | "previous_message_not_found" | "unavailable"
 
-    @[JSON::Field(key: "cache_missed_input_tokens")]
-    getter cache_missed_input_tokens : Int32
+    @[JSON::Field(key: "cache_missed_input_tokens", emit_null: false)]
+    getter cache_missed_input_tokens : Int32?
 
-    def initialize(@type : String, @cache_missed_input_tokens : Int32)
+    def initialize(@type : String, @cache_missed_input_tokens : Int32? = nil)
     end
   end
 end

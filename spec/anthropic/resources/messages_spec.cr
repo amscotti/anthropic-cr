@@ -221,34 +221,19 @@ describe Anthropic::Messages do
       body["system"].as_s.should eq("You are a helpful assistant.")
     end
 
-    it "sends temperature" do
+    it "sends speed" do
       capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
 
       client = Anthropic::Client.new(api_key: "sk-ant-test")
       client.messages.create(
         model: "claude-sonnet-4-6",
         max_tokens: 100,
-        temperature: 0.7,
+        speed: "fast",
         messages: [{role: "user", content: "Hello"}]
       )
 
       body = JSON.parse(capture.body.not_nil!)
-      body["temperature"].as_f.should eq(0.7)
-    end
-
-    it "sends top_p" do
-      capture = stub_and_capture(:post, "https://api.anthropic.com/v1/messages", Fixtures::Responses::MESSAGE_BASIC)
-
-      client = Anthropic::Client.new(api_key: "sk-ant-test")
-      client.messages.create(
-        model: "claude-sonnet-4-6",
-        max_tokens: 100,
-        top_p: 0.9,
-        messages: [{role: "user", content: "Hello"}]
-      )
-
-      body = JSON.parse(capture.body.not_nil!)
-      body["top_p"].as_f.should eq(0.9)
+      body["speed"].as_s.should eq("fast")
     end
 
     it "sends stop_sequences" do

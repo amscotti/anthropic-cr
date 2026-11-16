@@ -148,15 +148,6 @@ module Anthropic
     getter system : SystemPrompt?
 
     @[JSON::Field(emit_null: false)]
-    getter temperature : Float64?
-
-    @[JSON::Field(key: "top_p", emit_null: false)]
-    getter top_p : Float64?
-
-    @[JSON::Field(key: "top_k", emit_null: false)]
-    getter top_k : Int32?
-
-    @[JSON::Field(emit_null: false)]
     getter tools : Array(ToolDefinition | ServerTool)?
 
     @[JSON::Field(key: "tool_choice", emit_null: false)]
@@ -170,6 +161,9 @@ module Anthropic
 
     @[JSON::Field(key: "service_tier", emit_null: false)]
     getter service_tier : String?
+
+    @[JSON::Field(emit_null: false)]
+    getter speed : String?
 
     @[JSON::Field(emit_null: false)]
     getter thinking : ThinkingConfig?
@@ -204,14 +198,12 @@ module Anthropic
       @messages : Array(MessageParam),
       @stream : Bool? = nil,
       @system : SystemPrompt? = nil,
-      @temperature : Float64? = nil,
-      @top_p : Float64? = nil,
-      @top_k : Int32? = nil,
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @stop_sequences : Array(String)? = nil,
       @metadata : Metadata? = nil,
       @service_tier : String? = nil,
+      @speed : String? = nil,
       @thinking : ThinkingConfig? = nil,
       @cache_control : CacheControl? = nil,
       @container : String? = nil,
@@ -390,6 +382,53 @@ module Anthropic
   alias CompactionParam = SummarizeCompaction
 
   # Beta message create params - extends MessageCreateParams.
+  # Start a new beta message thread on the server (`{"type": "create"}`).
+  struct BetaThreadCreateParams
+    include JSON::Serializable
+
+    getter type : String = "create"
+
+    def initialize
+      @type = "create"
+    end
+  end
+
+  # Continue an existing beta message thread from `previous_message_id`.
+  struct BetaThreadContinueParams
+    include JSON::Serializable
+
+    getter type : String = "continue"
+
+    @[JSON::Field(key: "previous_message_id")]
+    getter previous_message_id : String
+
+    def initialize(@previous_message_id : String)
+      @type = "continue"
+    end
+  end
+
+  alias BetaThreadParam = BetaThreadCreateParams | BetaThreadContinueParams
+
+  module BetaThreadParamConverter
+    def self.from_json(pull : JSON::PullParser) : BetaThreadParam
+      json = JSON::Any.new(pull)
+      raw = json.to_json
+
+      case json["type"]?.try(&.as_s?)
+      when "create"
+        BetaThreadCreateParams.from_json(raw)
+      when "continue"
+        BetaThreadContinueParams.from_json(raw)
+      else
+        raise JSON::ParseException.new("Unknown BetaThreadParam type: #{json["type"]?}", 0, 0)
+      end
+    end
+
+    def self.to_json(value : BetaThreadParam, builder : JSON::Builder) : Nil
+      value.to_json(builder)
+    end
+  end
+
   struct BetaMessageCreateParams
     include JSON::Serializable
 
@@ -405,15 +444,6 @@ module Anthropic
 
     @[JSON::Field(emit_null: false)]
     getter system : SystemPrompt?
-
-    @[JSON::Field(emit_null: false)]
-    getter temperature : Float64?
-
-    @[JSON::Field(key: "top_p", emit_null: false)]
-    getter top_p : Float64?
-
-    @[JSON::Field(key: "top_k", emit_null: false)]
-    getter top_k : Int32?
 
     @[JSON::Field(emit_null: false)]
     getter tools : Array(ToolDefinition | ServerTool)?
@@ -473,15 +503,15 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter compaction : CompactionParam?
 
+    @[JSON::Field(converter: Anthropic::BetaThreadParamConverter, emit_null: false)]
+    getter thread : BetaThreadParam?
+
     def initialize(
       @model : String,
       @max_tokens : Int32,
       @messages : Array(MessageParam),
       @stream : Bool? = nil,
       @system : SystemPrompt? = nil,
-      @temperature : Float64? = nil,
-      @top_p : Float64? = nil,
-      @top_k : Int32? = nil,
       @tools : Array(ToolDefinition | ServerTool)? = nil,
       @tool_choice : ToolChoice? = nil,
       @stop_sequences : Array(String)? = nil,
@@ -500,6 +530,7 @@ module Anthropic
       @fallback_credit_token : FallbackCreditToken? = nil,
       @diagnostics : DiagnosticsParam? = nil,
       @compaction : CompactionParam? = nil,
+      @thread : BetaThreadParam? = nil,
     )
     end
   end
@@ -605,6 +636,9 @@ module Anthropic
     @[JSON::Field(emit_null: false)]
     getter diagnostics : DiagnosticsParam?
 
+    @[JSON::Field(emit_null: false)]
+    getter speed : String?
+
     def initialize(
       @model : String,
       @messages : Array(MessageParam),
@@ -616,6 +650,7 @@ module Anthropic
       @output_config : OutputConfig? = nil,
       @inference_geo : String? = nil,
       @diagnostics : DiagnosticsParam? = nil,
+      @speed : String? = nil,
     )
     end
   end

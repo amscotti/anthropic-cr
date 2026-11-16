@@ -756,12 +756,12 @@ describe "v0.11.0 parity additions" do
         model: "claude-sonnet-4-6",
         max_tokens: 64,
         messages: [Anthropic::MessageParam.user("hi")],
-        tools: [v011_tool("test")] of Anthropic::Tool,
-        compaction: Anthropic::CompactionConfig.enabled(threshold: 100) { |_, _| }
+        tools: [v011_tool("test")] of Anthropic::Tool
       )
 
       runner.remove_tools("test")
       runner.next_message
+      runner.count_tokens
 
       count_capture.headers.not_nil!["anthropic-beta"].should contain("inline-tools-2026-09-15")
     end

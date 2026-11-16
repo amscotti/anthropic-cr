@@ -39,6 +39,11 @@ module Anthropic
       nil
     end
 
+    # Whether strict schema adherence is enabled for this tool
+    def strict : Bool?
+      nil
+    end
+
     # Whether to enable eager input streaming for this tool (beta)
     def eager_input_streaming : Bool?
       nil
@@ -53,6 +58,7 @@ module Anthropic
           properties: input_schema_properties,
           required: required_properties
         ),
+        strict: strict,
         cache_control: cache_control,
         allowed_callers: allowed_callers,
         defer_loading: defer_loading?,
@@ -74,6 +80,11 @@ module Anthropic
     @schema : Hash(String, Schema::Property)
     @required : Array(String)
     @cache_control : CacheControl?
+    @strict : Bool?
+    @defer_loading : Bool?
+    @allowed_callers : Array(String)?
+    @input_examples : Array(JSON::Any)?
+    @eager_input_streaming : Bool?
     @handler : Proc(JSON::Any, String)?
 
     def initialize(
@@ -82,6 +93,11 @@ module Anthropic
       @schema : Hash(String, Schema::Property),
       @required : Array(String) = [] of String,
       @cache_control : CacheControl? = nil,
+      @strict : Bool? = nil,
+      @defer_loading : Bool? = nil,
+      @allowed_callers : Array(String)? = nil,
+      @input_examples : Array(JSON::Any)? = nil,
+      @eager_input_streaming : Bool? = nil,
       &handler : JSON::Any -> String
     )
       @handler = handler
@@ -105,6 +121,26 @@ module Anthropic
 
     def cache_control : CacheControl?
       @cache_control
+    end
+
+    def strict : Bool?
+      @strict
+    end
+
+    def defer_loading? : Bool?
+      @defer_loading
+    end
+
+    def allowed_callers : Array(String)?
+      @allowed_callers
+    end
+
+    def input_examples : Array(JSON::Any)?
+      @input_examples
+    end
+
+    def eager_input_streaming : Bool?
+      @eager_input_streaming
     end
 
     def call(input : JSON::Any) : String
@@ -139,9 +175,26 @@ module Anthropic
     schema : Hash(String, Schema::Property),
     required : Array(String) = [] of String,
     cache_control : CacheControl? = nil,
+    strict : Bool? = nil,
+    defer_loading : Bool? = nil,
+    allowed_callers : Array(String)? = nil,
+    input_examples : Array(JSON::Any)? = nil,
+    eager_input_streaming : Bool? = nil,
     &handler : JSON::Any -> String
   ) : Tool
-    InlineTool.new(name, description, schema, required, cache_control, &handler)
+    InlineTool.new(
+      name,
+      description,
+      schema,
+      required,
+      cache_control,
+      strict,
+      defer_loading,
+      allowed_callers,
+      input_examples,
+      eager_input_streaming,
+      &handler
+    )
   end
 
   # Typed tool with struct input (Ruby BaseTool-like pattern)
@@ -178,10 +231,26 @@ module Anthropic
   class TypedTool(T) < Tool
     @name : String
     @description : String
+    @cache_control : CacheControl?
+    @strict : Bool?
+    @defer_loading : Bool?
+    @allowed_callers : Array(String)?
+    @input_examples : Array(JSON::Any)?
+    @eager_input_streaming : Bool?
     @handler : Proc(T, String)
     @cached_schema : JSON::Any?
 
-    def initialize(@name : String, @description : String, &handler : T -> String)
+    def initialize(
+      @name : String,
+      @description : String,
+      @cache_control : CacheControl? = nil,
+      @strict : Bool? = nil,
+      @defer_loading : Bool? = nil,
+      @allowed_callers : Array(String)? = nil,
+      @input_examples : Array(JSON::Any)? = nil,
+      @eager_input_streaming : Bool? = nil,
+      &handler : T -> String
+    )
       @handler = handler
     end
 
@@ -191,6 +260,30 @@ module Anthropic
 
     def description : String
       @description
+    end
+
+    def cache_control : CacheControl?
+      @cache_control
+    end
+
+    def strict : Bool?
+      @strict
+    end
+
+    def defer_loading? : Bool?
+      @defer_loading
+    end
+
+    def allowed_callers : Array(String)?
+      @allowed_callers
+    end
+
+    def input_examples : Array(JSON::Any)?
+      @input_examples
+    end
+
+    def eager_input_streaming : Bool?
+      @eager_input_streaming
     end
 
     # Not used for TypedTool - we override to_definition instead
@@ -219,6 +312,7 @@ module Anthropic
           properties: properties,
           required: required_arr
         ),
+        strict: strict,
         cache_control: cache_control,
         allowed_callers: allowed_callers,
         defer_loading: defer_loading?,
@@ -292,7 +386,27 @@ module Anthropic
   #   "Found results for #{input.query}"
   # end
   # ```
-  macro tool(name, description, input, &block)
-    Anthropic::TypedTool({{input}}).new({{name}}, {{description}}) {{block}}
+  macro tool(
+    name,
+    description,
+    input,
+    cache_control = nil,
+    strict = nil,
+    defer_loading = nil,
+    allowed_callers = nil,
+    input_examples = nil,
+    eager_input_streaming = nil,
+    &block
+  )
+    Anthropic::TypedTool({{input}}).new(
+      {{name}},
+      {{description}},
+      cache_control: {{cache_control}},
+      strict: {{strict}},
+      defer_loading: {{defer_loading}},
+      allowed_callers: {{allowed_callers}},
+      input_examples: {{input_examples}},
+      eager_input_streaming: {{eager_input_streaming}},
+    ) {{block}}
   end
 end
